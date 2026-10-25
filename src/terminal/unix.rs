@@ -111,11 +111,8 @@ fn process_args(pid: i32) -> Result<Vec<String>> {
 /// launch mode; spaces in a session name or executable path stay intact.
 #[cfg(any(target_os = "macos", test))]
 fn darwin_args(data: &[u8]) -> Result<Vec<String>> {
-    if data.len() < 4 {
-        bail!("missing process argument count");
-    }
-    let argc = u32::from_ne_bytes(data[..4].try_into().unwrap()) as usize;
-    let mut rest = &data[4..];
+    let Some((argc, mut rest)) = data.split_first_chunk::<4>() else { bail!("missing process argument count") };
+    let argc = u32::from_ne_bytes(*argc) as usize;
     let end = rest.iter().position(|b| *b == 0);
     let Some(end) = end.filter(|_| argc > 0 && argc <= rest.len()) else { bail!("invalid process arguments") };
     rest = &rest[end + 1..];
@@ -139,5 +136,10 @@ mod tests {
         let mut data = 2u32.to_ne_bytes().to_vec();
         data.extend_from_slice(b"/bin/herdr\0\0\0herdr\0--session\0HOME=/x\0");
         assert_eq!(darwin_args(&data).unwrap(), ["herdr", "--session"]);
+    }
+
+    #[test]
+    fn darwin_args_reject_a_short_buffer() {
+        assert!(darwin_args(&[2, 0, 0]).is_err());
     }
 }

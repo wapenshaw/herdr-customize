@@ -153,8 +153,11 @@ fn split_editor(command: &str) -> Result<Vec<String>> {
     while i < chars.len() {
         let c = chars[i];
         let next = chars.get(i + 1).copied();
-        if c == '\\' && next.is_some_and(|n| (quote == Some('"') && n == '"') || (quote.is_none() && n.is_whitespace())) {
-            word.push(next.unwrap());
+        if c == '\\'
+            && let Some(n) = next
+            && ((quote == Some('"') && n == '"') || (quote.is_none() && n.is_whitespace()))
+        {
+            word.push(n);
             started = true;
             i += 2;
             continue;
@@ -230,6 +233,7 @@ mod tests {
         assert_eq!(split_editor("code --wait").unwrap(), ["code", "--wait"]);
         assert_eq!(split_editor("'/Applications/My Editor' -n").unwrap(), ["/Applications/My Editor", "-n"]);
         assert_eq!(split_editor(r"my\ editor").unwrap(), ["my editor"]);
+        assert_eq!(split_editor(r#"ed "a \"b\"""#).unwrap(), ["ed", r#"a "b""#]);
         assert!(split_editor("'open").is_err());
         assert!(split_editor("   ").is_err());
     }
