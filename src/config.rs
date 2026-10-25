@@ -440,10 +440,7 @@ impl Store {
             return Err(CheckError { issues }.into());
         }
         result.check_skipped = skipped;
-        if let Some(original) = &original {
-            fsutil::daily_backup(&self.path, original)?;
-        }
-        fsutil::atomic_write(&self.path, data.as_bytes(), 0o600)?;
+        fsutil::write_backed_up(&self.path, data.as_bytes(), 0o600)?;
         result.changed = true;
         if !self.no_reload {
             result.reload_err = herdr::reload().err().map(|e| e.to_string());

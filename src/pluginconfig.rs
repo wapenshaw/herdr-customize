@@ -222,13 +222,7 @@ impl File {
         if data == old {
             return Ok(());
         }
-        if !old.is_empty() {
-            fsutil::daily_backup(&self.path, old.as_bytes())?;
-        }
-        if let Some(dir) = self.path.parent() {
-            fs::create_dir_all(dir)?;
-        }
-        fsutil::atomic_write(&self.path, data.as_bytes(), 0o644)
+        fsutil::write_backed_up(&self.path, data.as_bytes(), 0o644)
     }
 }
 

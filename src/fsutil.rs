@@ -47,9 +47,20 @@ pub fn atomic_write(path: &Path, data: &[u8], mode: u32) -> Result<()> {
     result
 }
 
+/// Atomically replaces path after keeping the day's backup of what it held.
+/// A missing file gets its directory created and no backup.
+pub fn write_backed_up(path: &Path, data: &[u8], mode: u32) -> Result<()> {
+    match fs::read(path) {
+        Ok(old) => daily_backup(path, &old)?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?,
+        Err(e) => return Err(e.into()),
+    }
+    atomic_write(path, data, mode)
+}
+
 /// Keeps one copy of the original file per day as path.bak-YYYYMMDD. An
 /// existing backup for today is never overwritten.
-pub fn daily_backup(path: &Path, data: &[u8]) -> Result<()> {
+fn daily_backup(path: &Path, data: &[u8]) -> Result<()> {
     let mut bak = path.as_os_str().to_owned();
     bak.push(format!(".bak-{}", today()));
     let bak = PathBuf::from(bak);
@@ -192,12 +203,15 @@ mod tests {
     }
 
     #[test]
-    fn daily_backup_never_overwrites() {
-        let dir = tempdir("bak");
+    fn daily_backup_keeps_the_first_original() {
+        let dir = tempdir("bak").join("new");
         let path = dir.join("config.toml");
-        daily_backup(&path, b"first").unwrap();
-        daily_backup(&path, b"second").unwrap();
-        let bak = fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
+        write_backed_up(&path, b"first", 0o600).unwrap();
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "a new file has nothing to back up");
+        write_backed_up(&path, b"second", 0o600).unwrap();
+        write_backed_up(&path, b"third", 0o600).unwrap();
+        let bak = fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).find(|p| p != &path).unwrap();
         assert_eq!(fs::read(bak).unwrap(), b"first");
+        assert_eq!(fs::read(&path).unwrap(), b"third");
     }
 }
