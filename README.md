@@ -3,30 +3,30 @@
 Customize [Herdr](https://herdr.dev) from one popup instead of editing
 `config.toml` by hand. It runs on Linux, macOS and Windows.
 
-![The Themes page: bundled palettes on the left, a live preview of the selected theme on the right](docs/screenshots/themes.png)
+![The Settings page: every Herdr setting grouped by section, with the allowed values on each row](docs/screenshots/settings.png)
 
 The popup has four pages. **Tab** and **Shift+Tab** switch pages, as do
 **1** to **4**. Arrow keys only move within a page.
 
+- **Settings**: every documented setting for your Herdr version, with the
+  allowed values shown on each row.
+- **Keys**: every Herdr action and its binding, your custom
+  `[[keys.command]]` entries, and plugin actions that have no key yet.
+  Conflicts are flagged before you save.
 - **Themes**: 112 bundled [terminalcolors.com](https://terminalcolors.com)
   palettes with a live preview. Picking one recolors Herdr's UI and the
   terminal running it.
 - **Plugins**: your installed plugins and their actions, update checks,
   install, enable/disable, uninstall, logs, each plugin's own settings, and a
   marketplace.
-- **Keys**: every Herdr action and its binding, your custom
-  `[[keys.command]]` entries, and plugin actions that have no key yet.
-  Conflicts are flagged before you save.
-- **Settings**: every documented setting for your Herdr version, with the
-  allowed values shown on each row.
 
 The plugin edits `config.toml` in place and keeps your comments and layout.
 It runs `herdr config check` on every change before writing it, then reloads
 Herdr.
 
-| Plugins | Keys | Settings |
+| Keys | Themes | Plugins |
 | --- | --- | --- |
-| ![Plugins page with an update available](docs/screenshots/plugins.png) | ![Keys page flagging a conflict](docs/screenshots/keys.png) | ![Settings page with enum values on each row](docs/screenshots/settings.png) |
+| ![Keys page flagging a conflict](docs/screenshots/keys.png) | ![Themes page with a live preview of the selected palette](docs/screenshots/themes.png) | ![Plugins page with an update available](docs/screenshots/plugins.png) |
 
 ## Install
 
@@ -224,7 +224,7 @@ reload, so press Herdr's reload key in the client afterwards
 ### Commands
 
 ```sh
-herdr-customize ui [page]              # the popup: themes, plugins, keys or settings
+herdr-customize ui [page]              # the popup: settings, keys, themes or plugins
 herdr-customize open [page]            # open the popup inside Herdr from a shell
 herdr-customize bind [key]             # bind a key to the popup (default: prefix+t)
 herdr-customize apply dracula-default  # apply a theme by name
