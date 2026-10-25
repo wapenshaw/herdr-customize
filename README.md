@@ -57,8 +57,20 @@ The Plugins page uses `git` for update checks.
 
 ### Bind a key
 
-Herdr does not bind keys from plugin manifests. Add one binding to
-`config.toml` and reload. After that, the Keys page can add the rest.
+Herdr does not bind keys from plugin manifests, so bind one once after
+installing:
+
+```bash
+herdr plugin action invoke bind --plugin herdr-customize
+```
+
+That binds `prefix+t` to the popup and reloads Herdr, and the result shows
+as a Herdr notification. It changes nothing if one of the plugin's actions
+already has a key, and refuses a key another binding uses. For another key,
+run `./target/release/herdr-customize bind <key>` in the plugin's checkout,
+or change it on the Keys page. The Keys page can add the rest.
+
+To bind it by hand instead, add this to `config.toml` and reload:
 
 ```toml
 [[keys.command]]
@@ -214,6 +226,7 @@ reload, so press Herdr's reload key in the client afterwards
 ```sh
 herdr-customize ui [page]              # the popup: themes, plugins, keys or settings
 herdr-customize open [page]            # open the popup inside Herdr from a shell
+herdr-customize bind [key]             # bind a key to the popup (default: prefix+t)
 herdr-customize apply dracula-default  # apply a theme by name
 herdr-customize sync                   # send the applied colors to local clients again
 herdr-customize sync --client 12345    # ... to one client PID only
@@ -401,6 +414,7 @@ herdr server reload-config
 ```
 
 - `src/main.rs`: CLI routing.
+- `src/bind.rs`: `bind`, which adds the first key binding for the popup.
 - `src/ui/`: the popup. `mod.rs` holds the event loop, `Msg`, `Ctx` and the
   `Page` trait. The four pages, the plugin settings screen and shared widgets
   sit beside it, along with `tests.rs`, a driver that runs the popup without a

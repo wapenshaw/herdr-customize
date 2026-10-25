@@ -73,6 +73,14 @@ title = "Customize: settings"
 contexts = ["workspace"]
 command = ["./target/release/herdr-customize", "open", "settings"]
 
+# Herdr binds no keys from manifests, so a new install runs this once:
+# herdr plugin action invoke bind --plugin herdr-customize
+[[actions]]
+id = "bind"
+title = "Customize: bind prefix+t to the popup"
+contexts = ["global"]
+command = ["./target/release/herdr-customize", "bind"]
+
 [[actions]]
 id = "sync"
 title = "Customize: sync terminal colors"

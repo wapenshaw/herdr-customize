@@ -1,6 +1,7 @@
 //! herdr-customize: themes, plugins, keybindings and settings for Herdr in
 //! one popup.
 
+mod bind;
 mod config;
 mod fsutil;
 mod herdr;
@@ -19,6 +20,7 @@ const USAGE: &str = "Usage: herdr-customize [command]
 
   ui [themes|plugins|keys|settings]  open the customize popup (default: themes)
   open [page]                        open the popup as a Herdr plugin pane
+  bind [key]                         bind a key to the popup (default: prefix+t)
   apply <slug>                       apply a theme
   sync [--client <pid>]              re-send the applied colors to local clients
   preview <slug>                     print a theme preview
@@ -58,6 +60,7 @@ fn run(args: &[String]) -> Result<()> {
                 bail!("open the customize popup: herdr failed");
             }
         }
+        ("bind", 1 | 2) => bind::run(arg(1))?,
         ("sync", 1 | 3) => {
             let client = match (arg(1), arg(2)) {
                 (Some("--client"), Some(pid)) => pid.to_string(),
@@ -81,7 +84,7 @@ fn run(args: &[String]) -> Result<()> {
         ("terminal-sync", 2) => std::process::exit(terminal::run_helper(&args[1])),
         ("preview", 2) => print!("{}", theme::preview::render_swatch(&theme::load_look(&args[1])?.tokens, &args[1])),
         ("apply", 2) => theme::apply_theme(&args[1])?,
-        ("sync" | "invoke-after-close" | "preview" | "apply", _) => bail!("wrong arguments (see herdr-customize help)"),
+        ("bind" | "sync" | "invoke-after-close" | "preview" | "apply", _) => bail!("wrong arguments (see herdr-customize help)"),
         (other, _) => bail!("unknown command: {other} (see herdr-customize help)"),
     }
     Ok(())
