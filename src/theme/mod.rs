@@ -323,27 +323,25 @@ impl Look {
 }
 
 pub fn load_look(slug: &str) -> Result<Look> {
-    Ok(Look::of(&parse_palette_file(&resolve_palette(slug)?)?))
+    Ok(Look::of(&resolve_palette(slug)?.0))
 }
 
-/// The palette file for slug: a user theme first, then a bundled one.
-pub fn resolve_palette(slug: &str) -> Result<PathBuf> {
+/// The palette for slug, a user theme first, then a bundled one, with the
+/// file it came from.
+pub fn resolve_palette(slug: &str) -> Result<(Palette, PathBuf)> {
     if !is_valid_slug(slug) {
         bail!("invalid slug: {slug}");
     }
     let user = user_themes_dir().join(slug);
     match fs::symlink_metadata(&user) {
         Ok(meta) if !meta.is_file() => bail!("user theme is not a regular file: {slug}"),
-        Ok(_) => {
-            parse_palette_file(&user).context("invalid user theme")?;
-            return Ok(user);
-        }
+        Ok(_) => return Ok((parse_palette_file(&user).context("invalid user theme")?, user)),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
     let bundled = plugin_root().join("themes").join(slug);
     if bundled.is_file() {
-        return Ok(bundled);
+        return Ok((parse_palette_file(&bundled).context("invalid bundled theme")?, bundled));
     }
     bail!("theme {slug:?} not found (browse more at https://terminalcolors.com and add one from the clipboard or your editor)")
 }
