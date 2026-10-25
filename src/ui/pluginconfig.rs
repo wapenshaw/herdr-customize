@@ -197,7 +197,7 @@ impl PluginConfig {
         self.assume(&f.name, key, value.clone());
         self.saving += 1;
         let (id, f, key) = (self.plugin.id.clone(), f.clone(), key.to_string());
-        ctx.spawn(move || {
+        ctx.write(move || {
             let (what, result) = match &value {
                 Some(v) => (key.clone(), f.set(&key, v)),
                 None => (format!("{key} default"), f.unset(&key)),

@@ -154,6 +154,8 @@ pub struct Shared {
 }
 
 type Job = Box<dyn FnOnce() -> Msg + Send>;
+/// A finished job's message, and whether the job was a write.
+type Done = (Msg, bool);
 type After = Box<dyn FnOnce() -> Result<()>>;
 type ExecDone = Box<dyn FnOnce(Result<()>) -> Msg>;
 
@@ -162,6 +164,7 @@ enum Effect {
     QuitThen(After),
     Goto(usize, Option<Msg>),
     Spawn(Job),
+    Write(Job),
     Timer(Duration, Msg),
     Exec(Command, ExecDone),
     Send(Msg),
@@ -185,6 +188,12 @@ impl Ctx<'_> {
     /// Runs job on a thread; its Msg comes back to every page.
     pub fn spawn(&mut self, job: impl FnOnce() -> Msg + Send + 'static) {
         self.fx.push(Effect::Spawn(Box::new(job)));
+    }
+
+    /// Runs job, which writes a file, after every write queued before it. The
+    /// popup waits for writes before it exits.
+    pub fn write(&mut self, job: impl FnOnce() -> Msg + Send + 'static) {
+        self.fx.push(Effect::Write(Box::new(job)));
     }
 
     /// Delivers msg to every page after delay.
@@ -234,7 +243,7 @@ impl Ctx<'_> {
     /// Applies edit, which changes key, to the config in the background.
     pub fn save(&mut self, what: impl Into<String>, key: String, edit: impl FnOnce(&mut Doc) -> Result<()> + Send + 'static) {
         let (store, what) = (self.sh.store.clone(), what.into());
-        self.spawn(move || Msg::Saved(save(&store, what, Some(key), edit)));
+        self.write(move || Msg::Saved(save(&store, what, Some(key), edit)));
     }
 }
 
@@ -253,7 +262,7 @@ pub fn load_doc(store: &Store, err: &mut Option<String>) -> Doc {
     }
 }
 
-/// Saves through store; Store keeps saves in order.
+/// Saves through store.
 fn save(store: &Store, what: String, key: Option<String>, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Saved {
     match store.update(edit) {
         Ok(result) => Saved { what, key, result, err: None },
@@ -300,10 +309,18 @@ pub struct App {
     /// Shows every key of the current page in place of its body.
     sheet: bool,
     quit: bool,
+    /// Quitting, with the last writes still running.
+    closing: bool,
+    /// The first write that failed while closing, shown again when the close
+    /// is called off.
+    close_failed: Option<String>,
+    /// Ctrl+C while closing: leave without waiting for the writes.
+    abandon: bool,
     after: Option<After>,
     /// Messages to deliver before the next frame.
     queue: VecDeque<Msg>,
     jobs: Vec<Job>,
+    writes: Vec<Job>,
     timers: Vec<(Instant, Msg)>,
     execs: Vec<(Command, ExecDone)>,
 }
@@ -322,9 +339,13 @@ impl App {
             status_err: false,
             sheet: false,
             quit: false,
+            closing: false,
+            close_failed: None,
+            abandon: false,
             after: None,
             queue: VecDeque::new(),
             jobs: Vec::new(),
+            writes: Vec::new(),
             timers: Vec::new(),
             execs: Vec::new(),
         };
@@ -373,6 +394,7 @@ impl App {
                     }
                 }
                 Effect::Spawn(job) => self.jobs.push(job),
+                Effect::Write(job) => self.writes.push(job),
                 Effect::Timer(delay, msg) => self.timers.push((Instant::now() + delay, msg)),
                 Effect::Exec(cmd, done) => self.execs.push((cmd, done)),
                 Effect::Send(msg) => self.queue.push_back(msg),
@@ -398,6 +420,15 @@ impl App {
     }
 
     pub fn key(&mut self, key: &Key) {
+        // Only ctrl+c counts while closing: a pick made now would wait on a
+        // delay the close does not wait for. Leaving at once also drops what
+        // was to run after closing, which could wait on the same writes.
+        if self.closing {
+            if key.is("ctrl+c") {
+                (self.abandon, self.after) = (true, None);
+            }
+            return;
+        }
         self.status.clear();
         if key.is("ctrl+c") {
             self.quit = true;
@@ -449,6 +480,7 @@ impl App {
             help = format!("tab next page · {help} · esc close");
         }
         let status = match (self.status.is_empty(), self.status_err) {
+            _ if self.closing => line(dim("saving… ctrl+c closes without waiting")),
             (true, _) => Line::default(),
             (false, true) => line(error(format!("✗ {}", self.status))),
             (false, false) => line(ok(self.status.clone())),
@@ -467,16 +499,56 @@ impl App {
         lines
     }
 
-    /// Runs queued jobs on threads, sending their results to tx.
-    fn start_jobs(&mut self, tx: &Sender<Msg>) -> usize {
-        let n = self.jobs.len();
+    /// Runs queued jobs on threads and queued writes on writer, sending
+    /// their results to tx. Returns how many jobs and writes it started.
+    fn start_jobs(&mut self, tx: &Sender<Done>, writer: &Sender<Job>) -> (usize, usize) {
+        let n = (self.jobs.len(), self.writes.len());
         for job in self.jobs.drain(..) {
             let tx = tx.clone();
             std::thread::spawn(move || {
-                let _ = tx.send(job());
+                let _ = tx.send((job(), false));
             });
         }
+        for job in self.writes.drain(..) {
+            let _ = writer.send(job);
+        }
         n
+    }
+
+    /// Delivers a write's result, noting a failure that happens while closing.
+    fn written(&mut self, msg: Msg) {
+        self.dispatch(msg);
+        if self.closing && self.status_err {
+            self.close_failed.get_or_insert_with(|| self.status.clone());
+        }
+    }
+
+    /// Whether the popup may close with `writing` writes still running. A write
+    /// that failed while closing cancels the close, and what was to run after
+    /// it, so its error stays on screen.
+    fn ready_to_close(&mut self, writing: usize) -> bool {
+        if writing > 0 {
+            return false;
+        }
+        if let Some(failed) = self.close_failed.take() {
+            (self.quit, self.closing, self.after) = (false, false, None);
+            (self.status, self.status_err) = (failed, true);
+            return false;
+        }
+        true
+    }
+
+    /// Starts closing, or keeps it going, by saving every pick still waiting
+    /// on its delay.
+    fn shutdown(&mut self) {
+        if !self.closing {
+            (self.closing, self.status_err) = (true, false);
+        }
+        let picks: Vec<_> = self.timers.extract_if(.., |(_, msg)| matches!(msg, Msg::PendingSave { .. })).collect();
+        for (_, msg) in picks {
+            self.dispatch(msg);
+        }
+        self.settle();
     }
 
     /// Delivers timers that are due. Returns whether any were, and the time
@@ -527,7 +599,14 @@ pub fn run(tab: &str) -> Result<()> {
         hook(info);
     }));
     let mut term = enter()?;
-    let result = event_loop(&mut app, &mut term, &tx, &rx);
+    let (writer, done) = start_writer(tx.clone());
+    let result = event_loop(&mut app, &mut term, &tx, &rx, &writer);
+    // An exit while a write runs could leave it half done, so the writes
+    // finish first unless ctrl+c said not to wait.
+    drop(writer);
+    if !app.abandon {
+        let _ = done.join();
+    }
     leave()?;
     result?;
     match app.after.take() {
@@ -550,15 +629,33 @@ fn leave() -> Result<()> {
     Ok(())
 }
 
-fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Msg>, rx: &Receiver<Msg>) -> Result<()> {
-    let mut running = 0;
+/// Runs writes one at a time in the order they arrive, so a later save never
+/// lands before an earlier one; the thread ends once the sender is dropped.
+fn start_writer(tx: Sender<Done>) -> (Sender<Job>, std::thread::JoinHandle<()>) {
+    let (writer, writes) = mpsc::channel::<Job>();
+    let done = std::thread::spawn(move || {
+        for job in writes {
+            let _ = tx.send((job(), true));
+        }
+    });
+    (writer, done)
+}
+
+fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Done>, rx: &Receiver<Done>, writer: &Sender<Job>) -> Result<()> {
+    let (mut running, mut writing) = (0, 0);
     let mut dirty = true;
     loop {
         let (fired, next_timer) = app.fire_timers();
         dirty |= fired;
         app.settle();
-        running += app.start_jobs(tx);
+        let (jobs, writes) = app.start_jobs(tx, writer);
+        (running, writing) = (running + jobs + writes, writing + writes);
         if app.quit {
+            app.shutdown();
+            let (jobs, writes) = app.start_jobs(tx, writer);
+            (running, writing) = (running + jobs + writes, writing + writes);
+        }
+        if app.closing && (app.abandon || app.ready_to_close(writing)) {
             return Ok(());
         }
         if dirty {
@@ -603,9 +700,14 @@ fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Msg>, rx: &Receiver<Ms
                 _ => {}
             }
         }
-        while let Ok(msg) = rx.try_recv() {
+        while let Ok((msg, write)) = rx.try_recv() {
             running -= 1;
-            app.dispatch(msg);
+            if write {
+                writing -= 1;
+                app.written(msg);
+            } else {
+                app.dispatch(msg);
+            }
             dirty = true;
         }
     }

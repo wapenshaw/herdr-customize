@@ -271,7 +271,7 @@ impl SettingsPage {
             Err(e) => return ctx.error(format!("not saved, press E to fix: {e:#}")),
         };
         let store = ctx.sh.store.clone();
-        ctx.spawn(move || {
+        ctx.write(move || {
             let mut saved = save(&store, RAW_WHAT.into(), None, |d| {
                 *d = doc;
                 Ok(())
