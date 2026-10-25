@@ -4,6 +4,14 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.4.0](https://github.com/wapenshaw/herdr-customize/compare/v0.3.0...v0.4.0) (2026-10-25)
+
+
+### Features
+
+* **ui:** open the popup on settings by default ([be510fb](https://github.com/wapenshaw/herdr-customize/commit/be510fb2c48a336027343d7e1f215f9e237d6574))
+* **ui:** put settings first and lead the hints with tab ([cb64679](https://github.com/wapenshaw/herdr-customize/commit/cb6467937526522d74ba414f4b997649fe5632aa))
+
 ## [0.3.0](https://github.com/wapenshaw/herdr-customize/compare/v0.2.0...v0.3.0) (2026-10-25)
 
 

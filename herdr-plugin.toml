@@ -1,6 +1,6 @@
 id = "herdr-customize"
 name = "Herdr Customize"
-version = "0.3.0"
+version = "0.4.0"
 min_herdr_version = "0.8.0"
 description = "Themes, plugins, keybindings and settings for Herdr, all from one popup. No more hunting for config files or hand-editing TOML. Linux, macOS and Windows."
 platforms = ["linux", "macos", "windows"]
