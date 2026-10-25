@@ -130,7 +130,10 @@ fn unix_seconds(t: std::time::SystemTime) -> i64 {
 /// Breaks t into local calendar fields.
 #[cfg(unix)]
 pub fn local_time(t: std::time::SystemTime) -> LocalTime {
-    let secs = unix_seconds(t) as libc::time_t;
+    // Naming libc::time_t warns on musl, where it is due to become 64-bit on
+    // 32-bit targets; let localtime_r's signature pick the type.
+    #[allow(clippy::useless_conversion, reason = "time_t is 32-bit on some targets")]
+    let secs = unix_seconds(t).try_into().unwrap_or_default();
     // SAFETY: localtime_r only writes the tm we pass it.
     let tm = unsafe {
         let mut tm: libc::tm = std::mem::zeroed();
