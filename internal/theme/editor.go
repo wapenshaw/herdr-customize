@@ -1,7 +1,6 @@
 package theme
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -82,7 +81,8 @@ func splitEditor(command string) ([]string, error) {
 	return args, nil
 }
 
-func editorCommand(path string) (*exec.Cmd, error) {
+// EditorCommand opens path in the preferred editor.
+func EditorCommand(path string) (*exec.Cmd, error) {
 	editor := PickEditor()
 	// A preference may be an unquoted executable path containing spaces.
 	var args []string
@@ -103,16 +103,15 @@ func editorCommand(path string) (*exec.Cmd, error) {
 	if runtime.GOOS == "windows" && (strings.EqualFold(filepath.Ext(executable), ".cmd") || strings.EqualFold(filepath.Ext(executable), ".bat")) {
 		// Editors such as VS Code install a .cmd shim rather than a PE executable.
 		// PowerShell's literal argument quoting avoids cmd.exe expansion of paths.
-		command, shell := previewCommand(executable, args...)
+		command, shell := quotedCommand(executable, args...)
 		shellArgs := strings.Fields(shell)
-		return exec.Command(shellArgs[0], append(shellArgs[1:], strings.TrimSuffix(command, " {}"))...), nil
+		return exec.Command(shellArgs[0], append(shellArgs[1:], command)...), nil
 	}
 	return exec.Command(executable, args...), nil
 }
 
-const saveRow = "✓ Save & apply"
-
-func setOverride(body, token, color string) (string, error) {
+// SetOverride records a per-token color for a user theme body.
+func SetOverride(body, token, color string) (string, error) {
 	if !isToken(token) {
 		return "", fmt.Errorf("unknown token: %s", token)
 	}
@@ -136,81 +135,56 @@ func setOverride(body, token, color string) (string, error) {
 	return updated, nil
 }
 
-// EditTheme previews and edits a private scratch file; only Save & apply commits.
-func EditTheme(slug string) error {
+// TokenRow describes one Herdr token of a palette for the token editor.
+type TokenRow struct {
+	Token, Color, Origin, Role string
+	Overridden                 bool
+}
+
+// TokenRows maps body to Herdr tokens in TokenOrder.
+func TokenRows(body string) ([]TokenRow, map[string]string, error) {
+	pal, err := ParsePaletteContent(body)
+	if err != nil {
+		return nil, nil, err
+	}
+	tokens, err := PaletteToTokens(pal)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows := make([]TokenRow, 0, len(TokenOrder))
+	for _, token := range TokenOrder {
+		_, overridden := pal.Overrides[token]
+		origin := TokenOrigin(token)
+		if overridden {
+			origin = "custom override"
+		}
+		rows = append(rows, TokenRow{Token: token, Color: tokens[token], Origin: origin, Role: TokenRole(token), Overridden: overridden})
+	}
+	return rows, tokens, nil
+}
+
+// UserThemeBody returns a user theme's palette for editing.
+func UserThemeBody(slug string) (string, error) {
+	dest, err := userThemePath(slug)
+	if err != nil {
+		return "", err
+	}
+	if _, err := ParsePaletteFile(dest); err != nil {
+		return "", err
+	}
+	body, err := os.ReadFile(dest)
+	return string(body), err
+}
+
+// CommitUserTheme replaces a user theme's palette with an edited body.
+func CommitUserTheme(slug, body string) error {
+	// Recheck ownership before committing; never follow a replaced symlink.
 	dest, err := userThemePath(slug)
 	if err != nil {
 		return err
 	}
-	if _, err := ParsePaletteFile(dest); err != nil {
+	if _, err := ParsePaletteContent(body); err != nil {
 		return err
 	}
-	body, err := os.ReadFile(dest)
-	if err != nil {
-		return err
-	}
-	scratch, err := os.CreateTemp("", "herdr-theme-edit-*")
-	if err != nil {
-		return err
-	}
-	path := scratch.Name()
-	defer os.Remove(path)
-	if err := scratch.Close(); err != nil {
-		return err
-	}
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		if err := atomicWriteFile(path, body, 0o600); err != nil {
-			return err
-		}
-		pal, err := ParsePaletteContent(string(body))
-		if err != nil {
-			return err
-		}
-		tokens, err := PaletteToTokens(pal)
-		if err != nil {
-			return err
-		}
-		var rows []string
-		for _, token := range TokenOrder {
-			origin := TokenOrigin(token)
-			if _, overridden := pal.Overrides[token]; overridden {
-				origin = "custom override"
-			}
-			rows = append(rows, fmt.Sprintf("%-14s %s ← %-16s %s", token, tokens[token], origin, TokenRole(token)))
-		}
-		rows = append(rows, saveRow)
-		_, selected, cancelled, err := runFZF(strings.Join(rows, "\n"), "Edit "+slug+": ",
-			"↵ change hex · Save & apply commits · esc discards", "esc", "preview-file", path)
-		if err != nil || cancelled {
-			return err
-		}
-		if selected == saveRow {
-			// Recheck ownership before committing; never follow a replaced symlink.
-			if _, err := userThemePath(slug); err != nil {
-				return err
-			}
-			if err := atomicWriteFile(dest, body, 0o644); err != nil {
-				return err
-			}
-			return ApplyTheme(slug)
-		}
-		fields := strings.Fields(selected)
-		if len(fields) == 0 || !isToken(fields[0]) {
-			return fmt.Errorf("invalid token selection: %q", selected)
-		}
-		color, err := readAnswer(reader, "New hex for "+fields[0]+" (#rrggbb; empty cancels): ")
-		if err != nil {
-			return err
-		}
-		if color == "" {
-			continue
-		}
-		updated, err := setOverride(string(body), fields[0], color)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			continue
-		}
-		body = []byte(updated)
-	}
+	return atomicWriteFile(dest, []byte(body), 0o644)
 }

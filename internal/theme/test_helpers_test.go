@@ -12,10 +12,7 @@ import (
 func TestMain(m *testing.M) { testutil.Main(m) }
 
 var writeTestFile = testutil.WriteFile
-var fakeFZF = testutil.FakeFZF
 var copyTestExecutable = testutil.CopyExecutable
-
-type fzfStep = testutil.FZFStep
 
 func fixturePalette(t *testing.T) string {
 	t.Helper()

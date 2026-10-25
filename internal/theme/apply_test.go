@@ -117,12 +117,12 @@ func TestLegacyNamesDoNotDisablePickerOrLoseIndexEntries(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		writeTestFile(t, filepath.Join(UserThemesDir(), "con"), fixturePalette(t))
 	}
-	items, err := pickerItems()
-	if err != nil || !strings.Contains(items, "dracula-default") {
+	items, _, err := Themes()
+	if err != nil || !hasItem(items, Item{Slug: "dracula-default"}) {
 		t.Fatalf("legacy entry disabled picker: %v", err)
 	}
 	if runtime.GOOS != "windows" {
-		if !strings.Contains(items, "★ con") {
+		if !hasItem(items, Item{Slug: "con", User: true}) {
 			t.Fatal("existing Unix theme disappeared")
 		}
 		if _, err := ResolvePalette("con"); err != nil {
@@ -147,7 +147,16 @@ func TestLegacyNamesDoNotDisablePickerOrLoseIndexEntries(t *testing.T) {
 func TestEmptySelectionDoesNotDisablePicker(t *testing.T) {
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
 	writeTestFile(t, AppliedFile(), "  \n")
-	if _, err := pickerItems(); err != nil {
+	if _, _, err := Themes(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func hasItem(items []Item, want Item) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	. "github.com/wapenshaw/herdr-customize/internal/theme"
+	"github.com/wapenshaw/herdr-customize/tests/testutil"
 )
 
 func TestCustomThemeOverridesBundledName(t *testing.T) {
@@ -218,27 +219,16 @@ func TestEditorDiscardLeavesOriginal(t *testing.T) {
 	if err := saveFixtureTheme(t, "editable", body); err != nil {
 		t.Fatal(err)
 	}
-	fakeFZF(t, fzfStep{Selection: "\naccent #123456\n"}, fzfStep{Selection: "esc\naccent #123456\n"})
-	stdin, err := os.CreateTemp(t.TempDir(), "stdin")
+	loaded, err := UserThemeBody("editable")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stdin.Close()
-	if _, err := stdin.WriteString("#654321\n"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stdin.Seek(0, 0); err != nil {
-		t.Fatal(err)
-	}
-	originalStdin := os.Stdin
-	os.Stdin = stdin
-	t.Cleanup(func() { os.Stdin = originalStdin })
-	if err := EditTheme("editable"); err != nil {
+	if _, err := SetOverride(loaded, "accent", "#654321"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(UserThemesDir(), "editable"))
 	if err != nil || string(got) != body {
-		t.Fatal("discard changed original theme")
+		t.Fatal("an unsaved edit changed the original theme")
 	}
 }
 
@@ -253,27 +243,20 @@ func TestEditorSaveCommitsWithoutServerReload(t *testing.T) {
 	writeTestFile(t, cfg, "[ui]\nwidth = 30\n")
 	t.Setenv("HERDR_CONFIG_PATH", cfg)
 	t.Setenv("HERDR_CUSTOMIZE_CLIENT_PID", "invalid")
-	fakeFZF(t, fzfStep{Selection: "\naccent #123456\n"}, fzfStep{Selection: "\n" + "✓ Save & apply" + "\n"})
-	stdin, err := os.CreateTemp(t.TempDir(), "stdin")
+	failReload(t)
+	body, err := UserThemeBody("editable")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stdin.Close()
-	if _, err := stdin.WriteString("#654321\n"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stdin.Seek(0, 0); err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := os.CreateTemp(t.TempDir(), "stdout")
+	body, err = SetOverride(body, "accent", "#654321")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer stdout.Close()
-	originalStdin, originalStdout := os.Stdin, os.Stdout
-	os.Stdin, os.Stdout = stdin, stdout
-	t.Cleanup(func() { os.Stdin, os.Stdout = originalStdin, originalStdout })
-	if err := EditTheme("editable"); err != nil {
+	if err := CommitUserTheme("editable", body); err != nil {
+		t.Fatal(err)
+	}
+	quietStdout(t)
+	if err := ApplyTheme("editable"); err != nil {
 		t.Fatalf("local save depended on a server reload: %v", err)
 	}
 	pal, err := ParsePaletteFile(filepath.Join(UserThemesDir(), "editable"))
@@ -301,20 +284,28 @@ func TestApplySavesWithoutServerReload(t *testing.T) {
 	writeTestFile(t, cfg, "[ui]\nwidth = 30\n")
 	t.Setenv("HERDR_CONFIG_PATH", cfg)
 	t.Setenv("HERDR_CUSTOMIZE_CLIENT_PID", "invalid") // Never emit into a real terminal during tests.
-	fakeFZF(t)
-	stdout, err := os.CreateTemp(t.TempDir(), "stdout")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer stdout.Close()
-	originalStdout := os.Stdout
-	os.Stdout = stdout
-	t.Cleanup(func() { os.Stdout = originalStdout })
-	err = ApplyTheme("dracula-default")
-	if err != nil {
+	failReload(t)
+	quietStdout(t)
+	if err := ApplyTheme("dracula-default"); err != nil {
 		t.Fatalf("local save depended on a server reload: %v", err)
 	}
 	if data, err := os.ReadFile(AppliedFile()); err != nil || string(data) != "dracula-default\n" {
 		t.Fatalf("saved config and selection diverged: %q %v", data, err)
 	}
+}
+
+func failReload(t *testing.T) {
+	t.Helper()
+	testutil.FakeHerdr(t, testutil.HerdrResponse{Args: "server reload-config", Stdout: "simulated reload failure", Exit: 2})
+}
+
+func quietStdout(t *testing.T) {
+	t.Helper()
+	stdout, err := os.CreateTemp(t.TempDir(), "stdout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := os.Stdout
+	os.Stdout = stdout
+	t.Cleanup(func() { os.Stdout = original; stdout.Close() })
 }

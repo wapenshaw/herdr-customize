@@ -32,7 +32,7 @@ func TestEditorArguments(t *testing.T) {
 
 func TestOverrideValidation(t *testing.T) {
 	body := fixturePalette(t) + "# hpick-override: accent=#abcdef\n"
-	updated, err := setOverride(body, "accent", "123456")
+	updated, err := SetOverride(body, "accent", "123456")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestOverrideValidation(t *testing.T) {
 		t.Fatal("override did not replace", err)
 	}
 	for _, color := range []string{"#123", "#123456junk", "red"} {
-		if _, err := setOverride(body, "accent", color); err == nil {
+		if _, err := SetOverride(body, "accent", color); err == nil {
 			t.Error("invalid color accepted", color)
 		}
 	}
@@ -58,7 +58,7 @@ func TestWindowsEditorShim(t *testing.T) {
 	writeTestFile(t, path, "@echo off\r\necho %~1\r\necho %~2\r\n")
 	t.Setenv("VISUAL", fmt.Sprintf("%q --wait", path))
 	file := filepath.Join(t.TempDir(), "palette with spaces.txt")
-	cmd, err := editorCommand(file)
+	cmd, err := EditorCommand(file)
 	if err != nil {
 		t.Fatal(err)
 	}

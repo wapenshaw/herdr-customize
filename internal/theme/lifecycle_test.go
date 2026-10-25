@@ -15,7 +15,13 @@ func TestDeleteGuardsAndConfirmation(t *testing.T) {
 		if err := deleteTheme(slug, strings.NewReader("y\n")); err == nil {
 			t.Errorf("delete accepted %q", slug)
 		}
-		if err := EditTheme(slug); err == nil {
+		if err := RemoveUserTheme(slug); err == nil {
+			t.Errorf("remove accepted %q", slug)
+		}
+		if err := CommitUserTheme(slug, fixturePalette(t)); err == nil {
+			t.Errorf("commit accepted %q", slug)
+		}
+		if _, err := UserThemeBody(slug); err == nil {
 			t.Errorf("edit accepted %q", slug)
 		}
 	}

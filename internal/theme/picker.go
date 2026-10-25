@@ -12,10 +12,8 @@ import (
 	"github.com/wapenshaw/herdr-customize/internal/terminal"
 )
 
-const (
-	addRow     = "+ Add new theme…"
-	addClipRow = "+ Add from clipboard…"
-	template   = `# Paste a ghostty-format theme below, then save and close this editor.
+// NewThemeTemplate is the starting text for a theme typed or pasted in an editor.
+const NewThemeTemplate = `# Paste a ghostty-format theme below, then save and close this editor.
 # Required: background, foreground, and palette 0..15 as #rrggbb colors.
 # Get one from https://terminalcolors.com → Download → Ghostty.
 #
@@ -27,139 +25,116 @@ const (
 # ... through ...
 # palette = 15=#a6adc8
 `
-)
 
-// RunPicker uses a loop so repeated deletion/editing never grows the call stack.
-// Inside Herdr with only herdr --remote clients attached, whoever opened it is
-// on another machine whose theme comes from its own config, so changing this
-// machine's config would not affect them; it explains where to run it instead.
-func RunPicker() error {
-	if os.Getenv("HERDR_ENV") != "" {
-		if processes, err := terminal.Processes(); err == nil && terminal.OnlyRemoteClients(processes) {
-			ShowClientSetup()
-			return nil
-		}
-	}
-	for {
-		input, err := pickerItems()
-		if err != nil {
-			return err
-		}
-		header := fmt.Sprintf("↵ apply · tab/+ Add: new · ctrl-e edit ★ · ctrl-d delete ★ · esc cancel\nBrowse 400+ themes: %s", Hyperlink("https://terminalcolors.com", "https://terminalcolors.com"))
-		key, selection, cancelled, err := runFZF(input, "Search themes: ",
-			header,
-			"tab,ctrl-e,ctrl-d", "preview")
-		if err != nil || cancelled {
-			return err
-		}
-		if key == "tab" || (key == "" && (selection == addRow || selection == addClipRow)) {
-			var slug string
-			if key != "tab" && selection == addClipRow {
-				slug, err = AddThemeClipboard()
-			} else {
-				slug, err = AddThemeEditor()
-			}
-			if err != nil {
-				return err
-			}
-			if slug == "" {
-				return nil
-			}
-			return ApplyTheme(slug)
-		}
-		slug := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(selection, "✓ "), "★ "))
-		if key == "ctrl-e" || key == "ctrl-d" {
-			if !IsUserTheme(slug) {
-				fmt.Fprintf(os.Stderr, "Only ★ user-added themes can be edited or deleted: %q.\n", slug)
-				continue
-			}
-			if key == "ctrl-e" {
-				return EditTheme(slug)
-			}
-			if err := DeleteTheme(slug); err != nil {
-				return err
-			}
-			continue
-		}
-		if slug == "" {
-			return nil
-		}
-		return ApplyTheme(slug)
-	}
+// ErrThemeExists reports a user theme that SaveUserTheme would overwrite.
+var ErrThemeExists = errors.New("theme already exists")
+
+// Item is one row of the theme list.
+type Item struct {
+	Slug    string
+	User    bool
+	Applied bool
 }
 
-// ShowClientSetup explains how a remote client picks its own theme.
+// ClientSetup explains how a remote client picks its own theme.
+const ClientSetup = "Themes belong to your client machine.\n\nOpen a local terminal outside Herdr and run:\n\n  herdr-customize picker\n\nThen use Reload config in the Herdr client you want to update.\nInstall herdr-customize locally if you are connected to a remote server.\nThis server's theme and terminal colors are left unchanged."
+
+// OnlyRemoteClients reports whether this runs inside Herdr while only
+// herdr --remote clients are attached. Whoever opened it is then on another
+// machine whose theme comes from its own config, so changing this machine's
+// config would not affect them.
+func OnlyRemoteClients() bool {
+	if os.Getenv("HERDR_ENV") == "" {
+		return false
+	}
+	processes, err := terminal.Processes()
+	return err == nil && terminal.OnlyRemoteClients(processes)
+}
+
+// ShowClientSetup prints ClientSetup and waits for Enter.
 func ShowClientSetup() {
-	fmt.Println("Themes belong to your client machine.\n\nOpen a local terminal outside Herdr and run:\n\n  herdr-customize picker\n\nThen use Reload config in the Herdr client you want to update.\nInstall herdr-customize locally if you are connected to a remote server.\nThis server's theme and terminal colors are left unchanged.\n\nPress Enter to close.")
+	fmt.Println(ClientSetup + "\n\nPress Enter to close.")
 	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
-func pickerItems() (string, error) {
-	users, err := readUserIndex()
+// AppliedSlug returns the recorded theme, or "" when none is usable.
+func AppliedSlug() (string, error) {
+	data, err := os.ReadFile(AppliedFile())
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
 	if err != nil {
 		return "", err
+	}
+	applied := strings.TrimSpace(string(data))
+	if applied != "" && !IsValidSlug(applied) && !IsUserTheme(applied) {
+		return "", nil
+	}
+	return applied, nil
+}
+
+// Themes lists the applied theme first, then user themes, then bundled ones.
+// Unusable user entries are skipped and reported as warnings.
+func Themes() ([]Item, []string, error) {
+	var warnings []string
+	users, err := readUserIndex()
+	if err != nil {
+		return nil, nil, err
 	}
 	bundledIndex := filepath.Join(PluginRoot(), "themes", "index.txt")
 	bundled, invalid, err := readIndex(bundledIndex, IsValidSlug)
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
 	if len(invalid) > 0 {
-		return "", fmt.Errorf("invalid slug %q in %s", invalid[0], bundledIndex)
+		return nil, nil, fmt.Errorf("invalid slug %q in %s", invalid[0], bundledIndex)
 	}
-	applied := ""
-	if data, err := os.ReadFile(AppliedFile()); err == nil {
-		applied = strings.TrimSpace(string(data))
-		if applied != "" && !IsValidSlug(applied) && !IsUserTheme(applied) {
-			fmt.Fprintf(os.Stderr, "Ignoring unsupported saved theme %q; choose a theme to replace it.\n", applied)
-			applied = ""
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
+	applied, err := AppliedSlug()
+	if err != nil {
+		return nil, nil, err
 	}
-	var rows []string
+	var items []Item
 	seen := make(map[string]bool)
+	add := func(item Item) {
+		if !seen[item.Slug] {
+			seen[item.Slug] = true
+			items = append(items, item)
+		}
+	}
 	if applied != "" {
-		rows = append(rows, "✓ "+applied)
-		seen[applied] = true
+		add(Item{Slug: applied, User: IsUserTheme(applied), Applied: true})
 	}
 	for _, slug := range users {
 		// users came from the index already; only the file needs checking.
 		if _, err := userThemeFile(slug); err != nil {
-			fmt.Fprintf(os.Stderr, "Skipping unavailable user theme %q: %v\n", slug, err)
+			warnings = append(warnings, fmt.Sprintf("skipping unavailable user theme %q: %v", slug, err))
 			continue
 		}
-		if !seen[slug] {
-			rows = append(rows, "★ "+slug)
-			seen[slug] = true
-		}
+		add(Item{Slug: slug, User: true})
 	}
 	for _, slug := range bundled {
-		if !seen[slug] {
-			rows = append(rows, "  "+slug)
-			seen[slug] = true
-		}
+		add(Item{Slug: slug})
 	}
-	rows = append(rows, addRow, addClipRow)
-	return strings.Join(rows, "\n"), nil
+	return items, warnings, nil
 }
 
-func readAnswer(reader *bufio.Reader, prompt string) (string, error) {
-	fmt.Fprint(os.Stderr, prompt)
-	answer, err := reader.ReadString('\n')
-	if err != nil && !(errors.Is(err, io.EOF) && answer != "") {
-		return "", err
-	}
-	return strings.TrimSpace(answer), nil
-}
-
-func finalizeTheme(body string) (string, error) {
-	if _, err := ParsePaletteContent(body); err != nil {
-		return "", fmt.Errorf("invalid palette: %w", err)
-	}
-	reader := bufio.NewReader(os.Stdin)
-	name, err := readAnswer(reader, "Theme name: ")
+// ValidateThemeBody checks a Ghostty palette before it is named and saved.
+func ValidateThemeBody(body string) error {
+	pal, err := ParsePaletteContent(body)
 	if err != nil {
+		return fmt.Errorf("invalid palette: %w", err)
+	}
+	if err := validatePalette(pal); err != nil {
+		return fmt.Errorf("invalid palette: %w", err)
+	}
+	return nil
+}
+
+// SaveUserTheme stores body as a user theme named name and returns its slug.
+// An existing theme is replaced only when overwrite is set; otherwise the
+// slug is returned with ErrThemeExists.
+func SaveUserTheme(name, body string, overwrite bool) (string, error) {
+	if err := ValidateThemeBody(body); err != nil {
 		return "", err
 	}
 	slug := Slugify(name)
@@ -171,6 +146,39 @@ func finalizeTheme(body string) (string, error) {
 		if !info.Mode().IsRegular() {
 			return "", fmt.Errorf("theme is not a regular file: %s", slug)
 		}
+		if !overwrite {
+			return slug, ErrThemeExists
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	if err := saveUserTheme(slug, body); err != nil {
+		return "", err
+	}
+	return slug, nil
+}
+
+func readAnswer(reader *bufio.Reader, prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	answer, err := reader.ReadString('\n')
+	if err != nil && !(errors.Is(err, io.EOF) && answer != "") {
+		return "", err
+	}
+	return strings.TrimSpace(answer), nil
+}
+
+// finalizeTheme names and saves body, prompting on stdin.
+func finalizeTheme(body string) (string, error) {
+	if err := ValidateThemeBody(body); err != nil {
+		return "", err
+	}
+	reader := bufio.NewReader(os.Stdin)
+	name, err := readAnswer(reader, "Theme name: ")
+	if err != nil {
+		return "", err
+	}
+	slug, err := SaveUserTheme(name, body, false)
+	if errors.Is(err, ErrThemeExists) {
 		yn, err := readAnswer(reader, fmt.Sprintf("%q already exists. Overwrite? [y/N] ", slug))
 		if err != nil {
 			return "", err
@@ -178,10 +186,11 @@ func finalizeTheme(body string) (string, error) {
 		if !strings.EqualFold(yn, "y") && !strings.EqualFold(yn, "yes") {
 			return "", nil
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	if err := saveUserTheme(slug, body); err != nil {
+		slug, err = SaveUserTheme(name, body, true)
+		if err != nil {
+			return "", err
+		}
+	} else if err != nil {
 		return "", err
 	}
 	fmt.Fprintf(os.Stderr, "Saved theme %q.\n", slug)
@@ -226,20 +235,32 @@ func AddThemeClipboard() (string, error) {
 	return finalizeTheme(clip)
 }
 
-func AddThemeEditor() (string, error) {
+// NewThemeFile writes NewThemeTemplate to a temporary file for an editor.
+// The caller removes it.
+func NewThemeFile() (string, error) {
 	f, err := os.CreateTemp("", "herdr-theme-*.txt")
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(f.Name())
-	if _, err := f.WriteString(template); err != nil {
+	if _, err := f.WriteString(NewThemeTemplate); err != nil {
 		f.Close()
+		os.Remove(f.Name())
 		return "", err
 	}
 	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
 		return "", err
 	}
-	cmd, err := editorCommand(f.Name())
+	return f.Name(), nil
+}
+
+func AddThemeEditor() (string, error) {
+	path, err := NewThemeFile()
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(path)
+	cmd, err := EditorCommand(path)
 	if err != nil {
 		return "", err
 	}
@@ -247,14 +268,7 @@ func AddThemeEditor() (string, error) {
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("editor failed: %w", err)
 	}
-	pal, err := ParsePaletteFile(f.Name())
-	if err != nil {
-		return "", err
-	}
-	if err := validatePalette(pal); err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(f.Name())
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
@@ -265,8 +279,7 @@ func AddThemeEditor() (string, error) {
 func DeleteTheme(slug string) error { return deleteTheme(slug, os.Stdin) }
 
 func deleteTheme(slug string, input io.Reader) error {
-	dest, err := userThemePath(slug)
-	if err != nil {
+	if _, err := userThemePath(slug); err != nil {
 		return err
 	}
 	answer, err := readAnswer(bufio.NewReader(input), fmt.Sprintf("Delete %q? [y/N] ", slug))
@@ -278,6 +291,20 @@ func deleteTheme(slug string, input io.Reader) error {
 	}
 	if !strings.EqualFold(answer, "y") && !strings.EqualFold(answer, "yes") {
 		return nil
+	}
+	if err := RemoveUserTheme(slug); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Deleted theme %q.\n", slug)
+	return nil
+}
+
+// RemoveUserTheme deletes a user theme and clears the selection marker if it
+// pointed at it. Bundled themes cannot be removed.
+func RemoveUserTheme(slug string) error {
+	dest, err := userThemePath(slug)
+	if err != nil {
+		return err
 	}
 	marker, err := os.ReadFile(AppliedFile())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -294,6 +321,5 @@ func deleteTheme(slug string, input io.Reader) error {
 	if err := errors.Join(indexErr, markerErr); err != nil {
 		return fmt.Errorf("theme deleted, but state cleanup failed: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Deleted theme %q.\n", slug)
 	return nil
 }

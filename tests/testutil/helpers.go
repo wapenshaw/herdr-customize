@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -25,12 +24,7 @@ func WriteFile(t *testing.T, path, body string) {
 	}
 }
 
-type FZFStep struct {
-	Selection string
-	ExitCode  int
-}
-
-// The same test binary acts as a fake fzf or Herdr in subprocess tests. This
+// The same test binary acts as a fake Herdr in subprocess tests. This
 // avoids assuming a POSIX shell or using platform-specific executable scripts.
 func Main(m *testing.M) {
 	if len(os.Args) > 2 && os.Args[1] == "terminal-sync" {
@@ -55,36 +49,6 @@ func Main(m *testing.M) {
 		exe, _ := os.Executable()
 		if strings.TrimSuffix(filepath.Base(exe), ".exe") == "herdr" {
 			os.Exit(runFakeHerdr(script))
-		}
-	}
-	if script := os.Getenv("THEME_TEST_FZF_SCRIPT"); script != "" {
-		exe, _ := os.Executable()
-		if strings.TrimSuffix(filepath.Base(exe), ".exe") == "fzf" {
-			data, err := os.ReadFile(script)
-			if err != nil {
-				os.Exit(2)
-			}
-			var steps []FZFStep
-			if json.Unmarshal(data, &steps) != nil {
-				os.Exit(2)
-			}
-			counter, _ := os.ReadFile(script + ".count")
-			n, _ := strconv.Atoi(string(counter))
-			if n >= len(steps) {
-				os.Exit(2)
-			}
-			if os.WriteFile(script+".count", []byte(strconv.Itoa(n+1)), 0o600) != nil {
-				os.Exit(2)
-			}
-			if steps[n].ExitCode != 0 {
-				os.Exit(steps[n].ExitCode)
-			}
-			fmt.Print(steps[n].Selection)
-			os.Exit(0)
-		}
-		if strings.TrimSuffix(filepath.Base(exe), ".exe") == "herdr" {
-			fmt.Fprintln(os.Stderr, "simulated reload failure")
-			os.Exit(2)
 		}
 	}
 	cleanup := isolate()
@@ -132,27 +96,6 @@ func CopyExecutable(t *testing.T, path string) {
 	if err := os.WriteFile(path, data, 0o755); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func FakeFZF(t *testing.T, steps ...FZFStep) string {
-	t.Helper()
-	dir := t.TempDir()
-	suffix := ""
-	if runtime.GOOS == "windows" {
-		suffix = ".exe"
-	}
-	CopyExecutable(t, filepath.Join(dir, "fzf"+suffix))
-	CopyExecutable(t, filepath.Join(dir, "herdr"+suffix))
-	script := filepath.Join(dir, "steps.json")
-	data, err := json.Marshal(steps)
-	if err != nil {
-		t.Fatal(err)
-	}
-	WriteFile(t, script, string(data))
-	t.Setenv("THEME_TEST_FZF_SCRIPT", script)
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("HERDR_BIN_PATH", filepath.Join(dir, "herdr"+suffix))
-	return script
 }
 
 // HerdrResponse is one scripted answer of the fake herdr. Args must equal the
