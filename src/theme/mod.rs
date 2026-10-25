@@ -577,103 +577,11 @@ pub fn new_theme_file() -> Result<PathBuf> {
     Ok(path)
 }
 
-/* ------------------------------------------------------------- editors */
-
-/// VISUAL or EDITOR, else an installed fallback.
-fn pick_editor() -> String {
-    for key in ["VISUAL", "EDITOR"] {
-        if let Some(v) = env(key) {
-            return v;
-        }
-    }
-    let fallback = if cfg!(windows) { "notepad.exe" } else { "vi" };
-    ["nvim", "nano"].iter().find(|n| proc::look_path(n).is_some()).map_or(fallback, |n| n).to_string()
-}
-
-/// Splits an editor command without evaluating shell syntax.
-fn split_editor(command: &str) -> Result<Vec<String>> {
-    let mut args = Vec::new();
-    let mut word = String::new();
-    let mut quote: Option<char> = None;
-    let mut started = false;
-    let chars: Vec<char> = command.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied();
-        if c == '\\' && next.is_some_and(|n| (quote == Some('"') && n == '"') || (quote.is_none() && n.is_whitespace())) {
-            word.push(next.unwrap());
-            started = true;
-            i += 2;
-            continue;
-        }
-        match quote {
-            Some(q) if c == q => quote = None,
-            Some(_) => word.push(c),
-            None if c == '\'' || c == '"' => quote = Some(c),
-            None if c.is_whitespace() => {
-                if started {
-                    args.push(std::mem::take(&mut word));
-                    started = false;
-                }
-                i += 1;
-                continue;
-            }
-            None => word.push(c),
-        }
-        started = true;
-        i += 1;
-    }
-    if quote.is_some() {
-        bail!("unclosed quote in editor command");
-    }
-    if started {
-        args.push(word);
-    }
-    if args.first().is_none_or(String::is_empty) {
-        bail!("editor command is empty");
-    }
-    Ok(args)
-}
-
-/// A command that opens path in the preferred editor.
-pub fn editor_command(path: &Path) -> Result<Command> {
-    let editor = pick_editor();
-    // A preference may be an unquoted executable path containing spaces.
-    let args = match proc::look_path(&editor) {
-        Some(resolved) => vec![resolved.to_string_lossy().into_owned()],
-        None => split_editor(&editor)?,
-    };
-    let exe = proc::look_path(&args[0]).ok_or_else(|| anyhow!("editor {:?} not found", args[0]))?;
-    let is_script = exe.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
-    if cfg!(windows) && is_script {
-        // Editors such as VS Code install a .cmd shim rather than an .exe.
-        // PowerShell's literal quoting keeps cmd.exe from expanding paths.
-        let quote = |s: &str| format!("'{}'", s.replace('\'', "''"));
-        let mut line = format!("& {}", quote(&exe.to_string_lossy()));
-        for arg in args[1..].iter().map(String::as_str).chain([path.to_string_lossy().as_ref()]) {
-            line.push(' ');
-            line.push_str(&quote(arg));
-        }
-        let mut cmd = Command::new(powershell());
-        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &line]);
-        return Ok(cmd);
-    }
-    let mut cmd = Command::new(exe);
-    cmd.args(&args[1..]).arg(path);
-    Ok(cmd)
-}
-
-/// PowerShell 7 when installed, else Windows PowerShell.
-fn powershell() -> &'static str {
-    if proc::look_path("pwsh.exe").is_some() { "pwsh.exe" } else { "powershell.exe" }
-}
-
 /// The text on the clipboard.
 pub fn read_clipboard() -> Result<String> {
     if cfg!(windows) {
         let script = "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Get-Clipboard -Raw";
-        let out = Command::new(powershell()).args(["-NoProfile", "-NonInteractive", "-Command", script]).output()?;
+        let out = Command::new(proc::powershell()).args(["-NoProfile", "-NonInteractive", "-Command", script]).output()?;
         if !out.status.success() {
             bail!("read clipboard: {}", String::from_utf8_lossy(&out.stderr).trim());
         }
@@ -734,15 +642,6 @@ palette = 8=#585b70\npalette = 9=#f38ba8\npalette = 10=#a6e3a1\npalette = 11=#f9
         assert!(is_valid_slug("catppuccin-mocha"));
         assert!(!is_valid_slug("../x"));
         assert!(!is_valid_slug("a--b"));
-    }
-
-    #[test]
-    fn editor_splitting() {
-        assert_eq!(split_editor("code --wait").unwrap(), ["code", "--wait"]);
-        assert_eq!(split_editor("'/Applications/My Editor' -n").unwrap(), ["/Applications/My Editor", "-n"]);
-        assert_eq!(split_editor(r"my\ editor").unwrap(), ["my editor"]);
-        assert!(split_editor("'open").is_err());
-        assert!(split_editor("   ").is_err());
     }
 
     #[test]

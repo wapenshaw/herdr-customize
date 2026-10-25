@@ -15,7 +15,6 @@ use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc, save};
 use crate::config::{self, Doc, Value};
 use crate::herdr;
 use crate::schema::{self, Reference};
-use crate::theme;
 use crate::theme::preview::rgb;
 
 /// How long ←/→ must rest before the picked value is saved, so cycling
@@ -250,22 +249,16 @@ impl SettingsPage {
         if let Err(e) = fs::write(&path, data) {
             return ctx.error(e);
         }
-        match theme::editor_command(&path) {
-            Ok(cmd) => ctx.exec(cmd, move |ok| Msg::RawEdited { path, ok }),
-            Err(e) => {
-                let _ = fs::remove_file(&path);
-                ctx.error(e);
-            }
-        }
+        ctx.edit_file(path.clone(), move |text| {
+            let _ = fs::remove_file(&path);
+            Msg::RawEdited(text)
+        });
     }
 
-    fn raw_edited(&mut self, path: &std::path::Path, ok: &anyhow::Result<()>, ctx: &mut Ctx) {
-        let data = fs::read_to_string(path);
-        let _ = fs::remove_file(path);
-        let data = match (ok, data) {
-            (Err(e), _) => return ctx.error(format!("editor: {e}")),
-            (_, Err(e)) => return ctx.error(e),
-            (Ok(()), Ok(data)) => data,
+    fn raw_edited(&mut self, text: &mut anyhow::Result<String>, ctx: &mut Ctx) {
+        let data = match text {
+            Ok(data) => std::mem::take(data),
+            Err(e) => return ctx.error(e),
         };
         // Kept until the save succeeds, so a rejected edit can be resumed.
         self.raw = Some(data.clone());
@@ -505,9 +498,7 @@ impl Page for SettingsPage {
                     self.flush(ctx);
                 }
             }
-            Msg::RawEdited { path, ok } => {
-                self.raw_edited(path, ok, ctx);
-            }
+            Msg::RawEdited(text) => self.raw_edited(text, ctx),
             _ => {}
         }
     }

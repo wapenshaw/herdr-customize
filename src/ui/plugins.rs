@@ -15,7 +15,7 @@ use super::widgets::{self, *};
 use super::{Ctx, Hint, Key, Msg, Page, Shared, load_plugins};
 use crate::fsutil;
 use crate::plugins::{self, Log, MARKET_TOPIC, Plugin, Repo, State, Status};
-use crate::{proc, theme};
+use crate::proc;
 
 /// How many results each marketplace request fetches.
 const MARKET_PAGE: usize = 50;
@@ -382,10 +382,7 @@ impl PluginsPage {
         if !path.exists() {
             return ctx.error(format!("{} not found", path.display()));
         }
-        match theme::editor_command(&path) {
-            Ok(cmd) => ctx.exec(cmd, Msg::RegistryEdited),
-            Err(e) => ctx.error(e),
-        }
+        ctx.edit_file(path, |text| Msg::RegistryEdited(text.map(drop)));
     }
 
     /// Fetches one page of marketplace results; page 1 starts over.
@@ -851,7 +848,7 @@ impl Page for PluginsPage {
             },
             Msg::RegistryEdited(result) => {
                 if let Err(e) = result {
-                    ctx.error(format!("editor: {e}"));
+                    ctx.error(e);
                 }
                 ctx.spawn(load_plugins);
             }
