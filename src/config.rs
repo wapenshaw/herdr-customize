@@ -72,6 +72,14 @@ pub fn lookup<'a>(table: &'a toml::Table, path: &[String]) -> Option<&'a Value> 
     Some(current)
 }
 
+/// The entries of [[path]] in a decoded table.
+pub fn tables_at(table: &toml::Table, path: &[String]) -> Vec<toml::Table> {
+    match lookup(table, path) {
+        Some(Value::Array(items)) => items.iter().filter_map(|v| v.as_table().cloned()).collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Renders a dotted key, quoting parts that are not bare keys.
 pub fn render_key(path: &[String]) -> String {
     path.iter().map(|p| if !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') { p.clone() } else { quote(p) }).collect::<Vec<_>>().join(".")
@@ -274,10 +282,7 @@ impl Doc {
     /// The decoded entries of an array of tables such as keys.command,
     /// whether written as [[headers]] or inline.
     pub fn array_table(&self, path: &[String]) -> Vec<toml::Table> {
-        match lookup(&self.decoded(), path) {
-            Some(Value::Array(items)) => items.iter().filter_map(|v| v.as_table().cloned()).collect(),
-            _ => Vec::new(),
-        }
+        tables_at(&self.decoded(), path)
     }
 
     /// Adds a [[path]] entry after the existing ones.

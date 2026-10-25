@@ -541,6 +541,21 @@ fn theme_block_is_checked_and_not_reloaded() {
     assert!(config.contains("[theme.custom]\npanel_bg = ") && config.contains("[theme.custom.dark]\naccent = \"#ffffff\""), "{config}");
 }
 
+// Pages rebuild from the config a save wrote instead of reading it again.
+#[test]
+fn saves_rebuild_from_what_they_wrote() {
+    let mut d = Driver::new("settings", "");
+    let config: toml::Table = toml::from_str("zz_probe = 1\n[[keys.command]]\nkey = \"f9\"\ntype = \"shell\"\ncommand = \"zz-probe\"\n").unwrap();
+    d.app.dispatch(Msg::Saved(Saved { what: "probe".into(), config: Some(config), ..Default::default() }));
+    d.typ("/");
+    d.typ("zz_probe");
+    assert!(d.screen().contains("not a Herdr setting"), "{}", d.screen());
+    d.press(&["esc", "tab"]);
+    d.typ("/");
+    d.typ("zz-probe");
+    assert!(d.screen().contains("f9"), "{}", d.screen());
+}
+
 // Themes and the process scan cost the popup's start, so they wait until
 // the Themes page is shown.
 #[test]

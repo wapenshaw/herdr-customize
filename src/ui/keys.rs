@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow, bail};
 use ratatui::text::{Line, Span};
 
 use super::widgets::*;
-use super::{Ctx, Key, Msg, Page, Shared, load_doc};
+use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc};
 use crate::config::{self, Field, Value};
 use crate::keys::{self, Binding};
 use crate::plugins::Plugin;
@@ -166,13 +166,16 @@ impl KeysPage {
 
     /// Reads the config and recomputes rows, conflicts and problems.
     fn rebuild(&mut self, sh: &Shared) {
-        let doc = load_doc(&sh.store, &mut self.load_err);
         // Decoded once: a lookup per key would re-serialize and re-parse the
         // whole document each time.
-        let table = doc.decoded();
+        let table = load_doc(&sh.store, &mut self.load_err).decoded();
+        self.rebuild_from(sh, &table);
+    }
+
+    fn rebuild_from(&mut self, sh: &Shared, table: &toml::Table) {
         let mut rows = vec![KeyRow::new(Kind::Header, "Herdr actions".into())];
         for k in sh.reference.section("keys").map(|s| s.keys.as_slice()).unwrap_or_default() {
-            let current = config::lookup(&table, &k.path()).cloned();
+            let current = config::lookup(table, &k.path()).cloned();
             let changed = current.is_some();
             let action = k.key.trim_start_matches("keys.").to_string();
             let values = keys::indexed(&action, keys::values(current.or_else(|| k.default_value()).as_ref()));
@@ -184,7 +187,7 @@ impl KeysPage {
         let installed: HashSet<String> = plugins.iter().flat_map(|p| p.actions.iter().map(|a| a.qualified(&p.id))).collect();
         let mut bound = HashSet::new();
         rows.push(KeyRow::new(Kind::Header, "Custom commands".into()));
-        for (index, entry) in doc.array_table(&command_path()).into_iter().enumerate() {
+        for (index, entry) in config::tables_at(table, &command_path()).into_iter().enumerate() {
             let (key, kind, command, desc) = (text(&entry, "key"), text(&entry, "type"), text(&entry, "command"), text(&entry, "description"));
             let mut missing = false;
             if kind == CommandType::PluginAction.name() {
@@ -574,6 +577,10 @@ impl Page for KeysPage {
                     self.plugins = Some(list.clone());
                 }
                 self.rebuild(ctx.sh);
+            }
+            Msg::Saved(Saved { config: Some(table), .. }) => {
+                self.load_err = None;
+                self.rebuild_from(ctx.sh, table);
             }
             Msg::Reference(_) | Msg::Saved(_) => self.rebuild(ctx.sh),
             Msg::BindAction { qualified, title } => self.bind_action(qualified, title),
