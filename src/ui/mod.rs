@@ -612,4 +612,4 @@ fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Msg>, rx: &Receiver<Ms
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

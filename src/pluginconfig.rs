@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::LazyLock;
 
 use anyhow::{Context, Result, bail};
 use regex::Regex;
@@ -181,10 +181,6 @@ fn type_of(value: &Value) -> &'static str {
     }
 }
 
-/// Orders writes to plugin config files. They have no herdr config check
-/// and are never config.toml, so they do not wait on config::SAVING.
-static WRITES: Mutex<()> = Mutex::new(());
-
 impl File {
     /// Writes key, creating the file when needed. Load again to see it.
     pub fn set(&self, key: &str, value: &Value) -> Result<()> {
@@ -216,7 +212,7 @@ impl File {
         if self.format == Format::Other {
             bail!("{} is not a TOML or .env file", self.name);
         }
-        let _guard = WRITES.lock().unwrap_or_else(PoisonError::into_inner);
+        let _lock = fsutil::write_lock(&self.path)?;
         let old = match fs::read_to_string(&self.path) {
             Ok(t) => t,
             Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
@@ -527,6 +523,24 @@ mod tests {
         assert_eq!(c.files[0].entries[0].value, Some(Value::Integer(1)));
     }
 
+    // Another process holds the same lock while it edits; an edit here must
+    // wait rather than load the file under it.
+    #[test]
+    fn edits_wait_for_the_file_lock() {
+        let _env = crate::ui::tests::isolated();
+        let dir = tempdir("lock");
+        let path = dir.join("a.env");
+        let f = File { name: "a.env".into(), path: path.clone(), format: Format::Env, missing: true, entries: Vec::new() };
+        let held = fsutil::write_lock(&path).unwrap();
+        let edit = std::thread::spawn(move || f.set("A", &Value::Integer(1)));
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(!path.exists());
+        drop(held);
+        edit.join().unwrap().unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "A=1\n");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "the lock stays out of the plugin's config folder");
+    }
+
     #[test]
     fn quoted_toml_keys_stay_whole() {
         let entries = read_toml("\"a.b\" = 1\n").unwrap();
@@ -561,6 +575,7 @@ mod tests {
 
     #[test]
     fn load_reads_a_directory() {
+        let _env = crate::ui::tests::isolated();
         let dir = std::env::temp_dir().join(format!("hc-pluginconfig-{}", std::process::id()));
         let root = dir.join("root");
         let cfg = dir.join("cfg");

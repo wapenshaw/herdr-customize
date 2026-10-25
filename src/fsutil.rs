@@ -90,6 +90,45 @@ pub fn lock(path: &Path) -> Result<File> {
     Ok(f)
 }
 
+/// Holds the write lock for path, kept in the plugin's state folder, until
+/// the returned file is dropped. Writers in this and every other process
+/// take turns, so none loads the file before another has replaced it.
+pub fn write_lock(path: &Path) -> Result<File> {
+    let dir = crate::theme::state_dir().join("locks");
+    fs::create_dir_all(&dir)?;
+    lock(&dir.join(format!("{:016x}.lock", path_hash(path)))).with_context(|| format!("lock {}", path.display()))
+}
+
+/// FNV-1a of the real path. Unlike std's hasher it never changes between
+/// builds, so every version of the plugin picks the same lock.
+fn path_hash(path: &Path) -> u64 {
+    let mut text = real_path(path).to_string_lossy().into_owned();
+    if cfg!(windows) {
+        text = text.to_lowercase();
+    }
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
+}
+
+/// path with symlinks and junctions resolved, so every way to reach a file
+/// names the same one. A missing file resolves its closest existing parent.
+fn real_path(path: &Path) -> PathBuf {
+    let abs = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut missing = Vec::new();
+    let mut base = abs.as_path();
+    loop {
+        if let Ok(real) = fs::canonicalize(base) {
+            return missing.iter().rev().fold(real, |p, name| p.join(name));
+        }
+        match (base.parent(), base.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name.to_os_string());
+                base = parent;
+            }
+            _ => return abs,
+        }
+    }
+}
+
 /// Unix permission bits for new files.
 #[cfg(unix)]
 fn with_mode(o: &mut OpenOptions, mode: u32) -> &mut OpenOptions {
@@ -221,6 +260,31 @@ mod tests {
     fn format_local_fills_every_field() {
         let text = format_local(std::time::SystemTime::now(), "on %Y-%m-%d at %H:%M:%S");
         assert!(regex::Regex::new(r"^on \d{4}-\d{2}-\d{2} at \d{2}:\d{2}:\d{2}$").unwrap().is_match(&text), "{text}");
+    }
+
+    // Every process and plugin version must name the same lock for a file.
+    #[test]
+    fn path_hash_is_stable() {
+        assert_eq!(path_hash(Path::new("/herdr/config.toml")), path_hash(Path::new("/herdr/config.toml")));
+        assert_ne!(path_hash(Path::new("/herdr/config.toml")), path_hash(Path::new("/herdr/other.toml")));
+    }
+
+    // A config reached through a linked folder must share the original's lock,
+    // whether or not the file exists yet.
+    #[test]
+    fn linked_paths_share_a_lock() {
+        let dir = tempdir("linked");
+        let real = dir.join("real");
+        fs::create_dir_all(&real).unwrap();
+        let link = dir.join("link");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        // A junction needs no privilege, unlike a Windows symlink.
+        #[cfg(windows)]
+        assert!(std::process::Command::new("cmd").args(["/C", "mklink", "/J"]).arg(&link).arg(&real).output().unwrap().status.success());
+        assert_eq!(path_hash(&link.join("config.toml")), path_hash(&real.join("config.toml")));
+        fs::write(real.join("config.toml"), "").unwrap();
+        assert_eq!(path_hash(&link.join("config.toml")), path_hash(&real.join("config.toml")));
     }
 
     #[test]
