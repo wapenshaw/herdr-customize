@@ -231,7 +231,7 @@ impl PluginConfig {
         if !same {
             self.flush(ctx);
         }
-        self.pending = Some(Pending { key: e.key.key.clone(), path: Vec::new(), value: opts[i].value.clone(), seq });
+        self.pending = Some(Pending { key: e.key.key.clone(), value: opts[i].value.clone(), seq });
         self.pending_file = f.name.clone();
         ctx.after(PICK_DELAY, Msg::PluginConfigPick(seq));
     }
