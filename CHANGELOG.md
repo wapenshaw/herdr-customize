@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions follow semver and
 match the `version` field in `herdr-plugin.toml`.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-25
 
 - First release as `herdr-customize`, a standalone repository continuing
   [qintmb/herdr-theme-picker](https://github.com/qintmb/herdr-theme-picker)
