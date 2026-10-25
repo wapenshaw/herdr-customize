@@ -166,13 +166,10 @@ impl ThemesPage {
             Ok(p) => p,
             Err(e) => return ctx.error(e),
         };
-        match theme::editor_command(&path) {
-            Ok(cmd) => ctx.exec(cmd, move |ok| Msg::ThemeEditorDone { path, ok }),
-            Err(e) => {
-                let _ = fs::remove_file(&path);
-                ctx.error(e);
-            }
-        }
+        ctx.edit_file(path.clone(), move |body| {
+            let _ = fs::remove_file(&path);
+            Msg::ThemeEditorDone(body)
+        });
     }
 
     fn add_from_clipboard(&mut self, ctx: &mut Ctx) {
@@ -475,15 +472,10 @@ impl Page for ThemesPage {
                     ctx.status(warnings.join("; "));
                 }
             }
-            Msg::ThemeEditorDone { path, ok } => {
-                let data = fs::read_to_string(&*path);
-                let _ = fs::remove_file(&*path);
-                match (ok, data) {
-                    (Err(e), _) => ctx.error(format!("editor failed: {e}")),
-                    (_, Err(e)) => ctx.error(e),
-                    (Ok(()), Ok(body)) => self.ask_name(body, ctx),
-                }
-            }
+            Msg::ThemeEditorDone(body) => match body {
+                Ok(body) => self.ask_name(std::mem::take(body), ctx),
+                Err(e) => ctx.error(e),
+            },
             _ => {}
         }
     }

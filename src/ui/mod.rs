@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::{execute, terminal};
 use ratatui::Terminal;
@@ -141,10 +141,8 @@ pub enum Msg {
         warnings: Vec<String>,
         err: Option<anyhow::Error>,
     },
-    ThemeEditorDone {
-        path: PathBuf,
-        ok: Result<()>,
-    },
+    /// The text of a new palette, from the editor.
+    ThemeEditorDone(Result<String>),
     // Plugins
     Checks(HashMap<String, Status>),
     Market {
@@ -194,10 +192,8 @@ pub enum Msg {
         saved: Saved,
     },
     Issues(CheckResult),
-    RawEdited {
-        path: PathBuf,
-        ok: Result<()>,
-    },
+    /// config.toml as edited in the editor.
+    RawEdited(Result<String>),
 }
 
 /// State every page reads: the config file and the key reference.
@@ -265,6 +261,18 @@ impl Ctx<'_> {
     /// Runs cmd on the terminal, with the popup suspended until it exits.
     pub fn exec(&mut self, cmd: Command, done: impl FnOnce(Result<()>) -> Msg + 'static) {
         self.fx.push(Effect::Exec(cmd, Box::new(done)));
+    }
+
+    /// Opens path in the user's editor with the popup suspended, then passes
+    /// done the file's text or why the edit failed.
+    pub fn edit_file(&mut self, path: PathBuf, done: impl FnOnce(Result<String>) -> Msg + 'static) {
+        match crate::proc::editor_command(&path) {
+            Ok(cmd) => self.exec(cmd, move |ok| {
+                let text = ok.and_then(|()| std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display())));
+                done(text.context("editor"))
+            }),
+            Err(e) => self.send(done(Err(e.context("editor")))),
+        }
     }
 
     /// Applies edit to the config in the background.

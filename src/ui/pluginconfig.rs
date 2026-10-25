@@ -11,7 +11,7 @@ use super::{Ctx, Key, Msg};
 use crate::config::Value;
 use crate::pluginconfig::{self, Config, Entry, File, Format, SCHEMA_FILE};
 use crate::plugins::{self, Plugin};
-use crate::{schema, theme};
+use crate::schema;
 
 /// Keeps writes to plugin config files in order.
 static WRITES: Mutex<()> = Mutex::new(());
@@ -248,14 +248,12 @@ impl PluginConfig {
     /// Opens a config file in the user's editor; the plugin validates it, not
     /// Herdr, so it is edited in place.
     fn edit_file(&mut self, f: &File, ctx: &mut Ctx) {
-        let cmd = match theme::editor_command(&f.path) {
-            Ok(cmd) => cmd,
-            Err(e) => return ctx.error(e),
-        };
-        let (id, name) = (self.plugin.id.clone(), f.name.clone());
-        ctx.exec(cmd, move |ok| match ok {
-            Ok(()) => Msg::PluginConfigReload(id),
-            Err(e) => Msg::PluginConfigSaved { id, what: name, err: Some(e.context("editor")) },
+        let (id, name, path) = (self.plugin.id.clone(), f.name.clone(), f.path.clone());
+        ctx.edit_file(f.path.clone(), move |text| match text {
+            Ok(_) => Msg::PluginConfigReload(id),
+            // A new file the editor closed without saving is still missing.
+            Err(_) if !path.exists() => Msg::PluginConfigReload(id),
+            Err(e) => Msg::PluginConfigSaved { id, what: name, err: Some(e) },
         });
     }
 

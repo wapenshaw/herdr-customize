@@ -1,12 +1,12 @@
-//! Helper processes that outlive the popup. Herdr tears down a popup's whole
-//! process group (or job object on Windows) when it closes, so a helper runs
-//! in its own session.
+//! Starting other programs: helpers that outlive the popup, the browser and
+//! the user's editor. Herdr tears down a popup's whole process group (or job
+//! object on Windows) when it closes, so a helper runs in its own session.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 
 /// Starts path in a new session with no standard streams, without waiting.
 pub fn start_detached(path: &Path, args: &[&str]) -> Result<()> {
@@ -122,4 +122,108 @@ fn is_executable(p: &Path) -> bool {
 #[cfg(windows)]
 fn is_executable(p: &Path) -> bool {
     p.is_file()
+}
+
+/// VISUAL or EDITOR, else an installed fallback.
+fn pick_editor() -> String {
+    for key in ["VISUAL", "EDITOR"] {
+        if let Some(v) = crate::config::env(key) {
+            return v;
+        }
+    }
+    let fallback = if cfg!(windows) { "notepad.exe" } else { "vi" };
+    ["nvim", "nano"].iter().find(|n| look_path(n).is_some()).map_or(fallback, |n| n).to_string()
+}
+
+/// Splits an editor command without evaluating shell syntax.
+fn split_editor(command: &str) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    let mut word = String::new();
+    let mut quote: Option<char> = None;
+    let mut started = false;
+    let chars: Vec<char> = command.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        let next = chars.get(i + 1).copied();
+        if c == '\\' && next.is_some_and(|n| (quote == Some('"') && n == '"') || (quote.is_none() && n.is_whitespace())) {
+            word.push(next.unwrap());
+            started = true;
+            i += 2;
+            continue;
+        }
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => word.push(c),
+            None if c == '\'' || c == '"' => quote = Some(c),
+            None if c.is_whitespace() => {
+                if started {
+                    args.push(std::mem::take(&mut word));
+                    started = false;
+                }
+                i += 1;
+                continue;
+            }
+            None => word.push(c),
+        }
+        started = true;
+        i += 1;
+    }
+    if quote.is_some() {
+        bail!("unclosed quote in editor command");
+    }
+    if started {
+        args.push(word);
+    }
+    if args.first().is_none_or(String::is_empty) {
+        bail!("editor command is empty");
+    }
+    Ok(args)
+}
+
+/// A command that opens path in the preferred editor.
+pub fn editor_command(path: &Path) -> Result<Command> {
+    let editor = pick_editor();
+    // A preference may be an unquoted executable path containing spaces.
+    let args = match look_path(&editor) {
+        Some(resolved) => vec![resolved.to_string_lossy().into_owned()],
+        None => split_editor(&editor)?,
+    };
+    let exe = look_path(&args[0]).ok_or_else(|| anyhow!("editor {:?} not found", args[0]))?;
+    let is_script = exe.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    if cfg!(windows) && is_script {
+        // Editors such as VS Code install a .cmd shim rather than an .exe.
+        // PowerShell's literal quoting keeps cmd.exe from expanding paths.
+        let quote = |s: &str| format!("'{}'", s.replace('\'', "''"));
+        let mut line = format!("& {}", quote(&exe.to_string_lossy()));
+        for arg in args[1..].iter().map(String::as_str).chain([path.to_string_lossy().as_ref()]) {
+            line.push(' ');
+            line.push_str(&quote(arg));
+        }
+        let mut cmd = Command::new(powershell());
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &line]);
+        return Ok(cmd);
+    }
+    let mut cmd = Command::new(exe);
+    cmd.args(&args[1..]).arg(path);
+    Ok(cmd)
+}
+
+/// PowerShell 7 when installed, else Windows PowerShell.
+pub fn powershell() -> &'static str {
+    if look_path("pwsh.exe").is_some() { "pwsh.exe" } else { "powershell.exe" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn editor_splitting() {
+        assert_eq!(split_editor("code --wait").unwrap(), ["code", "--wait"]);
+        assert_eq!(split_editor("'/Applications/My Editor' -n").unwrap(), ["/Applications/My Editor", "-n"]);
+        assert_eq!(split_editor(r"my\ editor").unwrap(), ["my editor"]);
+        assert!(split_editor("'open").is_err());
+        assert!(split_editor("   ").is_err());
+    }
 }
