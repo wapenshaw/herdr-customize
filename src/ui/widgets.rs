@@ -330,12 +330,14 @@ impl List {
     /// Replaces the rows, keeping the selected label when it still exists.
     /// headers marks group titles.
     pub fn set_rows(&mut self, labels: Vec<String>, headers: Vec<bool>) {
-        let keep = self.selected().and_then(|i| self.labels.get(i).cloned());
+        // Rows can share a label, so remember which copy was selected too.
+        let keep = self.selected().and_then(|i| Some((self.labels.get(i)?.clone(), self.labels[..i].iter().filter(|l| **l == self.labels[i]).count())));
         self.labels = labels;
         self.headers = headers;
         self.refilter();
-        if let Some(keep) = keep
-            && let Some(c) = self.matches.iter().position(|&i| self.labels[i] == keep)
+        if let Some((label, nth)) = keep
+            && let Some(row) = (0..self.labels.len()).filter(|&i| self.labels[i] == label).nth(nth)
+            && let Some(c) = self.matches.iter().position(|&i| i == row)
         {
             self.cursor = c;
         }
