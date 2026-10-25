@@ -81,7 +81,7 @@ pub fn load(dir: &Path, root: &Path) -> Result<Config> {
         Ok(entries) => {
             for e in entries.flatten() {
                 let name = e.file_name().to_string_lossy().into_owned();
-                if name.starts_with('.') || name.contains(".bak-") || name.ends_with(".lock") {
+                if (name.starts_with('.') && name != ".env") || name.contains(".bak-") || name.ends_with(".lock") {
                     continue;
                 }
                 let path = dir.join(&name);
@@ -110,6 +110,10 @@ pub fn load(dir: &Path, root: &Path) -> Result<Config> {
 }
 
 fn format_of(name: &str) -> Format {
+    // A leading dot starts a name, not an extension, so .env has none.
+    if name == ".env" {
+        return Format::Env;
+    }
     match Path::new(name).extension().map(|e| e.to_string_lossy().to_lowercase()).as_deref() {
         Some("toml") => Format::Toml,
         Some("env") => Format::Env,
@@ -503,6 +507,24 @@ mod tests {
         let data = set_env("A=1\nA=2\n", "A", "3").unwrap();
         assert_eq!(data, "A=1\nA=3\n");
         assert_eq!(read_env(&data)[0].value, Some(Value::Integer(3)));
+    }
+
+    fn tempdir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("hc-pluginconfig-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn dot_env_is_an_env_file() {
+        let dir = tempdir("dotenv");
+        fs::write(dir.join(".env"), "A=1\n").unwrap();
+        fs::write(dir.join(".hidden"), "B=2\n").unwrap();
+        let c = load(&dir, &dir).unwrap();
+        assert_eq!(c.files.len(), 1);
+        assert_eq!((c.files[0].name.as_str(), c.files[0].format), (".env", Format::Env));
+        assert_eq!(c.files[0].entries[0].value, Some(Value::Integer(1)));
     }
 
     #[test]
