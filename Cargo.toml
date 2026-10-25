@@ -5,6 +5,10 @@ edition = "2024"
 rust-version = "1.99"
 description = "Customize Herdr from one popup: themes, plugins, keybindings and settings."
 license = "MIT"
+homepage = "https://github.com/wapenshaw/herdr-customize?tab=readme-ov-file"
+authors = ["Siddharth Abbineni <contact@siddharthabbineni.in>"]
+readme = "README.md"
+repository = "https://github.com/wapenshaw/herdr-customize"
 publish = false
 
 [dependencies]
