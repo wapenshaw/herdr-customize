@@ -148,13 +148,12 @@ func TestPluginSettings(t *testing.T) {
 			t.Fatalf("missing %q in:\n%s", want, view)
 		}
 	}
-	// Arrows switch pages even on a setting with values.
-	d.keys("right")
-	if d.app.active != 2 {
-		t.Fatal("right did not switch pages")
-	}
 	// The first row is the file heading; the cursor starts on a setting.
-	d.keys("left", "enter", "enter", "j", "enter", "j", "enter", "ctrl+u", "250", "enter")
+	d.keys("right", "left", "left")
+	if d.app.active != 1 {
+		t.Fatal("an arrow switched pages")
+	}
+	d.keys("j", "enter", "j", "enter", "ctrl+u", "250", "enter")
 	want := "# Where the panel opens.\n#DEMO_MODE=split\nDEMO_MODE=tab\n# Debug logging.\n#DEMO_DEBUG=false\nDEMO_DEBUG=true\n#DEMO_POLL=500\nDEMO_POLL=250\n"
 	if got := readConfig(t, env); got != want {
 		t.Fatalf("got:\n%s", got)

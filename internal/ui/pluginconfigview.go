@@ -30,7 +30,7 @@ type pluginConfig struct {
 	list    list
 	editing bool
 	input   textinput.Model
-	// pending is a value picked with ↵/space in pendingFile, saved after
+	// pending is a value picked with ←/→ in pendingFile, saved after
 	// pickDelay like on the Settings page.
 	pending     *pendingValue
 	pendingFile string
@@ -122,9 +122,9 @@ func (c *pluginConfig) help() string {
 	case e == nil || e.ReadOnly:
 		return "E edit file · / search · r reload · esc back"
 	case e.Key.Open():
-		return "space next value · ↵ type a value · x reset · E edit file · esc back"
+		return "←/→ pick · ↵ type a value · x reset · E edit file · esc back"
 	case len(options(e.Key)) > 0:
-		return "↵ next value · x reset · E edit file · / search · esc back"
+		return "←/→ pick · x reset · E edit file · / search · esc back"
 	}
 	return "↵ change · x reset · E edit file · / search · esc back"
 }
@@ -192,13 +192,15 @@ func (c *pluginConfig) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return setStatus(e.Key.Key + " is a list of tables; press E to edit the file")
 	}
 	switch msg.String() {
+	case "left", "right":
+		return c.cycle(f, e, msg.String())
 	case "enter", " ":
 		if e.Key.Type == schema.TypeBoolean {
 			current, _ := effective(asRow(e)).(bool)
 			return c.save(f, e.Key.Key, !current)
 		}
 		if len(options(e.Key)) > 0 && (!e.Key.Open() || msg.String() == " ") {
-			return c.cycle(f, e)
+			return c.cycle(f, e, "right")
 		}
 		text := ""
 		if e.Set {
@@ -263,8 +265,8 @@ func (c *pluginConfig) run(f *pluginconfig.File, what string, write func() error
 	}
 }
 
-// cycle moves e to the next listed value, saving after a pause.
-func (c *pluginConfig) cycle(f *pluginconfig.File, e *pluginconfig.Entry) tea.Cmd {
+// cycle moves e to the previous or next listed value, saving after a pause.
+func (c *pluginConfig) cycle(f *pluginconfig.File, e *pluginconfig.Entry, dir string) tea.Cmd {
 	var opts []option
 	for _, o := range options(e.Key) {
 		if !o.custom {
@@ -279,7 +281,7 @@ func (c *pluginConfig) cycle(f *pluginconfig.File, e *pluginconfig.Entry) tea.Cm
 	if same {
 		value = c.pending.value
 	}
-	i := (selectedOption(opts, value) + 1) % len(opts)
+	i := step(selectedOption(opts, value), len(opts), dir)
 	var flush tea.Cmd
 	if c.pending != nil && !same {
 		flush = c.flush()

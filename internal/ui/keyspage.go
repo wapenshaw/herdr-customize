@@ -101,7 +101,7 @@ func (p *keysPage) help() string {
 		}
 		return "↵ save · ctrl+r record a key · empty resets to default · esc cancel"
 	case keysForm:
-		return "tab/shift+tab field · ←/→ change type · ↵ save · esc cancel"
+		return "tab/shift+tab field · ctrl+←/→ change type · ↵ save · esc cancel"
 	case keysConfirm:
 		return p.ask.question + " [y/N]"
 	}

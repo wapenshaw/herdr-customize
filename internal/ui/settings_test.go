@@ -77,21 +77,30 @@ func TestSettingsEnterCyclesEnums(t *testing.T) {
 	}
 }
 
-func TestSettingsArrowsSwitchPages(t *testing.T) {
+func TestSettingsArrowsStayOnPage(t *testing.T) {
 	d, page, path := settingsDriver(t, "")
-	for _, key := range []string{"terminal.new_cwd", "terminal.kitty_graphics", "ui.sidebar_width"} {
-		page.selectKey(t, key)
-		d.keys("right")
-		if d.app.active != 0 {
-			t.Fatalf("right on %s stayed on page %d", key, d.app.active)
-		}
-		d.keys("left")
-		if d.app.active != 3 {
-			t.Fatalf("left did not come back to Settings")
-		}
+	page.selectKey(t, "terminal.new_cwd") // follow, home, current, path; default follow
+	d.keys("right")
+	if got := readConfig(t, path); got != "[terminal]\nnew_cwd = \"home\"\n" {
+		t.Fatalf("got:\n%s", got)
 	}
-	if got := readConfig(t, path); got != "" {
-		t.Fatalf("arrows changed the config:\n%s", got)
+	// Left wraps from the first value to the last.
+	d.keys("left", "left", "left")
+	if got := readConfig(t, path); got != "[terminal]\nnew_cwd = \"current\"\n" {
+		t.Fatalf("got:\n%s", got)
+	}
+	page.selectKey(t, "ui.sidebar_width")
+	d.keys("right", "left", "up", "down")
+	if d.app.active != 3 {
+		t.Fatalf("an arrow switched to page %d", d.app.active)
+	}
+	d.keys("tab")
+	if d.app.active != 0 {
+		t.Fatal("tab did not switch pages")
+	}
+	d.keys("shift+tab")
+	if d.app.active != 3 {
+		t.Fatal("shift+tab did not switch back")
 	}
 }
 
@@ -99,8 +108,8 @@ func TestSettingsCyclingSavesOnce(t *testing.T) {
 	_, page, path := settingsDriver(t, "")
 	page.selectKey(t, "ui.host_cursor") // auto, native, drawn; default auto
 	r := page.current()
-	page.cycle(r)
-	page.cycle(r)
+	page.cycle(r, "right")
+	page.cycle(r, "right")
 	if page.pending == nil || page.pending.value != "drawn" {
 		t.Fatalf("pending = %+v", page.pending)
 	}

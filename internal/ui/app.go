@@ -162,10 +162,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, tea.Quit
 			case "q":
 				return a, tea.Quit
-			case "tab", "right":
+			// Arrows belong to the page; only Tab and the digits switch.
+			case "tab":
 				a.active = (a.active + 1) % len(a.pages)
 				return a, nil
-			case "shift+tab", "left":
+			case "shift+tab":
 				a.active = (a.active + len(a.pages) - 1) % len(a.pages)
 				return a, nil
 			case "1", "2", "3", "4":

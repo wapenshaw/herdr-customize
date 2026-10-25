@@ -53,7 +53,7 @@ type settingsPage struct {
 	issues  []string
 	mode    settingsMode
 	input   textinput.Model
-	// pending is a value picked with ↵/space that is saved once the keys stop.
+	// pending is a value picked with ←/→ that is saved once the keys stop.
 	pending *pendingValue
 	ask     *confirm
 	// raw holds an edit of the whole file that failed the check, so the next
@@ -77,7 +77,7 @@ type pendingValue struct {
 	seq   int
 }
 
-// pickDelay is how long ↵/space must rest before the picked value is saved, so
+// pickDelay is how long ←/→ must rest before the picked value is saved, so
 // cycling through values writes the config once.
 var pickDelay = 400 * time.Millisecond
 
@@ -129,9 +129,9 @@ func (p *settingsPage) help() string {
 	case r.unknown != nil:
 		return "x remove · / search · E edit config.toml"
 	case r.key.Open():
-		return "space next value · ↵ type a value · x reset · / search · E edit config.toml"
+		return "←/→ pick · ↵ type a value · x reset · / search · E edit config.toml"
 	case len(options(r.key)) > 0:
-		return "↵ next value · x reset · / search · E edit config.toml"
+		return "←/→ pick · x reset · / search · E edit config.toml"
 	}
 	return "↵ change · x reset · / search · E edit config.toml"
 }
@@ -306,6 +306,10 @@ func (p *settingsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch msg.String() {
+	case "left", "right":
+		if r.unknown == nil {
+			return p.cycle(r, msg.String())
+		}
 	case "enter", " ":
 		if r.unknown != nil {
 			return nil
@@ -313,7 +317,7 @@ func (p *settingsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		// Space steps through the listed values of a setting that also
 		// takes others; Enter types one.
 		if msg.String() == " " && r.key.Open() {
-			return p.cycle(r)
+			return p.cycle(r, "right")
 		}
 		return p.edit(r)
 	case "x":
@@ -348,7 +352,7 @@ func (p *settingsPage) edit(r *settingRow) tea.Cmd {
 		return p.write(k.Key, k.Path(), !current, true)
 	}
 	if len(options(k)) > 0 && !k.Open() {
-		return p.cycle(r)
+		return p.cycle(r, "right")
 	}
 	return p.editText(r)
 }
@@ -439,9 +443,9 @@ func (p *settingsPage) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// cycle moves r to the next listed value, wrapping around. The save waits
-// for pickDelay so stepping through several values writes once.
-func (p *settingsPage) cycle(r *settingRow) tea.Cmd {
+// cycle moves r to the previous or next listed value, wrapping around. The
+// save waits for pickDelay so stepping through several values writes once.
+func (p *settingsPage) cycle(r *settingRow, dir string) tea.Cmd {
 	var opts []option
 	for _, o := range options(r.key) {
 		if !o.custom {
@@ -455,7 +459,7 @@ func (p *settingsPage) cycle(r *settingRow) tea.Cmd {
 	if p.pending != nil && p.pending.key == r.key.Key {
 		value = p.pending.value
 	}
-	i := (selectedOption(opts, value) + 1) % len(opts)
+	i := step(selectedOption(opts, value), len(opts), dir)
 	var flush tea.Cmd
 	if p.pending != nil && p.pending.key != r.key.Key {
 		flush = p.flush()
@@ -466,6 +470,17 @@ func (p *settingsPage) cycle(r *settingRow) tea.Cmd {
 	}
 	p.pending = &pendingValue{key: r.key.Key, path: r.key.Path(), value: opts[i].value, seq: seq}
 	return tea.Batch(flush, tea.Tick(pickDelay, func(time.Time) tea.Msg { return pendingSaveMsg{seq: seq} }))
+}
+
+// step moves from option i (-1 for none) to the previous or next one.
+func step(i, n int, dir string) int {
+	switch {
+	case i < 0 && dir == "left":
+		return n - 1
+	case dir == "left":
+		return (i + n - 1) % n
+	}
+	return (i + 1) % n
 }
 
 // flush saves the pending value now.
