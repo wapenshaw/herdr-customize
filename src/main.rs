@@ -18,7 +18,7 @@ use anyhow::{Context, Result, bail};
 
 const USAGE: &str = "Usage: herdr-customize [command]
 
-  ui [settings|keys|themes|plugins]  open the customize popup (default: themes)
+  ui [settings|keys|themes|plugins]  open the customize popup (default: settings)
   open [page]                        open the popup as a Herdr plugin pane
   bind [key]                         bind a key to the popup (default: prefix+t)
   apply <slug>                       apply a theme
@@ -41,7 +41,7 @@ fn main() {
 }
 
 fn page(args: &[String]) -> Result<&str> {
-    let page = args.get(1).map_or("themes", String::as_str);
+    let page = args.get(1).map_or(ui::PAGES[0], String::as_str);
     if !ui::PAGES.contains(&page) {
         bail!("unknown page {page:?} (want one of {})", ui::PAGES.join(", "));
     }
@@ -88,4 +88,20 @@ fn run(args: &[String]) -> Result<()> {
         (other, _) => bail!("unknown command: {other} (see herdr-customize help)"),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The key `bind` adds runs the manifest's open action, so both must land on the first tab.
+    #[test]
+    fn open_lands_on_the_first_page() {
+        assert_eq!(page(&["ui".into()]).unwrap(), ui::PAGES[0]);
+        let manifest: toml_edit::DocumentMut = include_str!("../herdr-plugin.toml").parse().unwrap();
+        let actions = manifest["actions"].as_array_of_tables().unwrap();
+        let open = actions.iter().find(|a| a["id"].as_str() == Some("open")).unwrap();
+        let command = open["command"].as_array().unwrap();
+        assert_eq!(command.get(command.len() - 1).and_then(|v| v.as_str()), Some(ui::PAGES[0]));
+    }
 }

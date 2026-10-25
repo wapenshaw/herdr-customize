@@ -84,8 +84,8 @@ description = "customize herdr"
 herdr server reload-config
 ```
 
-`herdr-customize.open`, `.plugins`, `.keys` and `.settings` open the popup on
-that page.
+`herdr-customize.open` opens the popup on Settings, and `.keys`, `.themes`
+and `.plugins` open it on that page.
 
 To update, run `herdr plugin update herdr-customize` or update it from its own
 Plugins page.
@@ -94,7 +94,7 @@ Plugins page.
 
 This plugin replaces both. The Keys page marks bindings whose action is no
 longer installed, such as `herdr-theme-picker.open` or
-`ray.plugin-manager.open`. Point them at `herdr-customize.open` or
+`ray.plugin-manager.open`. Point them at `herdr-customize.themes` or
 `herdr-customize.plugins`, or delete them, then uninstall the old plugins from
 the Plugins page. Themes you added to herdr-theme-picker can be added again
 from the clipboard or your editor.
