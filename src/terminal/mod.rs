@@ -58,10 +58,9 @@ pub fn is_herdr(name: &str) -> bool {
     base == "herdr" || base.eq_ignore_ascii_case("herdr.exe")
 }
 
-/// Recognizes client launches, including the executable in args[0]. CLI
-/// commands such as server stop, status, and plugin actions do not consume
-/// host color replies and must never receive queries. Unknown arguments are
-/// rejected rather than guessed from the binary name.
+/// Recognizes client launches, args[0] included. CLI commands (server stop,
+/// status, plugin actions) never read color replies, so must never be queried;
+/// unknown arguments are rejected rather than guessed from the binary name.
 pub fn is_interactive_command(args: &[String]) -> bool {
     let Some((exe, mut args)) = args.split_first() else { return false };
     if !is_herdr(exe) {
@@ -178,11 +177,10 @@ pub fn host_payload(colors: &str) -> String {
     out
 }
 
-/// Splits a Windows command line the way the C runtime builds argv: the
-/// program name ends at the first space outside quotes, and in arguments
-/// 2n backslashes before a quote give n backslashes and toggle quoting,
-/// 2n+1 give n and a literal quote.
-#[cfg_attr(not(windows), allow(dead_code))]
+/// Splits a Windows command line as the C runtime builds argv: the program
+/// ends at the first unquoted space; before a quote, 2n backslashes give n and
+/// toggle quoting, 2n+1 give n and a literal quote.
+#[cfg_attr(not(windows), allow(dead_code, reason = "tested on every OS, used on Windows"))]
 fn split_command_line(line: &str) -> Vec<String> {
     let chars: Vec<char> = line.chars().collect();
     let mut args = Vec::new();

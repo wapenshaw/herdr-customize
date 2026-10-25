@@ -109,7 +109,7 @@ fn process_args(pid: i32) -> Result<Vec<String>> {
 /// kern.procargs2 holds argc, the executable path, alignment padding, then
 /// NUL-separated argv and environment strings. Only argv identifies the
 /// launch mode; spaces in a session name or executable path stay intact.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code, reason = "tested on every OS, used on macOS"))]
 fn darwin_args(data: &[u8]) -> Result<Vec<String>> {
     if data.len() < 4 {
         bail!("missing process argument count");

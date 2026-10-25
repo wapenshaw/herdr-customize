@@ -1,8 +1,6 @@
-//! The files a plugin keeps in its Herdr config directory. Herdr gives
-//! plugins the directory but no format, so the types come from a
-//! config-schema.json the plugin ships when there is one, and are otherwise
-//! inferred from the values and from commented-out defaults such as
-//! "#POLL_MS=500".
+//! The files a plugin keeps in its Herdr config directory. Types come from
+//! the plugin's config-schema.json, or else from the values and commented-out
+//! defaults such as "#POLL_MS=500", since Herdr sets no format.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;

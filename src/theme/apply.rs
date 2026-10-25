@@ -12,10 +12,9 @@ use super::{Palette, TOKEN_ORDER, Tokens, applied_file, parse_palette_file, reso
 use crate::config::{self, Doc, env};
 use crate::{fsutil, herdr, terminal};
 
-/// Writes [theme.custom] into this machine's Herdr config, records the
-/// selection, recolors this machine's Herdr client terminals, and reloads.
-/// Terminal sync and reload are best effort: the config is the source of
-/// truth and a manual reload repairs either one.
+/// Writes [theme.custom] to this machine's config, records the selection,
+/// recolors the client terminals and reloads. Sync and reload are best
+/// effort: the config is the truth, and a manual reload repairs either.
 pub fn apply_theme(slug: &str) -> Result<()> {
     let cfg = config::path();
     let palette_path = resolve_palette(slug).with_context(|| format!("cannot resolve theme {slug:?}"))?;
@@ -103,10 +102,9 @@ fn osc_payload(pal: &Palette) -> String {
     out
 }
 
-/// Recolors the host terminals of this machine's Herdr clients and refreshes
-/// the Ghostty fragment when the user created it. A non-empty client_pid
-/// limits the write to that client. Fails with terminal::Unavailable when no
-/// client was found.
+/// Recolors this machine's Herdr client terminals (only client_pid's, when
+/// set) and refreshes the user's Ghostty fragment if it exists. Fails with
+/// terminal::Unavailable when no client was found.
 fn sync_terminal_colors(pal: &Palette, palette_path: &Path, client_pid: &str) -> Result<()> {
     let mut errors: Vec<String> = Vec::new();
     // Ghostty only loads this fragment if the user includes it, so an

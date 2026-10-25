@@ -58,6 +58,8 @@ fn sandbox() -> &'static Path {
         fs::write(&herdr, FAKE_HERDR.1).unwrap();
         #[cfg(unix)]
         fs::set_permissions(&herdr, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        // SAFETY: runs once, under the driver's lock, which every test that
+        // touches the environment holds.
         let set = |k: &str, v: &Path| unsafe { std::env::set_var(k, v) };
         set("HERDR_BIN_PATH", &herdr);
         set("HERDR_CONFIG_PATH", &dir.join("config.toml"));
