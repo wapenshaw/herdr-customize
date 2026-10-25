@@ -11,6 +11,9 @@
 # HERDR_CUSTOMIZE_RELEASE_BASE points the download somewhere else (tests).
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell redraws the progress bar per chunk, which made the
+# download take 3 to 13 seconds instead of 0.6.
+$ProgressPreference = 'SilentlyContinue'
 
 $Repo = 'wapenshaw/herdr-customize'
 $Root = Split-Path -Parent $PSScriptRoot
