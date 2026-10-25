@@ -60,10 +60,10 @@ pub fn resolve_remote(slug: &str, git_ref: &str) -> Result<String> {
     if git_ref.len() == 40 && SHA.is_match(git_ref) {
         return Ok(git_ref.into());
     }
-    let name = git_ref.trim_start_matches("refs/tags/").trim_start_matches("refs/heads/");
-    let (peeled, tag, head) = (format!("refs/tags/{name}^{{}}"), format!("refs/tags/{name}"), format!("refs/heads/{name}"));
+    let wanted = candidates(git_ref);
     let out = Command::new("git")
-        .args(["ls-remote", &format!("{}/{slug}", git_base()), "HEAD", &tag, &peeled, &head])
+        .args(["ls-remote", &format!("{}/{slug}", git_base()), "HEAD"])
+        .args(&wanted)
         // Never prompt for credentials, and give up on a stalled connection.
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_HTTP_LOW_SPEED_LIMIT", "1000")
@@ -74,15 +74,29 @@ pub fn resolve_remote(slug: &str, git_ref: &str) -> Result<String> {
     }
     let text = String::from_utf8_lossy(&out.stdout);
     let refs: HashMap<&str, &str> = text.lines().filter_map(|l| l.split_once(char::is_whitespace)).map(|(sha, r)| (r.trim(), sha)).collect();
-    for key in [&peeled, &tag, &head] {
+    for key in &wanted {
         if let Some(sha) = refs.get(key.as_str()) {
             return Ok(sha.to_string());
         }
     }
     match refs.get("HEAD") {
-        Some(sha) if name == "HEAD" => Ok(sha.to_string()),
-        _ => Err(anyhow!("{slug} has no ref {name:?}")),
+        Some(sha) if git_ref == "HEAD" => Ok(sha.to_string()),
+        _ => Err(anyhow!("{slug} has no ref {git_ref:?}")),
     }
+}
+
+/// The full refs git_ref can mean, best first: a peeled tag, the tag, then a
+/// branch. A ref naming its namespace means only that one.
+fn candidates(git_ref: &str) -> Vec<String> {
+    if git_ref.starts_with("refs/heads/") {
+        return vec![git_ref.into()];
+    }
+    let name = git_ref.strip_prefix("refs/tags/").unwrap_or(git_ref);
+    let mut out = vec![format!("refs/tags/{name}^{{}}"), format!("refs/tags/{name}")];
+    if name == git_ref {
+        out.push(format!("refs/heads/{name}"));
+    }
+    out
 }
 
 /// The version in the plugin manifest at commit.
@@ -146,6 +160,14 @@ mod tests {
         assert!(plugin("abc1234", "abc1234def").pinned());
         assert!(!plugin("main", "abc1234def").pinned());
         assert!(!plugin("abc1234", "fff").pinned());
+    }
+
+    // A branch and a tag can share a name; an explicit namespace must pick one.
+    #[test]
+    fn explicit_namespaces_are_kept() {
+        assert_eq!(candidates("refs/heads/fix/x"), ["refs/heads/fix/x"]);
+        assert_eq!(candidates("refs/tags/v1"), ["refs/tags/v1^{}", "refs/tags/v1"]);
+        assert_eq!(candidates("main"), ["refs/tags/main^{}", "refs/tags/main", "refs/heads/main"]);
     }
 
     #[test]
