@@ -37,6 +37,18 @@ Use Rust 1.89 or newer (edition 2024); on Windows, the MSVC toolchain with the V
 
 Check platform-sensitive changes for every target: `cargo clippy --target x86_64-pc-windows-msvc` and `--target x86_64-unknown-linux-gnu` type-check from macOS (`ring` needs the target's C headers, so check a copy with ureq's `tls` feature off if they are missing). Native runtime checks are needed to validate terminal behavior; Windows steps are in `docs/windows-test-plan.md`.
 
+## Language rule (mandatory)
+
+**Everything written into this repository is in English.** Code comments, commit messages, log and error messages, documentation, test names: all English, whatever language the request was made in. Only the conversation with the user follows the user's language.
+
+## Type rule (mandatory)
+
+**A struct field exists only if code reads it.** Herdr's JSON carries far more than this plugin needs; mirroring it in full claims a dependency the code does not have, and every unread field is a promise to keep something working that nothing exercises. Add a field when the code that reads it lands in the same change, and delete it when its last reader goes. The same holds for methods, constants and `Msg` variants.
+
+## Comment rule (mandatory)
+
+**A comment is at most three lines**, and it says what is surprising rather than what is visible. A decision that needs a paragraph goes in `docs/`, with one line in the code pointing at it. Every `unsafe` block carries a `// SAFETY:` line, and every `#[allow]` gives a `reason`. The rule in full, with worked examples, is in [.claude/rules/comments.md](.claude/rules/comments.md).
+
 ## Coding Style & Naming Conventions
 
 Follow `rustfmt` and clippy. Platform code uses `#[cfg(unix)]`/`#[cfg(windows)]` on items, or separate `unix.rs`/`windows.rs` modules when a whole implementation differs; Windows APIs come from `windows-sys`, Unix ones from `libc`. `snake_case` for functions and modules, `PascalCase` for types. Errors use `anyhow` with context; a type the caller must recognize (such as `CheckError`) is a struct it can `downcast_ref`. UI state changes only in `Page::update`/`key`; side effects go through `Ctx` (`spawn`, `after`, `exec`, `save`) so pages stay testable.

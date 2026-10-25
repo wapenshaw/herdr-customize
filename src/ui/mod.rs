@@ -1,10 +1,6 @@
-//! The herdr-customize popup: one terminal program with a page per area
-//! (themes, plugins, keys, settings).
-//!
-//! Pages never block. Slow work runs on a thread and comes back as a Msg,
-//! which every page sees; each ignores the others'. Everything a page wants
-//! the app to do (status lines, background work, timers, running an editor,
-//! closing) it asks for through Ctx.
+//! The popup, a page per area. Pages never block: slow work runs on a thread
+//! and returns as a Msg every page sees, and anything a page wants the app to
+//! do (status, work, timers, an editor, closing) goes through Ctx.
 
 mod keys;
 mod pluginconfig;

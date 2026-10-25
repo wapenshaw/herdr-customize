@@ -45,4 +45,6 @@ removed, a release asset name the install scripts depend on.
 - [ ] Tests land with the behaviour they cover.
 - [ ] `CHANGELOG.md`, the tags and the versions in `Cargo.toml` and
       `herdr-plugin.toml` are untouched; they belong to release-please.
+- [ ] Something new learned about Herdr's CLI or config is recorded in
+      `docs/` or `AGENTS.md`.
 - [ ] This pull request is one thing.

@@ -35,6 +35,8 @@ herdr server reload-config
 
 - Branch from `main`, named `<type>/<kebab-summary>`, such as
   `fix/settings-flicker`.
+- **Everything written into this repository is in English**: comments, commit
+  messages, log and error text, documentation, test names.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org):
   `<type>(<scope>): <subject>`, imperative and lowercase, no trailing period,
   72 characters at most. Types in use are `feat`, `fix`, `perf`, `refactor`,
@@ -43,8 +45,22 @@ herdr server reload-config
   a dependency update. The body explains **why**; the diff already says what.
   One logical change per commit, and never a co-author trailer.
 - `feat`, `fix`, `perf` and `refactor` commits become the changelog, so write
-  their subjects for someone who uses the plugin.
+  their subjects for someone who uses the plugin. A dependency update is
+  `chore(deps)` whatever it updates, so it cuts no release on its own.
 - Tests land with the behaviour they cover.
+- **A struct field exists only if code reads it.** Herdr's JSON (plugin lists,
+  the config reference) carries far more than this plugin needs, and an unread
+  field is a promise to keep something working that nothing exercises.
+- A comment is at most three lines, and it explains what is surprising rather
+  than what is visible. A decision that needs a paragraph goes into `docs/`
+  with one line in the code pointing at it. The full rule is in
+  [.claude/rules/comments.md](.claude/rules/comments.md).
+- Never pass a value from a terminal, a theme file or a plugin manifest to a
+  shell. Run programs with argument lists, as `src/proc.rs` and `src/herdr.rs`
+  do.
+- Check Herdr's behaviour instead of assuming it: its source,
+  `herdr --help` and the config reference it publishes. Record what you learn
+  in `docs/` when it is not obvious from the code.
 - Windows, macOS and Linux are all supported, and Windows is the reason this
   project exists. Platform code goes behind `#[cfg(unix)]`/`#[cfg(windows)]`,
   and a change to it type-checks for every target:
@@ -73,6 +89,10 @@ herdr server reload-config
   sweep are three pull requests.
 - Fill in every section of the pull request template: a Summary that shows the
   change, Evidence from before and after, and the Merge Danger.
+
+## Code of conduct
+
+Be kind, assume good faith, keep it about the work.
 
 ## License
 

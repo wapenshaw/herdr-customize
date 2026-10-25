@@ -1,7 +1,6 @@
-//! Plugins: the installed plugins on the left and, on the right, a panel for
-//! the selected one whose menu holds everything it can do. → or ↵ moves into
-//! the panel, ← or esc back. The marketplace, recent runs and a plugin's
-//! settings are screens of their own.
+//! Plugins: the installed list, and a panel with everything the selected one
+//! can do (→ or ↵ enters it, ← or esc leaves). The marketplace, recent runs
+//! and a plugin's settings are screens of their own.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
