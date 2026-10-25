@@ -49,7 +49,6 @@ impl SettingRow {
 #[derive(Debug, Clone)]
 pub struct Pending {
     pub key: String,
-    pub path: Vec<String>,
     pub value: Value,
     pub seq: u64,
 }
@@ -223,14 +222,15 @@ impl SettingsPage {
         if !same {
             self.flush(ctx);
         }
-        self.pending = Some(Pending { key: r.key.key.clone(), path: r.key.path(), value: opts[i].value.clone(), seq });
+        self.pending = Some(Pending { key: r.key.key.clone(), value: opts[i].value.clone(), seq });
         ctx.after(PICK_DELAY, Msg::PendingSave(seq));
     }
 
     /// Saves the pending value now.
     fn flush(&mut self, ctx: &mut Ctx) {
         if let Some(p) = self.pending.take() {
-            self.write(p.key, p.path, Some(p.value), ctx);
+            let path = config::split_key(&p.key);
+            self.write(p.key, path, Some(p.value), ctx);
         }
     }
 
