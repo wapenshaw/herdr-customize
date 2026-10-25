@@ -161,6 +161,8 @@ impl SettingsPage {
     /// new value at once.
     fn write(&mut self, what: String, path: Vec<String>, value: Option<Value>, ctx: &mut Ctx) {
         let name = path.join(".");
+        // A pick on this row waiting on its delay would otherwise undo this.
+        self.pending.take_if(|p| p.key == name);
         let a = self.assumed.entry(name.clone()).or_insert(Assumed { value: None, inflight: 0 });
         a.value = value.clone();
         a.inflight += 1;
@@ -408,6 +410,8 @@ impl Page for SettingsPage {
             " " if r.unknown.is_none() && r.key.open() => self.cycle(&r, "right", ctx),
             "enter" | " " if r.unknown.is_none() => self.edit(&r, ctx),
             "x" => {
+                // Even with nothing set, a pick waiting on its delay is dropped.
+                self.pending.take_if(|p| p.key == r.name());
                 if r.value.is_none() {
                     return ctx.status(format!("{} already uses the default", r.name()));
                 }
