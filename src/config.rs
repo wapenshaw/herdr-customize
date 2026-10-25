@@ -51,9 +51,13 @@ pub fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
 
-/// Splits a dotted key; quoted parts are not supported.
+/// Splits a dotted key as render_key writes it, so a quoted part such as
+/// "a.b" stays one key.
 pub fn split_key(key: &str) -> Vec<String> {
-    key.split('.').map(String::from).collect()
+    match toml_edit::Key::parse(key) {
+        Ok(parts) => parts.iter().map(|k| k.get().to_string()).collect(),
+        Err(_) => key.split('.').map(String::from).collect(),
+    }
 }
 
 /// The value at path in a decoded table.
@@ -592,5 +596,12 @@ mod tests {
     #[test]
     fn normalize_ignores_positions() {
         assert_eq!(normalize_issue(" line 12, col 4: bad "), normalize_issue("line 3, col 40: bad"));
+    }
+
+    #[test]
+    fn split_key_keeps_quoted_parts() {
+        assert_eq!(split_key("ui.sidebar_width"), ["ui", "sidebar_width"]);
+        assert_eq!(split_key("\"a.b\".c"), ["a.b", "c"]);
+        assert_eq!(split_key(&render_key(&["x y".into(), "a.b".into()])), ["x y", "a.b"]);
     }
 }
