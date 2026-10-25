@@ -574,7 +574,7 @@ impl Page for KeysPage {
 
     fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
         match msg {
-            Msg::Plugins(list) => {
+            Msg::PluginList(list) => {
                 if let Ok(list) = list {
                     self.plugins = Some(list.clone());
                 }

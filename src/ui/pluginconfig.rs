@@ -3,9 +3,10 @@
 
 use ratatui::text::Line;
 
+use super::plugins::Msg;
 use super::values::{self, Pending, edit_text, effective, format_value, options, parse_value, strip};
 use super::widgets::*;
-use super::{Ctx, Key, Msg};
+use super::{self as ui, Ctx, Key};
 use crate::config::Value;
 use crate::pluginconfig::{self, Config, Entry, File, Format, SCHEMA_FILE};
 use crate::plugins::{self, Plugin};
@@ -27,11 +28,11 @@ pub struct PluginConfig {
     saving: usize,
 }
 
-pub fn load(pl: &Plugin) -> impl FnOnce() -> Msg + Send + 'static {
+pub fn load(pl: &Plugin) -> impl FnOnce() -> ui::Msg + Send + 'static {
     let (id, root) = (pl.id.clone(), pl.root.clone());
     move || {
         let cfg = plugins::config_dir(&id).and_then(|dir| pluginconfig::load(&dir, root.as_ref()));
-        Msg::PluginConfig { id, cfg }
+        Msg::Config { id, cfg }.into()
     }
 }
 
@@ -86,10 +87,10 @@ impl PluginConfig {
         !self.editing && !self.list.filtering && key.is("esc")
     }
 
-    pub fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
+    pub fn update(&mut self, msg: &mut ui::Msg, ctx: &mut Ctx) {
         match msg {
-            Msg::PluginConfig { id, cfg } if *id == self.plugin.id => self.loaded(cfg),
-            Msg::PluginConfigSaved { id, what, err } if *id == self.plugin.id => {
+            ui::Msg::Plugins(Msg::Config { id, cfg }) if *id == self.plugin.id => self.loaded(cfg),
+            ui::Msg::Plugins(Msg::ConfigSaved { id, what, err }) if *id == self.plugin.id => {
                 self.saving = self.saving.saturating_sub(1);
                 if self.saving == 0 {
                     ctx.spawn(load(&self.plugin));
@@ -99,8 +100,8 @@ impl PluginConfig {
                     None => ctx.status(format!("saved {what}; {} sees it the next time it reads its config", self.plugin.name)),
                 }
             }
-            Msg::PluginConfigReload(id) if *id == self.plugin.id => ctx.spawn(load(&self.plugin)),
-            Msg::PendingSave { seq } if self.pending.as_ref().is_some_and(|p| p.seq == *seq) => {
+            ui::Msg::Plugins(Msg::ConfigReload(id)) if *id == self.plugin.id => ctx.spawn(load(&self.plugin)),
+            ui::Msg::PendingSave { seq } if self.pending.as_ref().is_some_and(|p| p.seq == *seq) => {
                 self.flush(ctx);
             }
             _ => {}
@@ -197,7 +198,7 @@ impl PluginConfig {
                 Some(v) => (key.clone(), f.set(&key, v)),
                 None => (format!("{key} default"), f.unset(&key)),
             };
-            Msg::PluginConfigSaved { id, what, err: result.err() }
+            Msg::ConfigSaved { id, what, err: result.err() }.into()
         });
     }
 
@@ -226,10 +227,10 @@ impl PluginConfig {
     fn edit_file(&mut self, f: &File, ctx: &mut Ctx) {
         let (id, name, path) = (self.plugin.id.clone(), f.name.clone(), f.path.clone());
         ctx.edit_file(f.path.clone(), move |text| match text {
-            Ok(_) => Msg::PluginConfigReload(id),
+            Ok(_) => Msg::ConfigReload(id).into(),
             // A new file the editor closed without saving is still missing.
-            Err(_) if !path.exists() => Msg::PluginConfigReload(id),
-            Err(e) => Msg::PluginConfigSaved { id, what: name, err: Some(e) },
+            Err(_) if !path.exists() => Msg::ConfigReload(id).into(),
+            Err(e) => Msg::ConfigSaved { id, what: name, err: Some(e) }.into(),
         });
     }
 

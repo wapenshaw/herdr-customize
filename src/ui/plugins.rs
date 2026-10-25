@@ -12,10 +12,31 @@ use regex::Regex;
 
 use super::pluginconfig::{self, PluginConfig};
 use super::widgets::{self, *};
-use super::{Ctx, Hint, Key, Msg, Page, Shared, load_plugins};
+use super::{self as ui, Ctx, Hint, Key, Page, Shared, load_plugins};
 use crate::fsutil;
-use crate::plugins::{self, Log, MARKET_TOPIC, Plugin, Repo, State, Status};
+use crate::pluginconfig::Config;
+use crate::plugins::{self, Log, MARKET_TOPIC, Plugin, Repo, Results, State, Status};
 use crate::proc;
+
+/// What this page's background work reports, its settings screen's included.
+pub enum Msg {
+    Checks(HashMap<String, Status>),
+    Market { query: String, sort: String, page: usize, results: anyhow::Result<Results> },
+    Op { text: String, err: Option<anyhow::Error> },
+    Pin { plugin: Box<Plugin>, sha: anyhow::Result<String> },
+    Logs { id: String, logs: anyhow::Result<Vec<Log>> },
+    RegistryEdited(anyhow::Result<()>),
+    Detail { id: String, settings: String, last: String },
+    Config { id: String, cfg: anyhow::Result<Config> },
+    ConfigSaved { id: String, what: String, err: Option<anyhow::Error> },
+    ConfigReload(String),
+}
+
+impl From<Msg> for ui::Msg {
+    fn from(msg: Msg) -> ui::Msg {
+        ui::Msg::Plugins(msg)
+    }
+}
 
 /// How many results each marketplace request fetches.
 const MARKET_PAGE: usize = 50;
@@ -126,8 +147,8 @@ fn ago(t: SystemTime) -> String {
 fn interactive(ctx: &mut Ctx, what: String, args: Vec<String>) {
     match plugins::interactive(&args) {
         Ok(cmd) => ctx.exec(cmd, move |ok| match ok {
-            Ok(()) => Msg::PluginOp { text: format!("{what} done"), err: None },
-            Err(_) => Msg::PluginOp { text: what, err: Some(anyhow::anyhow!("cancelled or failed")) },
+            Ok(()) => Msg::Op { text: format!("{what} done"), err: None }.into(),
+            Err(_) => Msg::Op { text: what, err: Some(anyhow::anyhow!("cancelled or failed")) }.into(),
         }),
         Err(e) => ctx.error(e),
     }
@@ -231,7 +252,7 @@ impl PluginsPage {
                 Some(l) => format!("{} {} {}", l.trigger(), if l.status == "succeeded" { "✓" } else { "✗" }, ago(l.started_at())),
                 None => "none yet".into(),
             };
-            Msg::PluginDetail { id, settings, last }
+            Msg::Detail { id, settings, last }.into()
         });
     }
 
@@ -241,7 +262,7 @@ impl PluginsPage {
         }
         self.checking = true;
         let list = self.plugins.clone();
-        ctx.spawn(move || Msg::Checks(plugins::check_all(&list)));
+        ctx.spawn(move || Msg::Checks(plugins::check_all(&list)).into());
     }
 
     fn update_info(&self, p: &Plugin) -> String {
@@ -285,13 +306,13 @@ impl PluginsPage {
             Action::Update => self.update_one(p, ctx),
             Action::Toggle => {
                 let verb = if p.enabled { "disabled" } else { "enabled" };
-                ctx.spawn(move || Msg::PluginOp { text: format!("{verb} {}", p.name), err: plugins::set_enabled(&p.id, !p.enabled).err() });
+                ctx.spawn(move || Msg::Op { text: format!("{verb} {}", p.name), err: plugins::set_enabled(&p.id, !p.enabled).err() }.into());
             }
             Action::Remove => {
                 let verb = if p.github() { "uninstall" } else { "unlink" };
                 self.ask = Some(Confirm::new(format!("{verb} {} ({})?", p.name, p.id), move |page: &mut PluginsPage, ctx| {
                     page.panel = false;
-                    ctx.spawn(move || Msg::PluginOp { text: format!("{verb}ed {}", p.name), err: plugins::remove(&p).err() });
+                    ctx.spawn(move || Msg::Op { text: format!("{verb}ed {}", p.name), err: plugins::remove(&p).err() }.into());
                 }));
             }
             Action::Open if !p.github() => ctx.status(format!("{} is linked from a local checkout", p.name)),
@@ -309,7 +330,7 @@ impl PluginsPage {
         if p.pinned() {
             return ctx.spawn(move || {
                 let sha = plugins::resolve_remote(&p.slug(), "");
-                Msg::Pin { plugin: p, sha }
+                Msg::Pin { plugin: Box::new(p), sha }.into()
             });
         }
         if self.statuses.get(&p.id).is_some_and(|s| s.state == State::Current) {
@@ -385,7 +406,7 @@ impl PluginsPage {
         if !path.exists() {
             return ctx.error(format!("{} not found", path.display()));
         }
-        ctx.edit_file(path, |text| Msg::RegistryEdited(text.map(drop)));
+        ctx.edit_file(path, |text| Msg::RegistryEdited(text.map(drop)).into());
     }
 
     /// Fetches one page of marketplace results; page 1 starts over.
@@ -398,7 +419,7 @@ impl PluginsPage {
         let (query, sort) = (self.market_query.clone(), self.market_sort.clone());
         ctx.spawn(move || {
             let results = plugins::search(&query, &sort, page, MARKET_PAGE);
-            Msg::Market { query, sort, page, results }
+            Msg::Market { query, sort, page, results }.into()
         });
     }
 
@@ -454,7 +475,7 @@ impl PluginsPage {
         let id = self.logs_for.clone();
         ctx.spawn(move || {
             let logs = plugins::logs(&id, 50);
-            Msg::Logs { id, logs }
+            Msg::Logs { id, logs }.into()
         });
     }
 
@@ -550,7 +571,7 @@ impl PluginsPage {
                 }
             }
             "b" => match items.get(self.menu_cursor) {
-                Some(MenuItem { action: Action::Invoke(q), label, .. }) => ctx.goto("keys", Some(Msg::BindAction { qualified: q.clone(), title: label.clone() })),
+                Some(MenuItem { action: Action::Invoke(q), label, .. }) => ctx.goto("keys", Some(ui::Msg::BindAction { qualified: q.clone(), title: label.clone() })),
                 _ => ctx.status("select an action to bind it"),
             },
             _ => return false,
@@ -787,9 +808,9 @@ impl Page for PluginsPage {
         }
     }
 
-    fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
+    fn update(&mut self, msg: &mut ui::Msg, ctx: &mut Ctx) {
         match msg {
-            Msg::Plugins(list) => {
+            ui::Msg::PluginList(list) => {
                 self.loaded = true;
                 match list {
                     Ok(list) => (self.plugins, self.load_err) = (list.clone(), None),
@@ -805,14 +826,14 @@ impl Page for PluginsPage {
                     self.load_detail(ctx);
                 }
             }
-            Msg::PluginDetail { id, settings, last } => {
+            ui::Msg::Plugins(Msg::Detail { id, settings, last }) => {
                 self.details.insert(id.clone(), Detail { settings: std::mem::take(settings), last: std::mem::take(last) });
             }
-            Msg::Checks(statuses) => {
+            ui::Msg::Plugins(Msg::Checks(statuses)) => {
                 self.checking = false;
                 self.statuses = std::mem::take(statuses);
             }
-            Msg::Market { query, sort, page, results } => {
+            ui::Msg::Plugins(Msg::Market { query, sort, page, results }) => {
                 if *query != self.market_query || *sort != self.market_sort {
                     return;
                 }
@@ -831,7 +852,7 @@ impl Page for PluginsPage {
                     }
                 }
             }
-            Msg::Logs { id, logs } if *id == self.logs_for => match logs {
+            ui::Msg::Plugins(Msg::Logs { id, logs }) if *id == self.logs_for => match logs {
                 Ok(logs) => {
                     self.logs = std::mem::take(logs);
                     self.logs_err = None;
@@ -840,27 +861,27 @@ impl Page for PluginsPage {
                 }
                 Err(e) => self.logs_err = Some(format!("{e:#}")),
             },
-            Msg::PluginOp { text, err } => {
+            ui::Msg::Plugins(Msg::Op { text, err }) => {
                 match err {
                     Some(e) => ctx.error(format!("{text}: {e:#}")),
                     None => ctx.status(text.clone()),
                 }
                 ctx.spawn(load_plugins);
             }
-            Msg::Pin { plugin, sha } => match sha {
+            ui::Msg::Plugins(Msg::Pin { plugin, sha }) => match sha {
                 Ok(sha) => {
-                    let (plugin, sha) = (plugin.clone(), sha.clone());
+                    let (plugin, sha) = (Plugin::clone(plugin), sha.clone());
                     self.confirm_pin_move(plugin, sha, ctx);
                 }
                 Err(e) => ctx.error(e),
             },
-            Msg::RegistryEdited(result) => {
+            ui::Msg::Plugins(Msg::RegistryEdited(result)) => {
                 if let Err(e) = result {
                     ctx.error(e);
                 }
                 ctx.spawn(load_plugins);
             }
-            Msg::PluginConfig { .. } | Msg::PluginConfigSaved { .. } | Msg::PendingSave { .. } | Msg::PluginConfigReload(_) => {
+            ui::Msg::PendingSave { .. } | ui::Msg::Plugins(Msg::Config { .. } | Msg::ConfigSaved { .. } | Msg::ConfigReload(_)) => {
                 if let Some(c) = &mut self.config {
                     c.update(msg, ctx);
                 }

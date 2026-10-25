@@ -10,7 +10,7 @@ mod themes;
 mod values;
 mod widgets;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
@@ -27,11 +27,8 @@ use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 
 use crate::config::{CheckError, Doc, SaveResult, Store};
-use crate::herdr::CheckResult;
-use crate::pluginconfig::Config;
-use crate::plugins::{Log, Plugin, Results, Status};
+use crate::plugins::Plugin;
 use crate::schema::{self, Reference};
-use crate::theme::{Item, Look};
 use widgets::*;
 
 pub const PAGES: [&str; 4] = ["themes", "plugins", "keys", "settings"];
@@ -135,54 +132,8 @@ pub enum Msg {
     /// The key reference matching the installed Herdr.
     Reference(Reference),
     Saved(Saved),
-    Plugins(Result<Vec<Plugin>>),
-    // Themes
-    RemoteOnly(bool),
-    ThemesLoaded {
-        items: Vec<Item>,
-        looks: HashMap<String, Look>,
-        warnings: Vec<String>,
-        err: Option<anyhow::Error>,
-    },
-    /// The text of a new palette, from the editor.
-    ThemeEditorDone(Result<String>),
-    // Plugins
-    Checks(HashMap<String, Status>),
-    Market {
-        query: String,
-        sort: String,
-        page: usize,
-        results: Result<Results>,
-    },
-    PluginOp {
-        text: String,
-        err: Option<anyhow::Error>,
-    },
-    Pin {
-        plugin: Plugin,
-        sha: Result<String>,
-    },
-    Logs {
-        id: String,
-        logs: Result<Vec<Log>>,
-    },
-    RegistryEdited(Result<()>),
-    PluginDetail {
-        id: String,
-        settings: String,
-        last: String,
-    },
-    PluginConfig {
-        id: String,
-        cfg: Result<Config>,
-    },
-    PluginConfigSaved {
-        id: String,
-        what: String,
-        err: Option<anyhow::Error>,
-    },
-    PluginConfigReload(String),
-    // Keys
+    PluginList(Result<Vec<Plugin>>),
+    /// Asks the Keys page for a binding to a plugin action.
     BindAction {
         qualified: String,
         title: String,
@@ -191,10 +142,9 @@ pub enum Msg {
     PendingSave {
         seq: u64,
     },
-    // Settings
-    Issues(CheckResult),
-    /// config.toml as edited in the editor.
-    RawEdited(Result<String>),
+    Themes(themes::Msg),
+    Plugins(plugins::Msg),
+    Settings(settings::Msg),
 }
 
 /// State every page reads: the config file and the key reference.
@@ -559,7 +509,7 @@ fn render_sheet(title: &str, hints: &[Hint]) -> Vec<Line<'static>> {
 }
 
 fn load_plugins() -> Msg {
-    Msg::Plugins(crate::plugins::list())
+    Msg::PluginList(crate::plugins::list())
 }
 
 /// Shows the popup until the user leaves it.
