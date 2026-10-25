@@ -2,11 +2,13 @@
 //! screen: the values ←/→ step through, the text a field starts from and
 //! how its input is read back.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use ratatui::style::Modifier;
 use ratatui::text::Span;
 
+use super::Ctx;
 use super::widgets::*;
 use crate::config::{self, Value};
 use crate::schema;
@@ -15,12 +17,35 @@ use crate::schema;
 /// through values writes the config once.
 pub const PICK_DELAY: Duration = Duration::from_millis(400);
 
-/// A value picked with ←/→, saved after PICK_DELAY.
+/// A value picked with ←/→, saved after PICK_DELAY. file names the plugin
+/// config file it belongs to; None is Herdr's config.
 #[derive(Debug, Clone)]
 pub struct Pending {
     pub key: String,
     pub value: Value,
+    pub file: Option<String>,
     pub seq: u64,
+}
+
+/// Numbers picks on both screens, so a delayed save only ever matches the
+/// pick that scheduled it.
+static SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Moves the pick for k, which is set to value in file, to the previous or
+/// next listed value and schedules its save. Returns the pick on another row
+/// that it replaced, for the caller to save now.
+pub fn cycle(pending: &mut Option<Pending>, k: &schema::Key, value: Option<&Value>, file: Option<&str>, dir: &str, ctx: &mut Ctx) -> Option<Pending> {
+    let opts: Vec<Choice> = options(k).into_iter().filter(|o| !o.custom).collect();
+    if opts.is_empty() {
+        return None;
+    }
+    let replaced = pending.take_if(|p| p.key != k.key || p.file.as_deref() != file);
+    let current = pending.as_ref().map_or_else(|| effective(k, value), |p| p.value.clone());
+    let i = step(selected_option(&opts, &current), opts.len(), dir);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed) + 1;
+    *pending = Some(Pending { key: k.key.clone(), value: opts[i].value.clone(), file: file.map(String::from), seq });
+    ctx.debounced(seq);
+    replaced
 }
 
 /// Structured types are edited as TOML values; the rest as plain text.

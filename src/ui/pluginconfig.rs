@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use ratatui::text::Line;
 
-use super::values::{PICK_DELAY, Pending, edit_text, effective, format_value, options, parse_value, selected_option, step, strip};
+use super::values::{self, Pending, edit_text, effective, format_value, options, parse_value, strip};
 use super::widgets::*;
 use super::{Ctx, Key, Msg};
 use crate::config::Value;
@@ -25,10 +25,8 @@ pub struct PluginConfig {
     pub list: List,
     pub editing: bool,
     input: TextInput,
-    /// A value picked with ←/→ in pending_file, saved after PICK_DELAY like
-    /// on the Settings page.
+    /// A value picked with ←/→, saved after a pause like on the Settings page.
     pending: Option<Pending>,
-    pending_file: String,
     /// Saves still running; the files are read again once the last one is
     /// done, and until then rows show the values being saved.
     saving: usize,
@@ -44,7 +42,7 @@ pub fn load(pl: &Plugin) -> impl FnOnce() -> Msg + Send + 'static {
 
 impl PluginConfig {
     pub fn new(plugin: Plugin) -> PluginConfig {
-        PluginConfig { plugin, cfg: None, err: None, rows: Vec::new(), list: List::new(), editing: false, input: TextInput::default(), pending: None, pending_file: String::new(), saving: 0 }
+        PluginConfig { plugin, cfg: None, err: None, rows: Vec::new(), list: List::new(), editing: false, input: TextInput::default(), pending: None, saving: 0 }
     }
 
     fn loaded(&mut self, cfg: &anyhow::Result<Config>) {
@@ -107,7 +105,7 @@ impl PluginConfig {
                 }
             }
             Msg::PluginConfigReload(id) if *id == self.plugin.id => ctx.spawn(load(&self.plugin)),
-            Msg::PluginConfigPick(seq) if self.pending.as_ref().is_some_and(|p| p.seq == *seq) => {
+            Msg::PendingSave { seq } if self.pending.as_ref().is_some_and(|p| p.seq == *seq) => {
                 self.flush(ctx);
             }
             _ => {}
@@ -213,29 +211,19 @@ impl PluginConfig {
 
     /// Moves e to the previous or next listed value, saving after a pause.
     fn cycle(&mut self, f: &File, e: &Entry, dir: &str, ctx: &mut Ctx) {
-        let opts: Vec<_> = options(&e.key).into_iter().filter(|o| !o.custom).collect();
-        if opts.is_empty() {
-            return;
-        }
-        let same = self.pending.as_ref().is_some_and(|p| p.key == e.key.key) && self.pending_file == f.name;
-        let value = match &self.pending {
-            Some(p) if same => p.value.clone(),
-            _ => effective(&e.key, e.value.as_ref()),
-        };
-        let i = step(selected_option(&opts, &value), opts.len(), dir);
-        let seq = self.pending.as_ref().map_or(1, |p| p.seq + 1);
-        if !same {
-            self.flush(ctx);
-        }
-        self.pending = Some(Pending { key: e.key.key.clone(), value: opts[i].value.clone(), seq });
-        self.pending_file = f.name.clone();
-        ctx.after(PICK_DELAY, Msg::PluginConfigPick(seq));
+        let replaced = values::cycle(&mut self.pending, &e.key, e.value.as_ref(), Some(&f.name), dir, ctx);
+        self.save_pick(replaced, ctx);
     }
 
     /// Saves the pending value now.
     pub fn flush(&mut self, ctx: &mut Ctx) {
-        let Some(p) = self.pending.take() else { return };
-        let file = self.cfg.iter().flat_map(|c| c.files.iter()).find(|f| f.name == self.pending_file).cloned();
+        let pick = self.pending.take();
+        self.save_pick(pick, ctx);
+    }
+
+    fn save_pick(&mut self, pick: Option<Pending>, ctx: &mut Ctx) {
+        let Some(p) = pick else { return };
+        let file = self.cfg.iter().flat_map(|c| c.files.iter()).find(|f| p.file.as_ref() == Some(&f.name)).cloned();
         if let Some(f) = file {
             self.save(&f, &p.key, p.value, ctx);
         }
@@ -292,7 +280,7 @@ impl PluginConfig {
             let mut spans = vec![raw(pad(&e.key.key, key_width)), raw(" ")];
             let opts = options(&e.key);
             if !opts.is_empty() && !e.read_only {
-                let pending = self.pending.as_ref().filter(|_| self.pending_file == f.name);
+                let pending = self.pending.as_ref().filter(|p| p.file.as_ref() == Some(&f.name));
                 spans.extend(strip(&e.key, e.value.as_ref(), &opts, pending));
             } else if let Some(v) = &e.value {
                 spans.extend([accent(format_value(v)), raw(" *")]);

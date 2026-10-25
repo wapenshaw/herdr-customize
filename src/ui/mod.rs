@@ -179,15 +179,17 @@ pub enum Msg {
         what: String,
         err: Option<anyhow::Error>,
     },
-    PluginConfigPick(u64),
     PluginConfigReload(String),
     // Keys
     BindAction {
         qualified: String,
         title: String,
     },
+    /// A pick's delay is over; the screen holding pick seq saves it.
+    PendingSave {
+        seq: u64,
+    },
     // Settings
-    PendingSave(u64),
     SettingSaved {
         name: String,
         saved: Saved,
@@ -257,6 +259,11 @@ impl Ctx<'_> {
         if let Some(i) = PAGES.iter().position(|p| *p == page) {
             self.fx.push(Effect::Goto(i, msg));
         }
+    }
+
+    /// Delivers Msg::PendingSave for pick seq once PICK_DELAY has passed.
+    pub fn debounced(&mut self, seq: u64) {
+        self.after(values::PICK_DELAY, Msg::PendingSave { seq });
     }
 
     /// Runs cmd on the terminal, with the popup suspended until it exits.

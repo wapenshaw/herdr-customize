@@ -852,7 +852,7 @@ impl Page for PluginsPage {
                 }
                 ctx.spawn(load_plugins);
             }
-            Msg::PluginConfig { .. } | Msg::PluginConfigSaved { .. } | Msg::PluginConfigPick(_) | Msg::PluginConfigReload(_) => {
+            Msg::PluginConfig { .. } | Msg::PluginConfigSaved { .. } | Msg::PendingSave { .. } | Msg::PluginConfigReload(_) => {
                 if let Some(c) = &mut self.config {
                     c.update(msg, ctx);
                 }
