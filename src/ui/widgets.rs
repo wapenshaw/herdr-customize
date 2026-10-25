@@ -67,17 +67,22 @@ pub fn clip_str(s: &str, n: usize) -> String {
     if n == 0 {
         return String::new();
     }
+    take_width(s, n - 1) + "…"
+}
+
+/// The longest prefix of s that fits in room columns.
+fn take_width(s: &str, room: usize) -> String {
     let mut out = String::new();
     let mut used = 0;
     for c in s.chars() {
         let w = c.width().unwrap_or(0);
-        if used + w > n - 1 {
+        if used + w > room {
             break;
         }
         out.push(c);
         used += w;
     }
-    out + "…"
+    out
 }
 
 /// Pads a string with spaces to n columns.
@@ -100,17 +105,7 @@ pub fn clip(line: Line<'static>, n: usize) -> Line<'static> {
             continue;
         }
         let room = n.saturating_sub(1) - used;
-        let mut cut = String::new();
-        let mut cw = 0;
-        for c in span.content.chars() {
-            let w = c.width().unwrap_or(0);
-            if cw + w > room {
-                break;
-            }
-            cut.push(c);
-            cw += w;
-        }
-        spans.push(Span::styled(cut, span.style));
+        spans.push(Span::styled(take_width(&span.content, room), span.style));
         break;
     }
     if n > 0 {
@@ -550,7 +545,9 @@ fn match_rank(s: &str, terms: &[&str]) -> Option<usize> {
     let mut rank = 0;
     for term in terms {
         if name.contains(term) {
-        } else if s.contains(term) {
+            continue;
+        }
+        if s.contains(term) {
             rank = rank.max(1);
         } else if subsequence(name, term) {
             rank = 2;
