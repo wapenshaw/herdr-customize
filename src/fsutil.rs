@@ -90,12 +90,15 @@ pub fn lock(path: &Path) -> Result<File> {
     Ok(f)
 }
 
-/// Unix permission bits for new files; Windows files inherit their ACLs.
+/// Unix permission bits for new files.
+#[cfg(unix)]
 fn with_mode(o: &mut OpenOptions, mode: u32) -> &mut OpenOptions {
-    #[cfg(unix)]
-    o.mode(mode);
-    #[cfg(windows)]
-    let _ = mode;
+    o.mode(mode)
+}
+
+/// Windows files inherit their ACLs instead.
+#[cfg(windows)]
+fn with_mode(o: &mut OpenOptions, _: u32) -> &mut OpenOptions {
     o
 }
 

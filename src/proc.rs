@@ -99,18 +99,25 @@ pub fn open_url(url: &str) -> Result<()> {
 /// Finds an executable on PATH. On Windows a bare name also matches each
 /// PATHEXT extension, so `code` finds `code.cmd`.
 pub fn look_path(name: &str) -> Option<PathBuf> {
-    let candidates = |base: PathBuf| -> Vec<PathBuf> {
-        let mut out = vec![base.clone()];
-        if cfg!(windows) && base.extension().is_none() {
-            let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-            out = exts.split(';').filter(|e| !e.is_empty()).map(|e| base.with_extension(e.trim_start_matches('.'))).collect();
-        }
-        out
-    };
     if name.contains('/') || (cfg!(windows) && name.contains('\\')) {
         return candidates(PathBuf::from(name)).into_iter().find(|p| is_executable(p));
     }
     std::env::split_paths(&std::env::var_os("PATH")?).flat_map(|dir| candidates(if dir.as_os_str().is_empty() { PathBuf::from(".") } else { dir }.join(name))).find(|p| is_executable(p))
+}
+
+#[cfg(unix)]
+fn candidates(base: PathBuf) -> Vec<PathBuf> {
+    vec![base]
+}
+
+/// A name without an extension stands for each PATHEXT extension instead.
+#[cfg(windows)]
+fn candidates(base: PathBuf) -> Vec<PathBuf> {
+    if base.extension().is_some() {
+        return vec![base];
+    }
+    let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+    exts.split(';').filter(|e| !e.is_empty()).map(|e| base.with_extension(e.trim_start_matches('.'))).collect()
 }
 
 #[cfg(unix)]
