@@ -77,7 +77,11 @@ $want = $null
 foreach ($line in Get-Content $sums) {
     if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+)$' -and $Matches[2].Trim() -eq $Asset) { $want = $Matches[1].ToLowerInvariant() }
 }
-$got = (Get-FileHash -Algorithm SHA256 -Path $bin).Hash.ToLowerInvariant()
+# Not Get-FileHash: with pwsh 7's PSModulePath inherited, Windows PowerShell
+# picks 7's Utility module, cannot load it, and the cmdlet goes missing.
+$sha = [Security.Cryptography.SHA256]::Create()
+$stream = [IO.File]::OpenRead($bin)
+try { $got = -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) } finally { $stream.Dispose(); $sha.Dispose() }
 if (-not $want -or $want -ne $got) { Build-FromSource "checksum mismatch for $Asset" }
 
 try {
