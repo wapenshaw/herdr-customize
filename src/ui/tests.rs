@@ -198,11 +198,13 @@ fn settings_toggle_shows_new_value_and_saves() {
     let mut d = Driver::new("settings", "");
     let k = boolean_key(&d.app.sh);
     let default = matches!(k.default_value(), Some(Value::Boolean(true)));
+    let checks = d.herdr_calls("config check");
     d.typ("/");
     d.typ(&k.key);
     d.press(&["enter", "enter"]);
     assert!(d.config().contains(&format!("= {}", !default)), "{}", d.config());
     assert_eq!(d.herdr_calls("server reload-config"), 1);
+    assert_eq!(d.herdr_calls("config check"), checks + 1, "the issue list comes from the save's own check");
     assert!(d.screen().contains("saved and reloaded"));
 }
 

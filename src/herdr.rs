@@ -73,11 +73,9 @@ pub fn version() -> Result<String> {
 /// The outcome of 'herdr config check'.
 #[derive(Debug, Default, Clone)]
 pub struct CheckResult {
-    /// False when the check could not run, for example on a machine without
-    /// herdr or with a herdr too old to have the command.
-    pub ran: bool,
     pub issues: Vec<String>,
-    /// Why the check did not run.
+    /// Why the check did not run, for example on a machine without herdr or
+    /// with a herdr too old to have the command. Empty when it ran.
     pub skipped: String,
 }
 
@@ -90,11 +88,11 @@ pub fn check_config(path: &Path) -> CheckResult {
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     let text = text.trim();
     if out.status.success() {
-        return CheckResult { ran: true, ..Default::default() };
+        return CheckResult::default();
     }
     if out.status.code() == Some(1) && text.starts_with("config: issues found") {
         let issues = text.lines().skip(1).map(|l| l.trim_end_matches('\r')).filter(|l| !l.trim().is_empty()).map(String::from).collect();
-        return CheckResult { ran: true, issues, ..Default::default() };
+        return CheckResult { issues, ..Default::default() };
     }
     let skipped = if text.is_empty() { out.status.to_string() } else { error_message(text) };
     CheckResult { skipped, ..Default::default() }
