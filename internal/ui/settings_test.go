@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wapenshaw/herdr-customize/tests/testutil"
 )
@@ -18,6 +19,9 @@ func settingsDriver(t *testing.T, config string, responses ...testutil.HerdrResp
 	t.Setenv("HERDR_CONFIG_PATH", path)
 	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
 	testutil.FakeHerdr(t, responses...)
+	old := pickDelay
+	pickDelay = time.Millisecond
+	t.Cleanup(func() { pickDelay = old })
 	d := newDriver(t, Options{Tab: "settings"})
 	return d, d.app.pages[3].(*settingsPage), path
 }
@@ -50,16 +54,83 @@ func TestSettingsToggleUsesDefault(t *testing.T) {
 	}
 }
 
-func TestSettingsChooseEnum(t *testing.T) {
+func TestSettingsArrowsCycleEnums(t *testing.T) {
 	d, page, path := settingsDriver(t, "[terminal]\nnew_cwd = \"home\"\n")
 	page.selectKey(t, "terminal.new_cwd")
-	d.keys("enter")
-	if page.mode != settingsChoosing || page.options[page.choices.selected()] != "home" {
-		t.Fatal("chooser does not start on the current value")
+	if !strings.Contains(d.view(), "[home]") || !strings.Contains(d.view(), "follow") {
+		t.Fatalf("values not shown on the row:\n%s", d.view())
 	}
-	d.keys("j", "enter")
+	d.keys("right")
+	if d.app.active != 3 {
+		t.Fatal("right switched pages instead of cycling")
+	}
 	if got := readConfig(t, path); got != "[terminal]\nnew_cwd = \"current\"\n" {
 		t.Fatalf("got:\n%s", got)
+	}
+	d.keys("left", "left")
+	if got := readConfig(t, path); got != "[terminal]\nnew_cwd = \"follow\"\n" {
+		t.Fatalf("got:\n%s", got)
+	}
+	// Left wraps from the first value to the last; a default value cycles too.
+	page.selectKey(t, "ui.tab_bar_position")
+	d.keys("left")
+	if got := readConfig(t, path); !strings.Contains(got, "tab_bar_position = \"bottom\"") {
+		t.Fatalf("got:\n%s", got)
+	}
+	// Rows without values still let the arrows switch pages.
+	page.selectKey(t, "ui.sidebar_width")
+	d.keys("right")
+	if d.app.active != 0 {
+		t.Fatalf("right on a number row went to page %d", d.app.active)
+	}
+}
+
+func TestSettingsCyclingSavesOnce(t *testing.T) {
+	_, page, path := settingsDriver(t, "")
+	page.selectKey(t, "ui.host_cursor") // auto, native, drawn; default auto
+	r := page.current()
+	page.cycle(r, "right")
+	page.cycle(r, "right")
+	if page.pending == nil || page.pending.value != "drawn" {
+		t.Fatalf("pending = %+v", page.pending)
+	}
+	if cmd := page.update(pendingSaveMsg{seq: 1}); cmd != nil {
+		t.Fatal("an earlier press saved")
+	}
+	saved := page.update(pendingSaveMsg{seq: page.pending.seq})()
+	if msg := saved.(savedMsg); msg.err != nil {
+		t.Fatal(msg.err)
+	}
+	if got := readConfig(t, path); got != "[ui]\nhost_cursor = \"drawn\"\n" {
+		t.Fatalf("got:\n%s", got)
+	}
+}
+
+func TestSettingsOpenChoicesAcceptOtherValues(t *testing.T) {
+	d, page, path := settingsDriver(t, "")
+	page.selectKey(t, "ui.right_click_passthrough_modifier")
+	if !strings.Contains(d.view(), "other…") {
+		t.Fatal("open choice has no way to type a value")
+	}
+	d.keys("right", "right")
+	if got := readConfig(t, path); !strings.Contains(got, `right_click_passthrough_modifier = "alt"`) {
+		t.Fatalf("got:\n%s", got)
+	}
+	d.keys("enter", "ctrl+u", "ctrl+alt", "enter")
+	if got := readConfig(t, path); !strings.Contains(got, `right_click_passthrough_modifier = "ctrl+alt"`) {
+		t.Fatalf("got:\n%s", got)
+	}
+	if !strings.Contains(d.view(), "[ctrl+alt]") {
+		t.Fatalf("custom value not shown:\n%s", d.view())
+	}
+}
+
+func TestSettingsLeavesThemesToThemesPage(t *testing.T) {
+	_, page, _ := settingsDriver(t, "[theme]\nname = \"nord\"\n")
+	for _, r := range page.rows {
+		if r.header == "Theme" || strings.HasPrefix(r.name(), "theme.") && r.header == "" {
+			t.Fatalf("theme row %q on the Settings page", r.name())
+		}
 	}
 }
 

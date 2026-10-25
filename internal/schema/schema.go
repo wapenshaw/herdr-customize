@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -86,24 +87,42 @@ func (k Key) Editable() bool {
 	return false
 }
 
-// Choices lists known values for keys whose reference type is a free string.
+// Choices lists the values a key takes: an enum's values, or for a string
+// key, the names its description lists after "Accepts" (as in "Accepts
+// ctrl, alt, cmd, or a + separated combination"). Only enums are closed;
+// see Open. Everything comes from the reference, so it follows Herdr.
 func (k Key) Choices() []string {
 	if len(k.Values) > 0 {
 		return k.Values
 	}
-	switch k.Key {
-	case "theme.name", "theme.dark_name", "theme.light_name":
-		return BuiltinThemes
+	if k.Type != TypeString {
+		return nil
 	}
-	return nil
+	m := acceptsList.FindStringSubmatch(k.Description)
+	if m == nil {
+		return nil
+	}
+	var choices []string
+	// An empty value is offered first when the description says it disables
+	// the setting.
+	if strings.Contains(k.Description, "Empty disables") {
+		choices = append(choices, "")
+	}
+	for _, name := range strings.Split(m[1], ", ") {
+		// "a, b, or a combination" ends the list at "or".
+		if name == "or" || name == "and" {
+			break
+		}
+		choices = append(choices, name)
+	}
+	return choices
 }
 
-// BuiltinThemes are the UI themes compiled into Herdr.
-var BuiltinThemes = []string{
-	"catppuccin", "catppuccin-latte", "terminal", "tokyo-night", "tokyo-night-day", "dracula",
-	"nord", "gruvbox", "gruvbox-light", "one-dark", "one-light", "solarized", "solarized-light",
-	"kanagawa", "kanagawa-lotus", "rose-pine", "rose-pine-dawn", "vesper",
-}
+// acceptsList matches "Accepts a, b, c" with at least two plain names.
+var acceptsList = regexp.MustCompile(`Accepts ((?:[a-z_]+, )+[a-z_]+)\b`)
+
+// Open reports a key whose Choices are suggestions: other values are valid.
+func (k Key) Open() bool { return k.Type != TypeEnum && len(k.Choices()) > 0 }
 
 // Section returns the section with id.
 func (r *Reference) Section(id string) (Section, bool) {

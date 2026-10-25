@@ -231,13 +231,19 @@ modifier), and `plugin_action` commands whose action is not installed.
 
 ## Settings
 
-Every documented setting except keybindings, grouped as in Herdr's config
-reference. Set values are
-highlighted and marked `*`; the rest show their default.
+Every documented setting except keybindings and themes (those have their own
+pages), grouped as in Herdr's config reference. Set values are highlighted and
+marked `*`; the rest show their default.
 
-- **Enter** toggles a boolean, opens a chooser for a setting with fixed values
-  (and for theme names), or edits the value. Lists are entered as TOML, e.g.
-  `["codex", "claude"]`.
+- Settings with a fixed set of values show them on the row with the current one
+  in brackets. **←**/**→** cycle through them and save once you stop. Booleans
+  show `off`/`on` the same way; **Enter** also toggles them.
+- The values come from the config reference for your Herdr version: enum values,
+  plus names a string setting's description lists ("Accepts ctrl, alt, …").
+  Those settings also take other values: pick `other…` or press **Enter** to type
+  one.
+- **Enter** on any other setting edits the value. Lists are entered as TOML,
+  e.g. `["codex", "claude"]`.
 - **x** restores the default by removing the key.
 - **E** opens the whole `config.toml` in your editor. The edit is checked before
   it replaces the file; if Herdr rejects it, **E** reopens your edited copy.

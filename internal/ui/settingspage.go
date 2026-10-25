@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -41,7 +42,6 @@ type settingsMode int
 const (
 	settingsBrowse settingsMode = iota
 	settingsEditing
-	settingsChoosing
 	settingsConfirm
 )
 
@@ -53,17 +53,29 @@ type settingsPage struct {
 	issues  []string
 	mode    settingsMode
 	input   textinput.Model
-	choices list
-	options []string
+	// pending is a value picked with ←/→ that is saved once the keys stop.
+	pending *pendingValue
 	ask     *confirm
 	// raw holds an edit of the whole file that failed the check, so the next
 	// edit starts from it rather than losing the work.
 	raw []byte
 }
 
+type pendingValue struct {
+	key   string
+	path  []string
+	value any
+	seq   int
+}
+
+// pickDelay is how long ←/→ must rest before the picked value is saved, so
+// cycling through values writes the config once.
+var pickDelay = 400 * time.Millisecond
+
 type (
-	issuesMsg    struct{ result herdr.CheckResult }
-	rawEditedMsg struct {
+	pendingSaveMsg struct{ seq int }
+	issuesMsg      struct{ result herdr.CheckResult }
+	rawEditedMsg   struct {
 		path string
 		err  error
 	}
@@ -73,7 +85,7 @@ type (
 const rawWhat = "config.toml"
 
 func newSettingsPage(sh *shared) page {
-	p := &settingsPage{sh: sh, list: newList(), choices: newList()}
+	p := &settingsPage{sh: sh, list: newList()}
 	p.list.header = func(i int) bool { return i < len(p.rows) && p.rows[i].header != "" }
 	return p
 }
@@ -93,8 +105,6 @@ func (p *settingsPage) help() string {
 	switch p.mode {
 	case settingsEditing:
 		return "↵ save · esc cancel"
-	case settingsChoosing:
-		return "↵ choose · esc cancel"
 	case settingsConfirm:
 		return p.ask.question + " [y/N]"
 	}
@@ -104,8 +114,10 @@ func (p *settingsPage) help() string {
 		return "/ search · E edit config.toml"
 	case r.unknown != nil:
 		return "x remove · / search · E edit config.toml"
-	case r.key.Type == schema.TypeBoolean:
-		return "↵ toggle · x reset · / search · E edit config.toml"
+	case r.key.Open():
+		return "←/→ pick · ↵ type a value · x reset · / search · E edit config.toml"
+	case len(options(r.key)) > 0:
+		return "←/→ pick · x reset · / search · E edit config.toml"
 	}
 	return "↵ change · x reset · / search · E edit config.toml"
 }
@@ -130,8 +142,8 @@ func (p *settingsPage) rebuild() {
 	}
 	var rows []settingRow
 	for _, section := range p.sh.ref.Sections {
-		// Keybindings have their own page.
-		if section.ID == "keys" {
+		// Keybindings and themes have their own pages.
+		if section.ID == "keys" || section.ID == "theme" {
 			continue
 		}
 		rows = append(rows, settingRow{header: section.Title})
@@ -211,6 +223,10 @@ func (p *settingsPage) update(msg tea.Msg) tea.Cmd {
 		}
 	case issuesMsg:
 		p.issues = msg.result.Issues
+	case pendingSaveMsg:
+		if p.pending != nil && p.pending.seq == msg.seq {
+			return p.flush()
+		}
 	case rawEditedMsg:
 		return p.rawEdited(msg)
 	case tea.KeyMsg:
@@ -228,11 +244,10 @@ func (p *settingsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return ask.handle(msg)
 	case settingsEditing:
 		return p.handleEditKey(msg)
-	case settingsChoosing:
-		return p.handleChoiceKey(msg)
 	}
 	if handled, cmd := p.list.handleKey(msg); handled {
-		return cmd
+		// Moving away saves a value still waiting on its delay.
+		return tea.Batch(cmd, p.flush())
 	}
 	if msg.String() == "E" {
 		return p.editRaw()
@@ -242,6 +257,8 @@ func (p *settingsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch msg.String() {
+	case "left", "right":
+		return p.cycle(r, msg.String())
 	case "enter", " ":
 		if r.unknown != nil {
 			return nil
@@ -269,8 +286,8 @@ func (p *settingsPage) unset(what string, path []string) tea.Cmd {
 	})
 }
 
-// edit starts changing r: booleans toggle, keys with known values open a
-// chooser and everything else gets a text field.
+// edit starts changing r: booleans toggle, enums move to the next value and
+// everything else gets a text field.
 func (p *settingsPage) edit(r *settingRow) tea.Cmd {
 	k := r.key
 	if k.Type == schema.TypeBoolean {
@@ -282,21 +299,15 @@ func (p *settingsPage) edit(r *settingRow) tea.Cmd {
 		path := k.Path()
 		return p.sh.save(k.Key, func(doc *config.Doc) error { return doc.Set(path, !current) })
 	}
-	if choices := k.Choices(); len(choices) > 0 {
-		p.options = choices
-		labels := slices.Clone(choices)
-		p.choices.setRows(labels)
-		p.choices.cursor = 0
-		currentValue := r.value
-		if !r.set {
-			currentValue, _ = k.DefaultValue()
-		}
-		if s, ok := currentValue.(string); ok {
-			p.choices.selectRow(slices.Index(choices, s))
-		}
-		p.mode = settingsChoosing
-		return nil
+	if len(options(k)) > 0 && !k.Open() {
+		return p.cycle(r, "right")
 	}
+	return p.editText(r)
+}
+
+// editText opens the text field for r.
+func (p *settingsPage) editText(r *settingRow) tea.Cmd {
+	k := r.key
 	text := ""
 	if r.set {
 		text = editText(k, r.value)
@@ -375,28 +386,157 @@ func (p *settingsPage) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-func (p *settingsPage) handleChoiceKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
-		if !p.choices.clearFilter() {
-			p.mode = settingsBrowse
-		}
-		return nil
-	case "enter":
-		if p.choices.filtering {
-			break
-		}
-		r, i := p.current(), p.choices.selected()
-		p.mode = settingsBrowse
-		p.choices.clearFilter()
-		if r == nil || i < 0 {
-			return nil
-		}
-		value, path := p.options[i], r.key.Path()
-		return p.sh.save(r.key.Key, func(doc *config.Doc) error { return doc.Set(path, value) })
+// claims takes ←/→ on rows with values to pick, ahead of page switching.
+func (p *settingsPage) claims(msg tea.KeyMsg) bool {
+	if p.mode != settingsBrowse || p.list.filtering {
+		return false
 	}
-	_, cmd := p.choices.handleKey(msg)
-	return cmd
+	if key := msg.String(); key != "left" && key != "right" {
+		return false
+	}
+	r := p.current()
+	return r != nil && r.unknown == nil && len(options(r.key)) > 0
+}
+
+// cycle moves r to the previous or next listed value. The save waits for
+// pickDelay so cycling through several values writes once.
+func (p *settingsPage) cycle(r *settingRow, dir string) tea.Cmd {
+	var opts []option
+	for _, o := range options(r.key) {
+		if !o.custom {
+			opts = append(opts, o)
+		}
+	}
+	if len(opts) == 0 {
+		return nil
+	}
+	value := effective(*r)
+	if p.pending != nil && p.pending.key == r.key.Key {
+		value = p.pending.value
+	}
+	i := selectedOption(opts, value)
+	switch {
+	case i < 0 && dir == "left":
+		i = len(opts) - 1
+	case i < 0:
+		i = 0
+	case dir == "left":
+		i = (i + len(opts) - 1) % len(opts)
+	default:
+		i = (i + 1) % len(opts)
+	}
+	var flush tea.Cmd
+	if p.pending != nil && p.pending.key != r.key.Key {
+		flush = p.flush()
+	}
+	seq := 1
+	if p.pending != nil {
+		seq = p.pending.seq + 1
+	}
+	p.pending = &pendingValue{key: r.key.Key, path: r.key.Path(), value: opts[i].value, seq: seq}
+	return tea.Batch(flush, tea.Tick(pickDelay, func(time.Time) tea.Msg { return pendingSaveMsg{seq: seq} }))
+}
+
+// flush saves the pending value now.
+func (p *settingsPage) flush() tea.Cmd {
+	pending := p.pending
+	if pending == nil {
+		return nil
+	}
+	p.pending = nil
+	return p.sh.save(pending.key, func(doc *config.Doc) error { return doc.Set(pending.path, pending.value) })
+}
+
+// option is one value offered in place on a setting's row.
+type option struct {
+	label  string
+	value  any
+	custom bool // opens the text field for a value not listed
+}
+
+// options lists the values offered for k: on/off for booleans, the known
+// values otherwise, and "other…" when other values are valid too.
+func options(k schema.Key) []option {
+	if k.Type == schema.TypeBoolean {
+		return []option{{label: "off", value: false}, {label: "on", value: true}}
+	}
+	choices := k.Choices()
+	if len(choices) == 0 {
+		return nil
+	}
+	out := make([]option, 0, len(choices)+1)
+	for _, c := range choices {
+		label := c
+		if c == "" {
+			label = "off"
+		}
+		out = append(out, option{label: label, value: c})
+	}
+	if k.Open() {
+		out = append(out, option{label: "other…", custom: true})
+	}
+	return out
+}
+
+// effective is the value in force for r: its own, or the default.
+func effective(r settingRow) any {
+	if r.set {
+		return r.value
+	}
+	if def, ok := r.key.DefaultValue(); ok {
+		return def
+	}
+	// Some defaults are prose, such as compact or "stable" (with a note).
+	text := r.key.Default
+	if i := strings.Index(text, `"`); i >= 0 {
+		if j := strings.Index(text[i+1:], `"`); j >= 0 {
+			return text[i+1 : i+1+j]
+		}
+	}
+	return text
+}
+
+func selectedOption(opts []option, value any) int {
+	for i, o := range opts {
+		if !o.custom && o.value == value {
+			return i
+		}
+	}
+	return -1
+}
+
+// strip renders a row's values with the one in force marked, or the one
+// about to be saved highlighted.
+func (p *settingsPage) strip(r settingRow, opts []option) string {
+	value := effective(r)
+	current := selectedOption(opts, value)
+	picked := -1
+	if p.pending != nil && p.pending.key == r.key.Key {
+		picked = selectedOption(opts, p.pending.value)
+	}
+	parts := make([]string, len(opts))
+	for i, o := range opts {
+		label := o.label
+		other := o.custom && current < 0 && r.set
+		if other {
+			label = formatValue(value)
+		}
+		switch {
+		case i == picked:
+			parts[i] = styleTabActive.Render(" " + label + " ")
+		case picked < 0 && (i == current || other) && r.set:
+			parts[i] = styleAccent.Bold(true).Render("[" + label + "]")
+		case picked < 0 && (i == current || other):
+			parts[i] = styleHeading.Render("[" + label + "]")
+		default:
+			parts[i] = styleDim.Render(" " + label + " ")
+		}
+	}
+	text := strings.Join(parts, "")
+	if r.set {
+		text += " *"
+	}
+	return text
 }
 
 // editRaw opens config.toml in the user's editor through a scratch copy, so
@@ -471,12 +611,6 @@ func (p *settingsPage) view(width, height int) string {
 		top = append(top, styleWarn.Render(fmt.Sprintf("herdr config check: %d issue(s): %s", len(p.issues), p.issues[0])))
 	}
 	detail := p.detail(width)
-	if p.mode == settingsChoosing {
-		chooserHeight := min(len(p.options)+1, max(height/2, 4))
-		detail = append(detail, strings.Split(p.choices.view(chooserHeight, func(i int, selected bool) string {
-			return row(p.options[i], selected)
-		}), "\n")...)
-	}
 	listHeight := max(height-len(top)-len(detail)-1, 3)
 	keyWidth := min(max(width/3, 24), 40)
 	body := p.list.view(listHeight, func(i int, selected bool) string {
@@ -485,6 +619,11 @@ func (p *settingsPage) view(width, height int) string {
 			return styleHeading.Render(r.header)
 		}
 		name := padRight(r.name(), keyWidth)
+		if r.unknown == nil {
+			if opts := options(r.key); len(opts) > 0 {
+				return row(name+" "+p.strip(r, opts), selected)
+			}
+		}
 		return row(name+" "+p.display(r), selected)
 	})
 	lines := append(top, fit(body, width, listHeight), "")
@@ -526,7 +665,7 @@ func (p *settingsPage) detail(width int) []string {
 	r := p.current()
 	if r == nil {
 		if p.mode == settingsBrowse && p.list.filter.Value() == "" {
-			return []string{styleDim.Render("Keybindings are on the Keys page.")}
+			return []string{styleDim.Render("Keybindings are on the Keys page and themes on the Themes page.")}
 		}
 		return nil
 	}

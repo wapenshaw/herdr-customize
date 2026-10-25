@@ -92,6 +92,10 @@ func (d *driver) keys(keys ...string) {
 			d.send(tea.KeyMsg{Type: tea.KeyEsc})
 		case "tab":
 			d.send(tea.KeyMsg{Type: tea.KeyTab})
+		case "left":
+			d.send(tea.KeyMsg{Type: tea.KeyLeft})
+		case "right":
+			d.send(tea.KeyMsg{Type: tea.KeyRight})
 		case "ctrl+u":
 			d.send(tea.KeyMsg{Type: tea.KeyCtrlU})
 		default:

@@ -149,6 +149,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 		current := a.pages[a.active]
+		// A page can take a key that would otherwise switch pages.
+		if c, ok := current.(interface{ claims(tea.KeyMsg) bool }); ok && c.claims(msg) {
+			return a, current.update(msg)
+		}
 		if !current.capturing() {
 			switch msg.String() {
 			case "esc":
