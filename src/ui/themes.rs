@@ -71,6 +71,8 @@ pub struct ThemesPage {
     input: TextInput,
     ask: Option<Confirm<ThemesPage>>,
     remote_only: bool,
+    /// Themes load when the page is first shown.
+    shown: bool,
     /// A new palette waiting for a name.
     pending_body: String,
     // token editor
@@ -127,6 +129,7 @@ impl ThemesPage {
             input: TextInput::default(),
             ask: None,
             remote_only: false,
+            shown: false,
             pending_body: String::new(),
             edit_slug: String::new(),
             edit_body: String::new(),
@@ -489,11 +492,14 @@ impl Page for ThemesPage {
         "Themes"
     }
 
-    fn init(&mut self, ctx: &mut Ctx) {
-        // The client check scans every process, so it runs beside the first
-        // frame instead of in front of it.
-        ctx.spawn(load_themes);
-        ctx.spawn(|| Msg::RemoteOnly(theme::only_remote_clients()).into());
+    fn activated(&mut self, ctx: &mut Ctx) {
+        if !self.shown {
+            self.shown = true;
+            // The client check scans every process, so it runs beside the
+            // first frame instead of in front of it.
+            ctx.spawn(load_themes);
+            ctx.spawn(|| Msg::RemoteOnly(theme::only_remote_clients()).into());
+        }
     }
 
     fn update(&mut self, msg: &mut ui::Msg, ctx: &mut Ctx) {
