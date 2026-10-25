@@ -44,21 +44,24 @@ static SLUG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.-]+/[A
 /// Finds repositories tagged with the topic. sort is "stars" or "updated";
 /// page counts from 1.
 pub fn search(query: &str, sort: &str, page: usize, per_page: usize) -> Result<Results> {
+    search_at(&api_base(), github_token(), query, sort, page, per_page)
+}
+
+fn search_at(base: &str, token: Option<String>, query: &str, sort: &str, page: usize, per_page: usize) -> Result<Results> {
     let mut q = format!("topic:{MARKET_TOPIC}");
     if !query.trim().is_empty() {
         q += &format!(" {}", query.trim());
     }
     // The 50-result page is a few hundred KB; slow links need the time.
-    let mut req = ureq::get(&format!("{}/search/repositories", api_base()))
+    let mut req = ureq::get(&format!("{base}/search/repositories"))
         .query("q", &q)
         .query("sort", sort)
         .query("order", "desc")
-        .query("per_page", &per_page.to_string())
-        .query("page", &page.to_string())
-        .set("Accept", "application/vnd.github+json")
-        .timeout(Duration::from_secs(20));
-    if let Some(token) = github_token() {
-        req = req.set("Authorization", &format!("Bearer {token}"));
+        .query("per_page", per_page.to_string())
+        .query("page", page.to_string())
+        .header("Accept", "application/vnd.github+json");
+    if let Some(token) = token {
+        req = req.header("Authorization", format!("Bearer {token}"));
     }
     #[derive(Deserialize, Default)]
     #[serde(default)]
@@ -74,20 +77,23 @@ pub fn search(query: &str, sort: &str, page: usize, per_page: usize) -> Result<R
         stargazers_count: u64,
         description: Option<String>,
     }
-    let resp = match req.call() {
+    // Error statuses come back as responses so the API's message can be shown.
+    let mut resp = match req.config().timeout_global(Some(Duration::from_secs(20))).http_status_as_error(false).build().call() {
         Ok(resp) => resp,
-        Err(ureq::Error::Status(code, resp)) => {
-            let reason = if code == 403 || code == 429 { "GitHub rate limit" } else { "marketplace search failed" };
-            let message = resp.into_string().ok().and_then(|s| serde_json::from_str::<Data>(&s).ok()).map(|d| d.message).unwrap_or_default();
-            if message.is_empty() {
-                bail!("{reason} (HTTP {code})");
-            }
-            bail!("{reason} (HTTP {code}): {message}");
-        }
-        Err(ureq::Error::Transport(t)) if t.kind() == ureq::ErrorKind::Io => bail!("marketplace search timed out or lost its connection"),
+        Err(ureq::Error::Timeout(_) | ureq::Error::Io(_)) => bail!("marketplace search timed out or lost its connection"),
         Err(_) => bail!("marketplace search failed: no connection"),
     };
-    let data: Data = serde_json::from_str(&resp.into_string()?).map_err(|e| anyhow!("marketplace search: {e}"))?;
+    let code = resp.status().as_u16();
+    let body = resp.body_mut().read_to_string();
+    if code >= 400 {
+        let reason = if code == 403 || code == 429 { "GitHub rate limit" } else { "marketplace search failed" };
+        let message = body.ok().and_then(|s| serde_json::from_str::<Data>(&s).ok()).map(|d| d.message).unwrap_or_default();
+        if message.is_empty() {
+            bail!("{reason} (HTTP {code})");
+        }
+        bail!("{reason} (HTTP {code}): {message}");
+    }
+    let data: Data = serde_json::from_str(&body?).map_err(|e| anyhow!("marketplace search: {e}"))?;
     Ok(Results {
         total: data.total_count.min(MARKET_LIMIT),
         repos: data
@@ -116,4 +122,70 @@ fn github_token() -> Option<String> {
     let out = Command::new(gh).args(["auth", "token"]).output().ok()?;
     let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
     (out.status.success() && !token.is_empty()).then_some(token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+
+    /// Serves one canned HTTP response and returns the server's base URL
+    /// and the request line it received.
+    fn serve(status: &str, body: &'static str) -> (String, std::thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let status = status.to_string();
+        let handle = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream);
+            let mut head = String::new();
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+                head += &line;
+            }
+            let reply = format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            reader.get_mut().write_all(reply.as_bytes()).unwrap();
+            head
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn search_parses_results_and_sends_token() {
+        let (base, server) = serve("200 OK", r#"{"total_count":2,"items":[{"full_name":"a/b","stargazers_count":5,"description":"one\ntwo"},{"full_name":"bad slug/x","stargazers_count":1}]}"#);
+        let r = search_at(&base, Some("t0k".into()), "theme", "stars", 2, 50).unwrap();
+        let head = server.join().unwrap();
+        assert!(head.starts_with("GET /search/repositories?q=topic%3Aherdr-plugin%20theme&sort=stars&order=desc&per_page=50&page=2 "), "{head}");
+        assert!(head.to_lowercase().contains("authorization: bearer t0k"), "{head}");
+        assert_eq!(r.total, 2);
+        assert_eq!(r.repos.len(), 1);
+        assert_eq!((r.repos[0].full_name.as_str(), r.repos[0].stars, r.repos[0].description.as_str()), ("a/b", 5, "one two"));
+    }
+
+    #[test]
+    fn search_reports_rate_limit_message() {
+        let (base, server) = serve("403 Forbidden", r#"{"message":"API rate limit exceeded"}"#);
+        let err = search_at(&base, None, "", "stars", 1, 50).unwrap_err().to_string();
+        server.join().unwrap();
+        assert_eq!(err, "GitHub rate limit (HTTP 403): API rate limit exceeded");
+    }
+
+    #[test]
+    fn search_reports_status_without_message() {
+        let (base, server) = serve("500 Internal Server Error", "oops");
+        let err = search_at(&base, None, "", "stars", 1, 50).unwrap_err().to_string();
+        server.join().unwrap();
+        assert_eq!(err, "marketplace search failed (HTTP 500)");
+    }
+
+    #[test]
+    fn search_reports_no_connection() {
+        // Nothing listens on the discard port.
+        let err = search_at("http://127.0.0.1:9", None, "", "stars", 1, 50).unwrap_err().to_string();
+        assert!(err.starts_with("marketplace search"), "{err}");
+    }
 }

@@ -35,7 +35,7 @@ Use Rust 1.89 or newer (edition 2024); on Windows, the MSVC toolchain with the V
 - `./target/release/herdr-customize ui keys`: open the popup on a page (`themes`, `plugins`, `keys`, `settings`).
 - `./target/release/herdr-customize preview dracula-default`: render a bundled palette preview.
 
-Check platform-sensitive changes for every target: `cargo clippy --target x86_64-pc-windows-msvc` and `--target x86_64-unknown-linux-gnu` type-check from macOS (`ring` needs the target's C headers, so check a copy with ureq's `tls` feature off if they are missing). Native runtime checks are needed to validate terminal behavior; Windows steps are in `docs/windows-test-plan.md`.
+Check platform-sensitive changes for every target: `cargo clippy --target x86_64-pc-windows-msvc` and `--target x86_64-unknown-linux-gnu` type-check from macOS (`ring` needs the target's C headers, so check a copy with ureq's `rustls` feature off if they are missing). Native runtime checks are needed to validate terminal behavior; Windows steps are in `docs/windows-test-plan.md`.
 
 ## Language rule (mandatory)
 
