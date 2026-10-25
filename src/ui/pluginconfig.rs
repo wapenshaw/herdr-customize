@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use ratatui::text::Line;
 
-use super::settings::{PICK_DELAY, Pending, SettingRow, edit_text, effective, format_value, options, parse_value, selected_option, step, strip};
+use super::values::{PICK_DELAY, Pending, edit_text, effective, format_value, options, parse_value, selected_option, step, strip};
 use super::widgets::*;
 use super::{Ctx, Key, Msg};
 use crate::config::Value;
@@ -40,10 +40,6 @@ pub fn load(pl: &Plugin) -> impl FnOnce() -> Msg + Send + 'static {
         let cfg = plugins::config_dir(&id).and_then(|dir| pluginconfig::load(&dir, root.as_ref()));
         Msg::PluginConfig { id, cfg }
     }
-}
-
-fn as_row(e: &Entry) -> SettingRow {
-    SettingRow { key: e.key.clone(), value: e.value.clone(), ..Default::default() }
 }
 
 impl PluginConfig {
@@ -148,7 +144,7 @@ impl PluginConfig {
             "left" | "right" => self.cycle(&f, &e, &key.name, ctx),
             "enter" | " " => {
                 if e.key.kind == schema::BOOLEAN {
-                    let current = matches!(effective(&as_row(&e)), Value::Boolean(true));
+                    let current = matches!(effective(&e.key, e.value.as_ref()), Value::Boolean(true));
                     return self.save(&f, &e.key.key, Value::Boolean(!current), ctx);
                 }
                 if !options(&e.key).is_empty() && (!e.key.open() || key.is(" ")) {
@@ -224,7 +220,7 @@ impl PluginConfig {
         let same = self.pending.as_ref().is_some_and(|p| p.key == e.key.key) && self.pending_file == f.name;
         let value = match &self.pending {
             Some(p) if same => p.value.clone(),
-            _ => effective(&as_row(e)),
+            _ => effective(&e.key, e.value.as_ref()),
         };
         let i = step(selected_option(&opts, &value), opts.len(), dir);
         let seq = self.pending.as_ref().map_or(1, |p| p.seq + 1);
@@ -297,7 +293,7 @@ impl PluginConfig {
             let opts = options(&e.key);
             if !opts.is_empty() && !e.read_only {
                 let pending = self.pending.as_ref().filter(|_| self.pending_file == f.name);
-                spans.extend(strip(&as_row(e), &opts, pending));
+                spans.extend(strip(&e.key, e.value.as_ref(), &opts, pending));
             } else if let Some(v) = &e.value {
                 spans.extend([accent(format_value(v)), raw(" *")]);
             } else {

@@ -4,12 +4,12 @@
 use std::collections::HashMap;
 use std::fs;
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use regex::Regex;
 
+use super::values::*;
 use super::widgets::*;
 use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc, save};
 use crate::config::{self, Doc, Value};
@@ -17,21 +17,17 @@ use crate::herdr;
 use crate::schema::{self, Reference};
 use crate::theme::preview::rgb;
 
-/// How long ←/→ must rest before the picked value is saved, so cycling
-/// through values writes the config once.
-pub const PICK_DELAY: Duration = Duration::from_millis(400);
-
 /// Names saves of the whole file from the editor.
 const RAW_WHAT: &str = "config.toml";
 
 /// A section title, or a setting with its value (None when unset).
 #[derive(Debug, Clone, Default)]
-pub struct SettingRow {
-    pub header: Option<String>,
-    pub key: schema::Key,
+struct SettingRow {
+    header: Option<String>,
+    key: schema::Key,
     /// A key in config.toml that Herdr does not document.
-    pub unknown: Option<Vec<String>>,
-    pub value: Option<Value>,
+    unknown: Option<Vec<String>>,
+    value: Option<Value>,
 }
 
 impl SettingRow {
@@ -42,14 +38,6 @@ impl SettingRow {
     fn name(&self) -> String {
         self.path().join(".")
     }
-}
-
-/// A value picked with ←/→, saved after PICK_DELAY.
-#[derive(Debug, Clone)]
-pub struct Pending {
-    pub key: String,
-    pub value: Value,
-    pub seq: u64,
 }
 
 /// A value being saved, shown until its saves report back so a row does not
@@ -165,7 +153,7 @@ impl SettingsPage {
     fn edit(&mut self, r: SettingRow, ctx: &mut Ctx) {
         let k = &r.key;
         if k.kind == schema::BOOLEAN {
-            let current = matches!(effective(&r), Value::Boolean(true));
+            let current = matches!(effective(k, r.value.as_ref()), Value::Boolean(true));
             return self.write(k.key.clone(), k.path(), Some(Value::Boolean(!current)), ctx);
         }
         if !options(k).is_empty() && !k.open() {
@@ -213,7 +201,7 @@ impl SettingsPage {
         let same = self.pending.as_ref().is_some_and(|p| p.key == r.key.key);
         let value = match &self.pending {
             Some(p) if same => p.value.clone(),
-            _ => effective(r),
+            _ => effective(&r.key, r.value.as_ref()),
         };
         let i = step(selected_option(&opts, &value), opts.len(), dir);
         let seq = self.pending.as_ref().map_or(1, |p| p.seq + 1);
@@ -346,120 +334,6 @@ fn unknown_keys(table: &toml::Table, reference: &Reference, prefix: &[String]) -
 
 static HEX_COLOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9a-fA-F]{6}$").unwrap());
 
-/// Structured types are edited as TOML values; the rest as plain text.
-fn structured(k: &schema::Key) -> bool {
-    [schema::ARRAY, schema::STRING_LIST, schema::TOKEN_ROWS, schema::TOKEN_TABLES].contains(&k.kind.as_str())
-}
-
-pub fn edit_text(k: &schema::Key, value: &Value) -> String {
-    match value {
-        Value::String(s) if !structured(k) => s.clone(),
-        _ => config::encode(value).unwrap_or_else(|_| value.to_string()),
-    }
-}
-
-/// Turns the text field into the value to store.
-pub fn parse_value(k: &schema::Key, text: &str) -> anyhow::Result<Value> {
-    Ok(match k.kind.as_str() {
-        schema::INTEGER => Value::Integer(text.trim().parse().map_err(|_| anyhow::anyhow!("{} needs a whole number", k.key))?),
-        schema::FLOAT => Value::Float(text.trim().parse().map_err(|_| anyhow::anyhow!("{} needs a number", k.key))?),
-        _ if structured(k) => config::decode_value(text).map_err(|_| anyhow::anyhow!("{} needs a TOML value such as {}", k.key, k.default))?,
-        _ => Value::String(text.into()),
-    })
-}
-
-/// Moves from option i (None for none) to the previous or next one.
-pub fn step(i: Option<usize>, n: usize, dir: &str) -> usize {
-    match (i, dir) {
-        (None, "left") => n - 1,
-        (Some(i), "left") => (i + n - 1) % n,
-        (None, _) => 0,
-        (Some(i), _) => (i + 1) % n,
-    }
-}
-
-/// One value offered in place on a setting's row.
-#[derive(Debug, Clone)]
-pub struct Choice {
-    pub label: String,
-    pub value: Value,
-    /// Opens the text field for a value not listed.
-    pub custom: bool,
-}
-
-/// The values offered for k: on/off for booleans, the known values
-/// otherwise, and "other…" when other values are valid too.
-pub fn options(k: &schema::Key) -> Vec<Choice> {
-    let choice = |label: &str, value: Value| Choice { label: label.into(), value, custom: false };
-    if k.kind == schema::BOOLEAN {
-        return vec![choice("off", Value::Boolean(false)), choice("on", Value::Boolean(true))];
-    }
-    let choices = k.choices();
-    if choices.is_empty() {
-        return Vec::new();
-    }
-    let mut out: Vec<Choice> = choices.iter().map(|c| choice(if c.is_empty() { "off" } else { c }, Value::String(c.clone()))).collect();
-    if k.open() {
-        out.push(Choice { label: "other…".into(), value: Value::String(String::new()), custom: true });
-    }
-    out
-}
-
-/// The value in force for r: its own, or the default.
-pub fn effective(r: &SettingRow) -> Value {
-    if let Some(v) = r.value.clone().or_else(|| r.key.default_value()) {
-        return v;
-    }
-    // Some defaults are prose, such as compact or "stable" (with a note).
-    let text = &r.key.default;
-    if let Some((_, rest)) = text.split_once('"')
-        && let Some((quoted, _)) = rest.split_once('"')
-    {
-        return Value::String(quoted.into());
-    }
-    Value::String(text.clone())
-}
-
-pub fn selected_option(opts: &[Choice], value: &Value) -> Option<usize> {
-    opts.iter().position(|o| !o.custom && o.value == *value)
-}
-
-/// A row's values with the one in force marked, or the one about to be
-/// saved highlighted.
-pub fn strip(r: &SettingRow, opts: &[Choice], pending: Option<&Pending>) -> Vec<Span<'static>> {
-    let value = effective(r);
-    let current = selected_option(opts, &value);
-    let picked = pending.filter(|p| p.key == r.key.key).and_then(|p| selected_option(opts, &p.value));
-    let set = r.value.is_some();
-    let mut spans: Vec<Span<'static>> = opts
-        .iter()
-        .enumerate()
-        .map(|(i, o)| {
-            let other = o.custom && current.is_none() && set;
-            let label = if other { format_value(&value) } else { o.label.clone() };
-            let chosen = Some(i) == current || other;
-            match () {
-                _ if Some(i) == picked => styled(TAB_ACTIVE, format!(" {label} ")),
-                _ if picked.is_none() && chosen && set => styled(ACCENT.add_modifier(ratatui::style::Modifier::BOLD), format!("[{label}]")),
-                _ if picked.is_none() && chosen => heading(format!("[{label}]")),
-                _ => dim(format!(" {label} ")),
-            }
-        })
-        .collect();
-    if set {
-        spans.push(raw(" *"));
-    }
-    spans
-}
-
-pub fn format_value(value: &Value) -> String {
-    match value {
-        Value::String(s) if s.is_empty() => "\"\"".into(),
-        Value::String(s) => s.clone(),
-        _ => config::encode(value).unwrap_or_else(|_| value.to_string()),
-    }
-}
-
 impl Page for SettingsPage {
     fn title(&self) -> &'static str {
         "Settings"
@@ -561,7 +435,7 @@ impl Page for SettingsPage {
             if opts.is_empty() {
                 spans.extend(self.display(r));
             } else {
-                spans.extend(strip(r, &opts, self.pending.as_ref()));
+                spans.extend(strip(&r.key, r.value.as_ref(), &opts, self.pending.as_ref()));
             }
             row(Line::from(spans), selected)
         });
