@@ -4,6 +4,36 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.1.2](https://github.com/wapenshaw/herdr-customize/compare/v0.1.1...v0.1.2) (2026-10-25)
+
+
+### Bug Fixes
+
+* **pluginconfig:** decide a file's format before reading it ([abff8eb](https://github.com/wapenshaw/herdr-customize/commit/abff8eb3b98dee82fb234408fe7ea1b972512f3a))
+* **ui:** install the terminal panic hook once ([6c8ea3d](https://github.com/wapenshaw/herdr-customize/commit/6c8ea3d0339dbb31a07e9fc73f490235514f9b2c))
+
+
+### Performance
+
+* **ui:** decode the config once per page rebuild ([8fd509e](https://github.com/wapenshaw/herdr-customize/commit/8fd509e2c08f1f7ad6c8d21d6b234fa673c6de7a))
+
+
+### Refactoring
+
+* **config:** share the keep-the-decor value replacement ([7b5d457](https://github.com/wapenshaw/herdr-customize/commit/7b5d457f83a99656a242a1e07d881dea02450ce7))
+* **keys:** share the indexed suffix and clash lookup ([bba0ffb](https://github.com/wapenshaw/herdr-customize/commit/bba0ffbacee7e9ba0d080ede8d5606107f8d34d2))
+* **pluginconfig:** merge entries in place and share the quote check ([16d5620](https://github.com/wapenshaw/herdr-customize/commit/16d5620502b3a0b13844cb46097f28569ac22870))
+* **plugins:** share the JSON envelope and the GitHub URL ([9161497](https://github.com/wapenshaw/herdr-customize/commit/916149788756505267170a18c3212414a53a6315))
+* **settings:** derive the pending path from its key ([b129d49](https://github.com/wapenshaw/herdr-customize/commit/b129d49e2fb166999a278194094492feab8ee812))
+* **terminal:** replace dead-code allows with test cfgs ([f3f50d0](https://github.com/wapenshaw/herdr-customize/commit/f3f50d0b6bfb0dc9935cccb2f0c1affeb433b0ba))
+* **theme:** keep token order, origin and role in one table ([c4362dd](https://github.com/wapenshaw/herdr-customize/commit/c4362ddae2d8ab2fb84991491a44b26d68ccecbd))
+* **theme:** load a palette through one helper ([acbb14e](https://github.com/wapenshaw/herdr-customize/commit/acbb14ea470228e3bb62548c3587952b396339f7))
+* **ui:** drop a pass-through, a dead branch and a reparse ([b4077f8](https://github.com/wapenshaw/herdr-customize/commit/b4077f8d6e3fab5aa3aadd825c628df6a705d1e4))
+* **ui:** return the confirm directly from Confirm::new ([a8692d1](https://github.com/wapenshaw/herdr-customize/commit/a8692d1a6eba7a03bbb64bd40f68ad4389ab8210))
+* **ui:** share the page dispatch and timer code ([c280db0](https://github.com/wapenshaw/herdr-customize/commit/c280db0ba60dfb9ac6a127d686533a5f9f73c33a))
+* **ui:** take message payloads instead of cloning them ([d4a0f31](https://github.com/wapenshaw/herdr-customize/commit/d4a0f31af920687b90d3d99b4c77359c0b3d918f))
+* **widgets:** share the column cut between clip and clip_str ([36c1559](https://github.com/wapenshaw/herdr-customize/commit/36c1559ed7fbb25f078cd0e34d6e4a6033a221ed))
+
 ## [0.1.1](https://github.com/wapenshaw/herdr-customize/compare/v0.1.0...v0.1.1) (2026-10-25)
 
 
