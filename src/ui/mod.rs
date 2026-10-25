@@ -571,6 +571,13 @@ pub fn run(tab: &str) -> Result<()> {
     let mut app = App::new(tab);
     let (tx, rx) = mpsc::channel();
     let mut term = enter()?;
+    // Installed once: enter() runs again after every editor exit, and a hook
+    // per run would chain a leave() for each of them.
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = leave();
+        hook(info);
+    }));
     let result = event_loop(&mut app, &mut term, &tx, &rx);
     leave()?;
     result?;
@@ -585,11 +592,6 @@ type Term = Terminal<CrosstermBackend<io::Stdout>>;
 fn enter() -> Result<Term> {
     terminal::enable_raw_mode()?;
     execute!(io::stdout(), terminal::EnterAlternateScreen, event::EnableBracketedPaste)?;
-    let hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let _ = leave();
-        hook(info);
-    }));
     Ok(Terminal::new(CrosstermBackend::new(io::stdout()))?)
 }
 
