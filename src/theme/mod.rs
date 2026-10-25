@@ -351,7 +351,7 @@ pub fn resolve_palette(slug: &str) -> Result<(Palette, PathBuf)> {
 /* --------------------------------------------------------------- store */
 
 /// One row of the theme list.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Item {
     pub slug: String,
     pub user: bool,
@@ -472,7 +472,7 @@ pub fn validate_theme_body(body: &str) -> Result<()> {
 }
 
 /// What save_user_theme did.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Saved {
     Saved(String),
     /// A theme with this slug exists and overwrite was not set.

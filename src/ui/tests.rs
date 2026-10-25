@@ -4,7 +4,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use super::*;
 use crate::config::{self, Value};
@@ -86,7 +86,7 @@ struct Driver {
 
 impl Driver {
     fn new(tab: &str, config: &str) -> Driver {
-        let guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         let dir = sandbox();
         fs::write(dir.join("config.toml"), config).unwrap();
         fs::write(dir.join("plugins.json"), PLUGINS).unwrap();

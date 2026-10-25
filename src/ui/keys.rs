@@ -16,7 +16,7 @@ use crate::schema;
 const COMMAND_PATH: [&str; 2] = ["keys", "command"];
 
 fn command_path() -> Vec<String> {
-    COMMAND_PATH.iter().map(|s| s.to_string()).collect()
+    COMMAND_PATH.iter().map(ToString::to_string).collect()
 }
 
 /// The [[keys.command]] kinds Herdr accepts.
@@ -402,7 +402,7 @@ impl KeysPage {
 
     fn form_view(&self) -> Vec<Line<'static>> {
         let f = &self.form;
-        let title = f.index.map_or("New custom command".into(), |i| format!("Edit custom command {}", i + 1));
+        let title = f.index.map_or_else(|| "New custom command".into(), |i| format!("Edit custom command {}", i + 1));
         let mut lines = vec![line(heading(title)), Line::default()];
         let mut types = vec![raw(format!("{:<12}", "type"))];
         for t in CommandType::ALL {

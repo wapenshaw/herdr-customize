@@ -29,7 +29,7 @@ pub fn atomic_write(path: &Path, data: &[u8], mode: u32) -> Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
-    let dir = path.parent().unwrap_or(Path::new("."));
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let tmp = temp_path(dir, ".herdr-customize-");
     let result = (|| -> Result<()> {
         let mut f = with_mode(OpenOptions::new().write(true).create_new(true), mode).open(&tmp)?;
@@ -52,7 +52,7 @@ pub fn atomic_write(path: &Path, data: &[u8], mode: u32) -> Result<()> {
 pub fn write_backed_up(path: &Path, data: &[u8], mode: u32) -> Result<()> {
     match fs::read(path) {
         Ok(old) => daily_backup(path, &old)?,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => fs::create_dir_all(path.parent().unwrap_or(Path::new(".")))?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => fs::create_dir_all(path.parent().unwrap_or_else(|| Path::new(".")))?,
         Err(e) => return Err(e.into()),
     }
     atomic_write(path, data, mode)
@@ -117,7 +117,7 @@ pub fn temp_path(dir: &Path, prefix: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU32, Ordering};
     static N: AtomicU32 = AtomicU32::new(0);
     let n = N.fetch_add(1, Ordering::Relaxed);
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
     dir.join(format!("{prefix}{}-{n}-{nanos}", std::process::id()))
 }
 
@@ -150,7 +150,7 @@ struct LocalTime {
 }
 
 fn unix_seconds(t: std::time::SystemTime) -> i64 {
-    t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+    t.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
 /// Breaks t into local calendar fields.

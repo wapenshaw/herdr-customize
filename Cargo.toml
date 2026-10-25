@@ -34,6 +34,18 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_Shell",
 ] }
 
+# Beyond clippy's defaults; CI denies warnings, so these hold there too.
+[lints.clippy]
+derive_partial_eq_without_eq = "warn"
+manual_ok_or = "warn"
+map_unwrap_or = "warn"
+needless_collect = "warn"
+needless_pass_by_value = "warn"
+or_fun_call = "warn"
+redundant_clone = "warn"
+redundant_closure_for_method_calls = "warn"
+ref_option = "warn"
+
 [profile.release]
 lto = true
 codegen-units = 1

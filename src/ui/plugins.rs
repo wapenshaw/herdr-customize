@@ -155,7 +155,7 @@ fn interactive(ctx: &mut Ctx, what: String, args: &[String]) {
 }
 
 fn args(list: &[&str]) -> Vec<String> {
-    list.iter().map(|s| s.to_string()).collect()
+    list.iter().map(ToString::to_string).collect()
 }
 
 /// What herdr plugin install takes, plus an optional @ref.

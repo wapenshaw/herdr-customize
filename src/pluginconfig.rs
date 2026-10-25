@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 use anyhow::{Context, Result, bail};
 use regex::Regex;
@@ -212,7 +212,7 @@ impl File {
         if self.format == Format::Other {
             bail!("{} is not a TOML or .env file", self.name);
         }
-        let _guard = WRITES.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = WRITES.lock().unwrap_or_else(PoisonError::into_inner);
         let old = match fs::read_to_string(&self.path) {
             Ok(t) => t,
             Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),

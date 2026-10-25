@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow, bail};
 use crate::config::Value;
 
 /// One parsed key such as prefix+shift+t.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Combo {
     pub prefix: bool,
     /// In canonical order: ctrl, alt, shift, cmd.
@@ -154,7 +154,7 @@ fn canonical_key(key: &str) -> Result<String> {
         bail!("missing key");
     }
     if key.chars().count() == 1 {
-        return Ok(key_alias(key).map(String::from).unwrap_or_else(|| key.to_string()));
+        return Ok(key_alias(key).map_or_else(|| key.to_string(), String::from));
     }
     let lower = key.to_lowercase();
     if let Some(alias) = key_alias(&lower) {
