@@ -1,0 +1,40 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+- `cmd/herdr-customize/`: CLI entrypoint and command routing.
+- `internal/theme/`: palette loading, picker/editor, TOML persistence, and terminal color sync.
+- `internal/terminal/`: client discovery, OSC color writes/readback, and sync tracking.
+- `internal/instance/`: cross-platform file locking.
+- `tests/{theme,terminal,instance}/`: public API and regression tests; `tests/testutil/` provides fake subprocesses.
+- `themes/`: bundled Ghostty-format palettes and `index.txt`; `preview.png` is the preview asset.
+- `herdr-plugin.toml`: plugin metadata, build commands, panes, and actions. `docs/` records persistence edge cases.
+
+## Build, Test, and Development Commands
+
+Use Go 1.24 or newer. Interactive development requires Herdr and `fzf`.
+
+- `go build -o herdr-customize ./cmd/herdr-customize`: build the plugin binary; use `herdr-customize.exe` on Windows.
+- `go test -v ./...`: run all unit and regression tests.
+- `go vet ./...`: run Go static checks.
+- `go fmt ./...`: format Go packages.
+- `herdr plugin link "$PWD"` followed by `herdr server reload-config`: link the checkout for local development.
+- `./herdr-customize preview dracula-default`: render a bundled palette preview.
+
+Cross-build platform-sensitive changes for Linux, macOS, and Windows; native runtime checks are needed to validate terminal behavior.
+
+## Coding Style & Naming Conventions
+
+Follow standard Go formatting with tab indentation and `gofmt`. Use descriptive package-level names, `PascalCase` for exported identifiers, and `camelCase` for private identifiers. Keep OS-specific implementations in files such as `files_windows.go` and `files_unix.go`, preserving build constraints.
+
+Theme filenames use lowercase hyphenated slugs, such as `catppuccin-mocha`, without extensions. Register bundled additions in `themes/index.txt`; include foreground, background, and all 16 ANSI palette entries.
+
+## Testing Guidelines
+
+Use Go's standard `testing` package: name files `*_test.go` and functions `TestSomething`. Place private helper tests beside their packages and public API/integration tests under `tests/`. No numerical coverage threshold is configured.
+
+Use `t.TempDir()`, `t.Setenv()`, local HTTP servers, and `tests/testutil` subprocess helpers. Isolate state and config paths; tests must avoid recoloring live terminals, reloading real Herdr sessions, or modifying the clipboard. Add regression coverage for changed behavior.
+
+## Commit & Pull Request Guidelines
+
+History commonly uses `feat:`, `fix:`, and optional scopes such as `fix(sync):`. Use concise, imperative subjects. PRs should explain the problem and resulting behavior, link relevant issues, list validation commands and platforms, and include screenshots for picker/preview changes. Update README or persistence notes when behavior changes.
