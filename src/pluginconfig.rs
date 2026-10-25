@@ -325,7 +325,7 @@ fn leaves(table: &toml::Table, prefix: &[String]) -> Vec<String> {
         path.push(name.clone());
         match &table[name] {
             Value::Table(sub) => out.extend(leaves(sub, &path)),
-            _ => out.push(path.join(".")),
+            _ => out.push(config::render_key(&path)),
         }
     }
     out
@@ -525,6 +525,16 @@ mod tests {
         assert_eq!(c.files.len(), 1);
         assert_eq!((c.files[0].name.as_str(), c.files[0].format), (".env", Format::Env));
         assert_eq!(c.files[0].entries[0].value, Some(Value::Integer(1)));
+    }
+
+    #[test]
+    fn quoted_toml_keys_stay_whole() {
+        let entries = read_toml("\"a.b\" = 1\n").unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].value, Some(Value::Integer(1)));
+        let mut doc = Doc::parse("\"a.b\" = 1\n").unwrap();
+        doc.set(&split_key(&entries[0].key.key), &Value::Integer(2)).unwrap();
+        assert_eq!(doc.text(), "\"a.b\" = 2\n");
     }
 
     #[test]
