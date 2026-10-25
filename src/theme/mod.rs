@@ -14,6 +14,8 @@ use std::sync::LazyLock;
 use anyhow::{Context, Result, anyhow, bail};
 use regex::Regex;
 
+#[cfg(test)]
+pub(crate) use apply::write_custom_block;
 pub use apply::{apply_theme, only_remote_clients, sync_applied_theme};
 
 use crate::config::{self, env};

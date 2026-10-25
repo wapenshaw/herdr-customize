@@ -2,14 +2,13 @@
 //! the host terminals' colors, and a reload.
 
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{Item, Table};
 
 use super::{Palette, TOKENS, Tokens, applied_file, parse_palette_file, resolve_palette, state_dir};
-use crate::config::{self, Doc, env};
+use crate::config::{self, Doc, SaveResult, Store, env};
 use crate::{fsutil, herdr, terminal};
 
 /// Writes [theme.custom] to this machine's config, records the selection,
@@ -20,7 +19,10 @@ pub fn apply_theme(slug: &str) -> Result<()> {
     let (pal, palette_path) = load_palette(slug)?;
     fs::create_dir_all(state_dir()).context("create state directory")?;
     let _lock = fsutil::lock(&applied_file().with_extension("lock")).context("lock theme selection")?;
-    write_custom_block(&cfg, &pal.tokens()).context("failed to write the custom theme block")?;
+    let saved = write_custom_block(&cfg, &pal.tokens()).context("failed to write the custom theme block")?;
+    if !saved.check_skipped.is_empty() {
+        eprintln!("Warning: herdr config check unavailable: {}", saved.check_skipped);
+    }
     // Record the selection with the config so a later sync or failed reload
     // can never pair the new UI theme with the previous terminal palette.
     fsutil::atomic_write(&applied_file(), format!("{slug}\n").as_bytes(), 0o644).with_context(|| format!("theme written to {}, but the selection marker failed", cfg.display()))?;
@@ -45,21 +47,10 @@ fn load_palette(slug: &str) -> Result<(Palette, PathBuf)> {
 }
 
 /// Replaces the base tokens of [theme.custom], keeping the auto_switch
-/// [theme.custom.light] and [theme.custom.dark] layers.
-pub fn write_custom_block(cfg: &Path, tokens: &Tokens) -> Result<()> {
-    let original = match fs::read_to_string(cfg) {
-        Ok(text) => Some(text),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-        Err(e) => return Err(e.into()),
-    };
-    let mut doc = Doc::parse(original.as_deref().unwrap_or_default()).context("invalid existing TOML")?;
-    replace_custom_tokens(&mut doc, tokens)?;
-    match &original {
-        // Herdr works without a config; create one without inventing a backup.
-        None => fs::create_dir_all(cfg.parent().unwrap_or(Path::new(".")))?,
-        Some(text) => fsutil::daily_backup(cfg, text.as_bytes())?,
-    }
-    fsutil::atomic_write(cfg, doc.text().as_bytes(), 0o600)
+/// [theme.custom.light] and [theme.custom.dark] layers. It never reloads, so
+/// the reload can follow the terminal sync.
+pub(crate) fn write_custom_block(cfg: &Path, tokens: &Tokens) -> Result<SaveResult> {
+    Store { path: cfg.to_path_buf(), no_reload: true }.update(|doc| replace_custom_tokens(doc, tokens))
 }
 
 const LAYERS: [&str; 2] = ["light", "dark"];
