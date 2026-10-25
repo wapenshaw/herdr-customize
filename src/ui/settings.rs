@@ -9,7 +9,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use regex::Regex;
 
-use super::values::*;
+use super::values::{self, *};
 use super::widgets::*;
 use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc, save};
 use crate::config::{self, Doc, Value};
@@ -194,27 +194,18 @@ impl SettingsPage {
     /// save waits for PICK_DELAY so stepping through several values writes
     /// once.
     fn cycle(&mut self, r: &SettingRow, dir: &str, ctx: &mut Ctx) {
-        let opts: Vec<Choice> = options(&r.key).into_iter().filter(|o| !o.custom).collect();
-        if opts.is_empty() {
-            return;
-        }
-        let same = self.pending.as_ref().is_some_and(|p| p.key == r.key.key);
-        let value = match &self.pending {
-            Some(p) if same => p.value.clone(),
-            _ => effective(&r.key, r.value.as_ref()),
-        };
-        let i = step(selected_option(&opts, &value), opts.len(), dir);
-        let seq = self.pending.as_ref().map_or(1, |p| p.seq + 1);
-        if !same {
-            self.flush(ctx);
-        }
-        self.pending = Some(Pending { key: r.key.key.clone(), value: opts[i].value.clone(), seq });
-        ctx.after(PICK_DELAY, Msg::PendingSave(seq));
+        let replaced = values::cycle(&mut self.pending, &r.key, r.value.as_ref(), None, dir, ctx);
+        self.save_pick(replaced, ctx);
     }
 
     /// Saves the pending value now.
     fn flush(&mut self, ctx: &mut Ctx) {
-        if let Some(p) = self.pending.take() {
+        let pick = self.pending.take();
+        self.save_pick(pick, ctx);
+    }
+
+    fn save_pick(&mut self, pick: Option<Pending>, ctx: &mut Ctx) {
+        if let Some(p) = pick {
             let path = config::split_key(&p.key);
             self.write(p.key, path, Some(p.value), ctx);
         }
@@ -367,7 +358,7 @@ impl Page for SettingsPage {
                 }
             }
             Msg::Issues(result) => self.issues = std::mem::take(&mut result.issues),
-            Msg::PendingSave(seq) => {
+            Msg::PendingSave { seq } => {
                 if self.pending.as_ref().is_some_and(|p| p.seq == *seq) {
                     self.flush(ctx);
                 }

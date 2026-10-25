@@ -324,6 +324,20 @@ fn plugin_settings_are_typed() {
     assert!(d.screen().contains("saved FAST"));
 }
 
+// A pick waiting in one file must not be lost when a pick starts in another.
+#[test]
+fn plugin_settings_picks_in_two_files_write_both() {
+    let mut d = Driver::new("plugins", "");
+    let pc = sandbox().join("pc/demo");
+    fs::create_dir_all(&pc).unwrap();
+    fs::write(pc.join("a.env"), "# Poll often\n#FAST=false\n").unwrap();
+    fs::write(pc.join("b.env"), "# Poll rarely\n#FAST=false\n").unwrap();
+    d.press(&["s", "right", "down", "right"]);
+    d.fire();
+    assert_eq!(fs::read_to_string(pc.join("a.env")).unwrap(), "# Poll often\n#FAST=false\nFAST=true\n");
+    assert_eq!(fs::read_to_string(pc.join("b.env")).unwrap(), "# Poll rarely\n#FAST=false\nFAST=true\n");
+}
+
 #[test]
 fn key_sheet_opens_and_closes() {
     let mut d = Driver::new("plugins", "");
