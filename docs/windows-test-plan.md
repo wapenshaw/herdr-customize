@@ -35,6 +35,7 @@ herdr plugin install wapenshaw/herdr-customize
 | --- | --- |
 | Install output | `Installed herdr-customize from wapenshaw/herdr-customize.` Herdr shows the build step's own output only when it fails. |
 | Herdr started from pwsh 7, then install | Same result: the build step runs in Windows PowerShell 5.1 with pwsh 7's `PSModulePath` and still verifies the checksum. |
+| `herdr plugin action invoke bind --plugin herdr-customize` | A notification says `prefix+t` was bound (or which key already opens the popup); `prefix+t` opens it. Running it again changes nothing. |
 | Without network | The script says it is building from source and runs cargo (or explains how to install Rust). |
 | Binary | Runs on a machine without the Visual C++ redistributable (the CRT is linked statically). |
 | `herdr plugin update herdr-customize` from the popup's own Plugins page | Succeeds while the popup is open; the old binary is left as `herdr-customize.exe.old` and removed on the next update. |

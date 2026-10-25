@@ -6,6 +6,7 @@ The plugin is written in Rust. The first, Go implementation is kept on the
 `go` branch, and `docs/go-vs-rust.md` compares the two.
 
 - `src/main.rs`: CLI entrypoint and command routing.
+- `src/bind.rs`: `bind`, the first key binding for the popup, since Herdr binds no keys from plugin manifests.
 - `src/ui/`: the ratatui popup. `mod.rs` holds the event loop, `Msg`, `Ctx`
   effects and the `Page` trait; `themes.rs`, `plugins.rs`, `keys.rs`,
   `settings.rs` are the pages, `pluginconfig.rs` the plugin settings screen,
@@ -32,6 +33,7 @@ Use Rust 1.99 or newer (edition 2024); on Windows, the MSVC toolchain with the V
 - `cargo clippy --all-targets`: static checks; keep it warning-free.
 - `cargo fmt`: format (see `rustfmt.toml`).
 - `herdr plugin link "$PWD"` followed by `herdr server reload-config`: link the checkout for local development.
+- `herdr plugin action invoke <id> --plugin herdr-customize`: run an action. It returns as soon as the action starts, and the action's output reaches only `herdr plugin log list`, so an action that must tell the user something uses `herdr notification show`. Herdr likewise shows a build step's output only when it fails.
 - `./target/release/herdr-customize ui keys`: open the popup on a page (`themes`, `plugins`, `keys`, `settings`).
 - `./target/release/herdr-customize preview dracula-default`: render a bundled palette preview.
 

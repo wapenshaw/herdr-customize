@@ -208,6 +208,11 @@ pub fn values(value: Option<&Value>) -> Vec<String> {
     }
 }
 
+/// Indexed jumps take a modifier combo for 1..9, shown on each value.
+pub fn indexed(action: &str, values: Vec<String>) -> Vec<String> {
+    if action.starts_with("indexed.") { values.into_iter().map(|v| format!("{v}+1..9")).collect() } else { values }
+}
+
 /// A navigate-mode action, which Herdr checks separately from the rest.
 pub fn navigate(action: &str) -> bool {
     action.starts_with("navigate_")
