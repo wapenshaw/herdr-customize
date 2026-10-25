@@ -1,0 +1,26 @@
+[package]
+name = "herdr-customize"
+version = "0.1.0"
+edition = "2024"
+description = "Customize Herdr from one popup: themes, plugins, keybindings and settings."
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow = "1"
+crossterm = "0.28"
+libc = "0.2"
+ratatui = "0.29"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+toml_edit = "0.22"
+unicode-width = "0.2"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

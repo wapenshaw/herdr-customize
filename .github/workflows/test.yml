@@ -2,7 +2,7 @@ name: test
 
 on:
   push:
-    branches: [main]
+    branches: [main, rust-prototype]
   pull_request:
 
 permissions:
@@ -13,16 +13,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          go-version-file: go.mod
-      - name: gofmt
-        if: runner.os != 'Windows'
-        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - run: go vet ./...
-      - run: go test -count=1 ./...
-      - run: go build -o herdr-customize-bin ./cmd/herdr-customize
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked

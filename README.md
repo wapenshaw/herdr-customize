@@ -20,6 +20,9 @@ Every config change edits `config.toml` in place (comments and layout are
 kept), is checked with `herdr config check` before it is written, and reloads
 Herdr.
 
+> This is the Rust implementation (branch `rust-prototype`). The Go original is
+> on `main`; [docs/go-vs-rust.md](docs/go-vs-rust.md) compares the two.
+
 <p align="center">
   <img alt="Herdr theme preview" src="https://github.com/user-attachments/assets/5100a157-1ed1-4659-be98-b846fb98681d" width="70%"/>
 </p>
@@ -30,8 +33,8 @@ Herdr.
 herdr plugin install wapenshaw/herdr-customize
 ```
 
-Herdr builds the plugin with Go 1.24+. Supported on Linux, macOS and Windows.
-The Plugins page uses `git` for update checks.
+Herdr builds the plugin with `cargo build --release` (Rust 1.88 or newer).
+Supported on Linux and macOS. The Plugins page uses `git` for update checks.
 
 Herdr does not bind keys from plugin manifests. Add one binding to
 `config.toml` and reload; after that the Keys page can add the rest:
@@ -65,15 +68,12 @@ herdr server reload-config
 
 ### Coming from herdr-theme-picker or Plugin Manager
 
-This plugin replaces both. After installing it:
-
-- The Themes page offers to import user themes saved by herdr-theme-picker
-  (**I**, or `herdr-customize import-themes`). Existing themes are never
-  replaced.
-- The Keys page marks bindings to actions that are no longer installed, such as
-  `herdr-theme-picker.open` or `ray.plugin-manager.open`. Point them at
-  `herdr-customize.open` / `herdr-customize.plugins`, or delete them.
-- Uninstall the old plugins from the Plugins page when you are done.
+This plugin replaces both. The Keys page marks bindings to actions that are no
+longer installed, such as `herdr-theme-picker.open` or
+`ray.plugin-manager.open`: point them at `herdr-customize.open` /
+`herdr-customize.plugins`, or delete them. Uninstall the old plugins from the
+Plugins page when you are done. User themes from herdr-theme-picker can be
+added again from the clipboard or your editor.
 
 ## Themes
 
@@ -128,7 +128,7 @@ status colors and the full palette.
 
 The applied theme is marked `●`; user themes are marked `★`. `VISUAL` and
 `EDITOR` are respected, including arguments such as `code --wait`. Fallback
-editors are `nvim`, `nano`, then `vi` on Unix or Notepad on Windows.
+editors are `nvim`, `nano`, then `vi`.
 
 Palettes need `background`, `foreground`, and `palette` entries 0–15 as six-digit
 hex colors. New names become lowercase hyphenated slugs. User themes override
@@ -160,13 +160,12 @@ its pane colors.
   emulator's own colors. Run `herdr-customize sync` or the **Customize:
   sync terminal colors** action to re-send them.
 - **Ghostty:** to keep the colors in new windows, create
-  `~/.config/ghostty/herdr-theme` (on Windows,
-  `%APPDATA%\ghostty\herdr-theme`) and add `config-file = herdr-theme` to your
+  `~/.config/ghostty/herdr-theme` and add `config-file = herdr-theme` to your
   Ghostty config. The picker refreshes that file on every apply. It never
   creates the file.
 
-Support varies by emulator. Ghostty, iTerm2, WezTerm, kitty, Alacritty, and
-Windows Terminal implement OSC color setters; nested multiplexers can swallow
+Support varies by emulator. Ghostty, iTerm2, WezTerm, kitty and Alacritty
+implement OSC color setters; nested multiplexers can swallow
 them.
 
 ### Using `herdr --remote` from another machine
@@ -175,11 +174,9 @@ A `--remote` client takes its theme from its own machine, so pick the theme
 there:
 
 ```sh
-go install github.com/wapenshaw/herdr-customize/cmd/herdr-customize@latest
+cargo install --git https://github.com/wapenshaw/herdr-customize --branch rust-prototype
 herdr-customize ui themes
 ```
-
-On Windows, run `herdr-customize.exe ui themes` from PowerShell or Windows Terminal.
 
 Run it in a terminal **outside** Herdr. A Herdr pane runs on the server, so a
 picker started there changes the server's config. The bundled palettes live in
@@ -199,11 +196,10 @@ herdr-customize apply dracula-default  # apply a theme by name
 herdr-customize sync                   # re-send the applied colors to local clients
 herdr-customize sync --client 12345    # ... to one client PID only
 herdr-customize preview dracula-default
-herdr-customize add [--clipboard]
-herdr-customize edit my-theme
-herdr-customize delete my-theme
-herdr-customize import-themes          # copy user themes from herdr-theme-picker
+herdr-customize open [page]            # open the popup in Herdr from a shell
 ```
+
+Adding, editing and deleting user themes happens on the Themes page.
 
 Bundled palettes work offline. Import more from the clipboard or an editor by
 copying any Ghostty palette from [terminalcolors.com](https://terminalcolors.com).
@@ -322,14 +318,13 @@ without network the bundled 0.9.5 reference is used.
 ## Configuration and state
 
 Config lookup matches Herdr: `HERDR_CONFIG_PATH`, then
-`$XDG_CONFIG_HOME/herdr/config.toml`, then `%APPDATA%\herdr\config.toml` on
-Windows or `~/.config/herdr/config.toml` elsewhere. A missing config is created.
+`$XDG_CONFIG_HOME/herdr/config.toml`, then `~/.config/herdr/config.toml`. A missing config is created.
 
 Edits change only the lines they touch, so comments, ordering and formatting
 survive. Before writing, the new file is checked with `herdr config check`; a
 change that adds a problem is refused and the file is left as it was. Problems
-the file already had do not block unrelated edits. Inline tables are left
-alone: change those with **E** on the Settings page.
+the file already had do not block unrelated edits. Keys inside inline tables
+(`ui = { sidebar_width = 30 }`) and dotted keys are edited in place too.
 
 The theme picker owns only the base `[theme.custom]` tokens. Everything else is
 preserved: unrelated TOML, comments, permissions, symlinks, and
@@ -341,7 +336,7 @@ save.
 
 `HERDR_PLUGIN_STATE_DIR` sets the state directory. Otherwise state lives in
 `$XDG_STATE_HOME/herdr/plugins/herdr-customize` (`~/.local/state/...` by
-default, `%LOCALAPPDATA%\herdr\plugins\herdr-customize` on Windows), so
+default), so
 standalone runs and the installed plugin share user themes and the `applied`
 marker.
 
@@ -356,36 +351,39 @@ title builders, sounds and notifications, and restoring config backups.
 ## Development
 
 ```sh
-go test ./...
-go vet ./...
-go fmt ./...
-go build -o herdr-customize ./cmd/herdr-customize
+cargo test
+cargo clippy
+cargo fmt
+cargo build --release
 ```
 
-- `cmd/herdr-customize`: CLI routing.
-- `internal/ui`: the Bubble Tea popup and its four pages.
-- `internal/config`: in-place `config.toml` edits, checks, backups and reloads.
-- `internal/schema`: Herdr's config reference (bundled and per-version cache).
-- `internal/keys`: key parsing, Herdr's binding rules and conflicts.
-- `internal/plugins`: `herdr plugin` calls, update checks, marketplace search.
-- `internal/theme`: palettes, user themes, `[theme.custom]` writes, apply and sync.
-- `internal/terminal`: client discovery and OSC color writes.
-- `internal/herdr`, `internal/fsutil`, `internal/proc`, `internal/instance`:
-  the Herdr CLI, atomic writes, detached helpers and file locks.
-- `tests/`: public API and regression tests; `tests/testutil` isolates every
-  run in a temporary home/config/state and fakes `herdr`.
+- `src/main.rs`: CLI routing.
+- `src/ui/`: the popup (`mod.rs` holds the event loop, `Msg`, `Ctx` and the
+  `Page` trait), its four pages, the plugin settings screen, shared widgets, and
+  a test driver (`tests.rs`) that runs the popup without a terminal.
+- `src/config.rs`: in-place `config.toml` edits with `toml_edit`, checks,
+  backups and reloads.
+- `src/schema/`: Herdr's config reference (bundled and per-version cache).
+- `src/keys.rs`: key parsing, Herdr's binding rules and conflicts.
+- `src/plugins/`: `herdr plugin` calls, update checks, marketplace search.
+- `src/pluginconfig.rs`: typed reading and editing of plugin TOML/`.env` files.
+- `src/theme/`: palettes, user themes, `[theme.custom]` writes, apply, sync and
+  the preview.
+- `src/terminal.rs`: client discovery and OSC color writes.
+- `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: the Herdr CLI, atomic writes,
+  locks, and detached helpers.
 
 Tests must not recolor live terminals, reload real Herdr sessions, or touch the
-real clipboard. Cross-build platform-sensitive changes for Windows, Linux, and
-macOS; emulator and SSH behavior needs native checks. Windows checks are listed
-in [docs/windows-test-plan.md](docs/windows-test-plan.md).
+real clipboard: the UI tests point every path into a temporary sandbox and use
+a scripted `herdr`. Emulator and SSH behavior needs native checks on Linux and
+macOS.
 
 ## Credits
 
 - The theme picker started as
   [qintmb/herdr-theme-picker](https://github.com/qintmb/herdr-theme-picker),
   and its contributors.
-- The Plugins page is a Go port of
+- The Plugins page is a port of
   [speardragon/herdr-plugin-manager](https://github.com/speardragon/herdr-plugin-manager)
   (MIT).
 

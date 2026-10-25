@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions follow semver and
 match the `version` field in `herdr-plugin.toml`.
 
+## [Unreleased] - Rust branch
+
+- Rewritten in Rust (ratatui, crossterm, toml_edit) with the same four pages,
+  keys and file formats. See [docs/go-vs-rust.md](docs/go-vs-rust.md).
+- Keys in inline tables and dotted keys can now be edited in place.
+- Removed: Windows support, importing user themes from herdr-theme-picker,
+  and the `add`, `edit`, `delete`, `import-themes` and `terminal-sync`
+  commands (themes are managed on the Themes page).
+
 ## [0.1.0] - Unreleased
 
 - First release as `herdr-customize`, a standalone repository continuing

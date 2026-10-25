@@ -1,0 +1,271 @@
+//! Drives the popup without a terminal: keys go in, background jobs run
+//! inline, and the screen comes back as text. Every path the program touches
+//! points into a sandbox, and herdr is a script that logs its calls.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
+use super::*;
+use crate::config::Value;
+
+/// UI tests share the process environment, so they run one at a time.
+static LOCK: Mutex<()> = Mutex::new(());
+
+const FAKE_HERDR: &str = r#"#!/bin/sh
+dir=$(dirname "$0")
+echo "$*" >> "$dir/herdr.log"
+case "$1 $2" in
+  "--version ") echo "herdr 0.9.5" ;;
+  "config check") exit 0 ;;
+  "server reload-config") exit 0 ;;
+  "plugin list") cat "$dir/plugins.json" ;;
+  "plugin config-dir") echo "$dir/pc/$3" ;;
+  "plugin log") echo '{"result":{"logs":[]}}' ;;
+  *) echo '{"result":{}}' ;;
+esac
+"#;
+
+const PLUGINS: &str = r#"{"result":{"plugins":[{"plugin_id":"demo","name":"Demo","version":"1.0.0","description":"A demo plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"local"},"actions":[{"id":"hello","title":"Say hello"}]}]}}"#;
+
+fn sandbox() -> &'static Path {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir = std::env::temp_dir().join(format!("herdr-customize-ui-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("state")).unwrap();
+        let herdr = dir.join("herdr");
+        fs::write(&herdr, FAKE_HERDR).unwrap();
+        fs::set_permissions(&herdr, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let set = |k: &str, v: &Path| unsafe { std::env::set_var(k, v) };
+        set("HERDR_BIN_PATH", &herdr);
+        set("HERDR_CONFIG_PATH", &dir.join("config.toml"));
+        set("HERDR_PLUGIN_STATE_DIR", &dir.join("state"));
+        set("HERDR_PLUGIN_ROOT", Path::new(env!("CARGO_MANIFEST_DIR")));
+        // Nothing reaches GitHub, an editor, or a live Herdr session.
+        set("HERDR_CUSTOMIZE_GIT_BASE", &dir.join("no-such-remote"));
+        set("HERDR_CUSTOMIZE_RAW_BASE", Path::new("http://127.0.0.1:9"));
+        set("HERDR_CUSTOMIZE_API_BASE", Path::new("http://127.0.0.1:9"));
+        set("HERDR_CUSTOMIZE_NO_TOKEN", Path::new("1"));
+        set("VISUAL", Path::new("false"));
+        set("EDITOR", Path::new("false"));
+        unsafe { std::env::remove_var("HERDR_ENV") };
+        unsafe { std::env::remove_var("HERDR_SOCKET_PATH") };
+        dir
+    })
+}
+
+struct Driver {
+    app: App,
+    _guard: MutexGuard<'static, ()>,
+}
+
+impl Driver {
+    fn new(tab: &str, config: &str) -> Driver {
+        let guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = sandbox();
+        fs::write(dir.join("config.toml"), config).unwrap();
+        fs::write(dir.join("plugins.json"), PLUGINS).unwrap();
+        fs::write(dir.join("herdr.log"), "").unwrap();
+        let _ = fs::remove_dir_all(dir.join("pc"));
+        let mut d = Driver { app: App::new(tab), _guard: guard };
+        d.drain();
+        d
+    }
+
+    /// Runs queued work until nothing is left. Timers wait for fire().
+    fn drain(&mut self) {
+        loop {
+            self.app.settle();
+            assert!(self.app.execs.is_empty(), "a test ran a program on the terminal");
+            let jobs = std::mem::take(&mut self.app.jobs);
+            if jobs.is_empty() && self.app.queue.is_empty() {
+                return;
+            }
+            // In parallel like the app, delivered in order so runs repeat.
+            let running: Vec<_> = jobs.into_iter().map(std::thread::spawn).collect();
+            for job in running {
+                self.app.dispatch(job.join().unwrap());
+            }
+        }
+    }
+
+    /// Delivers every pending timer now.
+    fn fire(&mut self) {
+        for (_, msg) in std::mem::take(&mut self.app.timers) {
+            self.app.dispatch(msg);
+        }
+        self.drain();
+    }
+
+    fn press(&mut self, keys: &[&str]) {
+        for k in keys {
+            self.app.key(Key::named(k));
+            self.drain();
+        }
+    }
+
+    fn typ(&mut self, text: &str) {
+        for c in text.chars() {
+            self.press(&[&c.to_string()]);
+        }
+    }
+
+    fn screen(&mut self) -> String {
+        self.app.view(140, 40).iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect::<Vec<_>>().join("\n")
+    }
+
+    fn config(&self) -> String {
+        fs::read_to_string(sandbox().join("config.toml")).unwrap()
+    }
+
+    fn herdr_calls(&self, prefix: &str) -> usize {
+        fs::read_to_string(sandbox().join("herdr.log")).unwrap().lines().filter(|l| l.starts_with(prefix)).count()
+    }
+}
+
+/// A boolean Herdr setting outside the keys and theme sections.
+fn boolean_key(sh: &Shared) -> schema::Key {
+    sh.reference.sections.iter().filter(|s| s.id != "keys" && s.id != "theme").flat_map(|s| &s.keys).find(|k| k.kind == schema::BOOLEAN && k.default_value().is_some()).cloned().unwrap()
+}
+
+/// An enum setting with at least three values.
+fn enum_key(sh: &Shared) -> schema::Key {
+    sh.reference.sections.iter().filter(|s| s.id != "keys" && s.id != "theme").flat_map(|s| &s.keys).find(|k| !k.open() && k.choices().len() >= 3).cloned().unwrap()
+}
+
+#[test]
+fn only_tab_switches_pages() {
+    let mut d = Driver::new("themes", "");
+    assert!(d.screen().contains("⌕ type to search"));
+    d.press(&["tab"]);
+    assert_eq!(d.app.active, 1);
+    d.press(&["right", "left"]);
+    assert_eq!(d.app.active, 1);
+    d.press(&["shift+tab", "4"]);
+    assert_eq!(d.app.active, 3);
+    d.press(&["esc"]);
+    assert!(d.app.quit);
+}
+
+#[test]
+fn themes_search_and_apply() {
+    let mut d = Driver::new("themes", "");
+    d.typ("dracula");
+    let screen = d.screen();
+    assert!(screen.contains("⌕ dracula"), "{screen}");
+    assert!(screen.contains("› ") && screen.contains("dracula"));
+    // q is typed into the search rather than closing the popup.
+    d.typ("q");
+    assert!(!d.app.quit);
+    d.press(&["backspace", "enter"]);
+    assert!(d.app.quit && d.app.after.is_some(), "enter applies the selected theme after closing");
+}
+
+#[test]
+fn themes_filters_by_kind() {
+    let mut d = Driver::new("themes", "");
+    d.press(&["right"]);
+    let screen = d.screen();
+    assert!(screen.contains("Dark") && !screen.contains("LIGHT"), "{screen}");
+}
+
+#[test]
+fn settings_toggle_shows_new_value_and_saves() {
+    let mut d = Driver::new("settings", "");
+    let k = boolean_key(&d.app.sh);
+    let default = matches!(k.default_value(), Some(Value::Boolean(true)));
+    d.typ("/");
+    d.typ(&k.key);
+    d.press(&["enter", "enter"]);
+    assert!(d.config().contains(&format!("= {}", !default)), "{}", d.config());
+    assert_eq!(d.herdr_calls("server reload-config"), 1);
+    assert!(d.screen().contains("saved and reloaded"));
+}
+
+#[test]
+fn settings_cycling_writes_once() {
+    let mut d = Driver::new("settings", "");
+    let k = enum_key(&d.app.sh);
+    d.typ("/");
+    d.typ(&k.key);
+    d.press(&["enter", "right", "right"]);
+    assert_eq!(d.herdr_calls("server reload-config"), 0, "nothing is saved while cycling");
+    d.fire();
+    assert_eq!(d.herdr_calls("server reload-config"), 1);
+    let doc = Doc::parse(&d.config()).unwrap();
+    let saved = doc.get(&k.path()).unwrap();
+    let choices = k.choices();
+    let current = choices.iter().position(|c| Some(Value::String(c.clone())) == k.default_value()).map_or(-1, |i| i as isize);
+    let expected = &choices[((current + 2).rem_euclid(choices.len() as isize)) as usize];
+    assert_eq!(saved, Value::String(expected.clone()));
+}
+
+#[test]
+fn settings_lists_unknown_keys() {
+    let mut d = Driver::new("settings", "mystery = 1\n");
+    d.typ("/");
+    d.typ("mystery");
+    let screen = d.screen();
+    assert!(screen.contains("not a Herdr setting"), "{screen}");
+    d.press(&["enter", "x", "y"]);
+    assert!(!d.config().contains("mystery"));
+}
+
+#[test]
+fn keys_adds_a_custom_command() {
+    let mut d = Driver::new("keys", "# my config\n");
+    d.press(&["n"]);
+    assert!(d.screen().contains("New custom command"));
+    d.press(&["ctrl+right"]); // popup → pane
+    d.typ("prefix+g");
+    d.press(&["tab"]);
+    d.typ("lazygit");
+    d.press(&["enter"]);
+    let config = d.config();
+    assert!(config.starts_with("# my config"), "{config}");
+    assert!(config.contains("[[keys.command]]") && config.contains("type = \"pane\"") && config.contains("command = \"lazygit\""), "{config}");
+    assert!(d.screen().contains("prefix+g"));
+}
+
+#[test]
+fn keys_marks_conflicts() {
+    let mut d = Driver::new("keys", "[[keys.command]]\nkey = \"prefix+g\"\ntype = \"shell\"\ncommand = \"a\"\n\n[[keys.command]]\nkey = \"prefix+g\"\ntype = \"shell\"\ncommand = \"b\"\n");
+    let screen = d.screen();
+    assert!(screen.contains("bindings share a key"), "{screen}");
+    assert!(screen.contains("⚠ conflict"));
+}
+
+#[test]
+fn plugins_panel_binds_an_action() {
+    let mut d = Driver::new("plugins", "");
+    let screen = d.screen();
+    assert!(screen.contains("Demo") && screen.contains("Say hello"), "{screen}");
+    d.press(&["enter", "b"]);
+    assert_eq!(d.app.active, 2);
+    let screen = d.screen();
+    assert!(screen.contains("New custom command") && screen.contains("demo.hello"), "{screen}");
+}
+
+#[test]
+fn plugin_settings_are_typed() {
+    let mut d = Driver::new("plugins", "");
+    let pc = sandbox().join("pc/demo");
+    fs::create_dir_all(&pc).unwrap();
+    fs::write(pc.join("settings.env"), "# Poll often\n#FAST=false\nNAME=bob\n").unwrap();
+    d.press(&["s"]);
+    let screen = d.screen();
+    assert!(screen.contains("settings.env") && screen.contains("FAST") && screen.contains("[off]"), "{screen}");
+    d.press(&["enter"]);
+    assert_eq!(fs::read_to_string(pc.join("settings.env")).unwrap(), "# Poll often\n#FAST=false\nFAST=true\nNAME=bob\n");
+    assert!(d.screen().contains("saved FAST"));
+}
+
+#[test]
+fn key_sheet_opens_and_closes() {
+    let mut d = Driver::new("plugins", "");
+    d.press(&["?"]);
+    assert!(d.screen().contains("Keys · Plugins"));
+    d.press(&["x"]);
+    assert!(!d.screen().contains("Keys · Plugins"));
+}

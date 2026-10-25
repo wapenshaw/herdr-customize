@@ -2,7 +2,5 @@
 .DS_Store
 .codegraph/
 /herdr-customize
-/herdr-customize.exe
-*.test
-*.out
 /.build/
+/target/

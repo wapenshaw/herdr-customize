@@ -2,45 +2,50 @@
 
 ## Project Structure & Module Organization
 
-- `cmd/herdr-customize/`: CLI entrypoint and command routing.
-- `internal/ui/`: Bubble Tea popup with the Themes, Plugins, Keys, and Settings pages.
-- `internal/config/`: in-place `config.toml` edits, `herdr config check` gating, backups, and reloads.
-- `internal/schema/`: Herdr's config reference (embedded copy plus per-version cache).
-- `internal/keys/`: key parsing, Herdr's binding rules, and conflict detection.
-- `internal/plugins/`: `herdr plugin` calls, update checks, marketplace search, and detached action runs.
-- `internal/pluginconfig/`: typed reading and editing of any plugin's TOML/`.env` config files, with an optional `config-schema.json`.
-- `internal/theme/`: palette loading, user themes, `[theme.custom]` persistence, and terminal color sync.
-- `internal/terminal/`: client discovery, OSC color writes/readback, and sync tracking.
-- `internal/herdr/`, `internal/fsutil/`, `internal/proc/`, `internal/instance/`: Herdr CLI wrapper, atomic writes, detached helpers, and file locking.
-- `tests/{config,plugins,pluginconfig,schema,theme,terminal,instance}/`: public API and regression tests; `tests/testutil/` provides fake subprocesses, including a scripted `herdr`.
+This branch is the Rust implementation; `main` holds the Go original and
+`docs/go-vs-rust.md` compares them.
+
+- `src/main.rs`: CLI entrypoint and command routing.
+- `src/ui/`: the ratatui popup. `mod.rs` holds the event loop, `Msg`, `Ctx`
+  effects and the `Page` trait; `themes.rs`, `plugins.rs`, `keys.rs`,
+  `settings.rs` are the pages, `pluginconfig.rs` the plugin settings screen,
+  `widgets.rs` shared styles, input and lists, and `tests.rs` the UI driver.
+- `src/config.rs`: in-place `config.toml` edits with `toml_edit`, `herdr config check` gating, backups, and reloads.
+- `src/schema/`: Herdr's config reference (bundled `reference.json` plus per-version cache).
+- `src/keys.rs`: key parsing, Herdr's binding rules, and conflict detection.
+- `src/plugins/`: `herdr plugin` calls, update checks, marketplace search, and detached action runs.
+- `src/pluginconfig.rs`: typed reading and editing of any plugin's TOML/`.env` config files, with an optional `config-schema.json`.
+- `src/theme/`: palette loading, user themes, `[theme.custom]` writes, apply and sync, and the preview.
+- `src/terminal.rs`: client discovery and OSC color writes/readback.
+- `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: Herdr CLI wrapper, atomic writes and locks, and detached helpers.
 - `themes/`: bundled Ghostty-format palettes and `index.txt`; `preview.png` is the preview asset.
-- `herdr-plugin.toml`: plugin metadata, build commands, panes, and actions. `docs/` records persistence edge cases.
+- `herdr-plugin.toml`: plugin metadata, build command, panes, and actions. `docs/` records persistence edge cases and the language comparison.
 
 ## Build, Test, and Development Commands
 
-Use Go 1.24 or newer. Interactive development requires Herdr; plugin update checks use `git`.
+Use Rust 1.88 or newer (edition 2024). Interactive development requires Herdr; plugin update checks use `git`. Linux and macOS only.
 
-- `go build -o herdr-customize ./cmd/herdr-customize`: build the plugin binary; use `herdr-customize.exe` on Windows.
-- `go test -v ./...`: run all unit and regression tests.
-- `go vet ./...`: run Go static checks.
-- `go fmt ./...`: format Go packages.
+- `cargo build --release`: build `target/release/herdr-customize`, the binary the manifest runs.
+- `cargo test`: run all unit and UI tests.
+- `cargo clippy --all-targets`: static checks; keep it warning-free.
+- `cargo fmt`: format (see `rustfmt.toml`).
 - `herdr plugin link "$PWD"` followed by `herdr server reload-config`: link the checkout for local development.
-- `./herdr-customize ui keys`: open the popup on a page (`themes`, `plugins`, `keys`, `settings`).
-- `./herdr-customize preview dracula-default`: render a bundled palette preview.
+- `./target/release/herdr-customize ui keys`: open the popup on a page (`themes`, `plugins`, `keys`, `settings`).
+- `./target/release/herdr-customize preview dracula-default`: render a bundled palette preview.
 
-Cross-build platform-sensitive changes for Linux, macOS, and Windows; native runtime checks are needed to validate terminal behavior.
+Check platform-sensitive changes on both Linux and macOS; native runtime checks are needed to validate terminal behavior.
 
 ## Coding Style & Naming Conventions
 
-Follow standard Go formatting with tab indentation and `gofmt`. Use descriptive package-level names, `PascalCase` for exported identifiers, and `camelCase` for private identifiers. Keep OS-specific implementations in files such as `files_windows.go` and `files_unix.go`, preserving build constraints.
+Follow `rustfmt` and clippy. `snake_case` for functions and modules, `PascalCase` for types. Errors use `anyhow` with context; a type the caller must recognize (such as `CheckError`) is a struct it can `downcast_ref`. UI state changes only in `Page::update`/`key`; side effects go through `Ctx` (`spawn`, `after`, `exec`, `save`) so pages stay testable.
 
 Theme filenames use lowercase hyphenated slugs, such as `catppuccin-mocha`, without extensions. Register bundled additions in `themes/index.txt`; include foreground, background, and all 16 ANSI palette entries.
 
 ## Testing Guidelines
 
-Use Go's standard `testing` package: name files `*_test.go` and functions `TestSomething`. Place private helper tests beside their packages and public API/integration tests under `tests/`. No numerical coverage threshold is configured.
+Unit tests sit in `#[cfg(test)] mod tests` at the bottom of each module. UI tests live in `src/ui/tests.rs` and drive pages through its `Driver` (keys in, jobs run, screen out as text). No numerical coverage threshold is configured.
 
-Use `t.TempDir()`, `t.Setenv()`, local HTTP servers, and `tests/testutil` subprocess helpers (`FakeHerdr` scripts `herdr` responses and logs calls). Isolate state and config paths; tests must avoid recoloring live terminals, reloading real Herdr sessions, installing or changing real plugins, reaching GitHub, or modifying the clipboard. Point `plugins.GitBase`, `RawBase`, and `APIBase` at local repositories or servers. UI tests drive pages through the `driver` in `internal/ui/app_test.go`. Add regression coverage for changed behavior.
+Use temporary directories and isolate state and config paths. The UI driver points `HERDR_BIN_PATH` at a scripted fake `herdr` that logs its calls, sets `HERDR_CONFIG_PATH`/`HERDR_PLUGIN_STATE_DIR` into a sandbox, points `HERDR_CUSTOMIZE_GIT_BASE`, `_RAW_BASE` and `_API_BASE` at dead local endpoints, and sets `VISUAL`/`EDITOR` to `false`. Tests that change the environment hold the driver's lock. Tests must avoid recoloring live terminals, reloading real Herdr sessions, installing or changing real plugins, reaching GitHub, or modifying the clipboard. Add regression coverage for changed behavior.
 
 ## Commit & Pull Request Guidelines
 
