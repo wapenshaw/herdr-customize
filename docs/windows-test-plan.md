@@ -18,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1
 
 The script downloads the release binary for the version in `Cargo.toml` to
 `target\release\herdr-customize.exe`. Without a release it builds with cargo,
-which needs Rust 1.89 or newer and the Visual Studio Build Tools (the
+which needs Rust 1.99 or newer and the Visual Studio Build Tools (the
 "Desktop development with C++" workload). Step 1 needs that toolchain too.
 
 ### 0a. Install through Herdr

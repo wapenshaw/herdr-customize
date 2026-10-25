@@ -25,7 +25,7 @@ The plugin is written in Rust. The first, Go implementation is kept on the
 
 ## Build, Test, and Development Commands
 
-Use Rust 1.89 or newer (edition 2024); on Windows, the MSVC toolchain with the Visual Studio Build Tools. Interactive development requires Herdr; plugin update checks use `git`. Linux, macOS and Windows are all supported; Windows support is the reason this project exists, so never drop it.
+Use Rust 1.99 or newer (edition 2024); on Windows, the MSVC toolchain with the Visual Studio Build Tools. Interactive development requires Herdr; plugin update checks use `git`. Linux, macOS and Windows are all supported; Windows support is the reason this project exists, so never drop it.
 
 - `cargo build --release`: build `target/release/herdr-customize`, the binary the manifest runs. `herdr plugin link` skips the build step, so build before linking.
 - `cargo test`: run all unit and UI tests.

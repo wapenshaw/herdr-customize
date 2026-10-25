@@ -88,6 +88,6 @@ before handing work back.
     - Still broken: what is wrong and why you could not fix it.
 
 These steps are the whole gate on this machine, but CI also runs them natively
-on Linux, macOS and Windows, plus a build on Rust 1.89; see CONTRIBUTING's
+on Linux, macOS and Windows, plus a build on Rust 1.99; see CONTRIBUTING's
 "Pull requests". The user should never be surprised by a failure that could
 have been caught here.
