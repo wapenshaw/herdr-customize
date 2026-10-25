@@ -2,6 +2,7 @@ package ui
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -18,6 +19,8 @@ import (
 
 func TestMain(m *testing.M) {
 	cursorMode = cursor.CursorStatic
+	// Searches use the text matcher unless a test asks for fzf.
+	fzfPath = ""
 	// Keep update checks and marketplace searches off the network.
 	plugins.GitBase = filepath.Join(os.TempDir(), "herdr-customize-no-remote")
 	plugins.RawBase, plugins.APIBase = "http://127.0.0.1:1", "http://127.0.0.1:1"
@@ -104,6 +107,10 @@ func (d *driver) keys(keys ...string) {
 			d.send(tea.KeyMsg{Type: tea.KeyRight})
 		case "ctrl+u":
 			d.send(tea.KeyMsg{Type: tea.KeyCtrlU})
+		case "backspace":
+			d.send(tea.KeyMsg{Type: tea.KeyBackspace})
+		case "end":
+			d.send(tea.KeyMsg{Type: tea.KeyEnd})
 		default:
 			d.send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
 		}
@@ -113,29 +120,95 @@ func (d *driver) keys(keys ...string) {
 func (d *driver) view() string { return d.app.View() }
 
 func TestRunesThatArriveTogetherAreSplit(t *testing.T) {
-	d := newDriver(t, Options{})
-	page := d.app.pages[0].(*themesPage)
-	start := page.list.cursor
-	d.keys("jj")
-	if page.list.cursor != start+2 {
-		t.Fatalf("cursor = %d, want %d", page.list.cursor, start+2)
-	}
-	d.keys("/nord")
-	if !strings.Contains(d.view(), "/nord") || page.list.filter.Value() != "nord" {
-		t.Fatalf("filter not typed:\n%s", d.view())
+	together := newDriver(t, Options{Tab: "settings"})
+	together.keys("jj")
+	apart := newDriver(t, Options{Tab: "settings"})
+	apart.keys("j", "j")
+	got, want := together.app.pages[3].(*settingsPage).list.cursor, apart.app.pages[3].(*settingsPage).list.cursor
+	if got != want || want == 0 {
+		t.Fatalf("cursor = %d, want %d", got, want)
 	}
 }
 
-func TestEscClearsSearchBeforeQuitting(t *testing.T) {
+func TestThemesTypeToSearch(t *testing.T) {
 	d := newDriver(t, Options{})
-	d.keys("/nord", "enter", "esc")
 	page := d.app.pages[0].(*themesPage)
+	d.keys("nord")
+	if page.list.filter.Value() != "nord" || !strings.Contains(d.view(), "⌕ nord") {
+		t.Fatalf("search not typed:\n%s", d.view())
+	}
+	if item, ok := page.selectedItem(); !ok || !strings.Contains(item.Slug, "nord") {
+		t.Fatalf("selected %+v", item)
+	}
+	// Letters that are keys elsewhere are typed here.
+	d.keys("q", "backspace")
+	if d.app.after != nil || page.list.filter.Value() != "nord" {
+		t.Fatalf("q was not typed: %q", page.list.filter.Value())
+	}
+	d.keys("esc")
 	if page.list.filter.Value() != "" {
 		t.Fatal("esc did not clear the search")
 	}
 	_, cmd := d.app.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil || cmd() != tea.Quit() {
 		t.Fatal("second esc did not quit")
+	}
+	// With no search, digits still switch pages.
+	d.keys("3")
+	if d.app.active != 2 {
+		t.Fatalf("3 went to page %d", d.app.active)
+	}
+}
+
+func TestThemesAddRowsAndPastedPalette(t *testing.T) {
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	d := newDriver(t, Options{})
+	page := d.app.pages[0].(*themesPage)
+	d.keys("end")
+	if page.selectedKind() != themeAddClipboard {
+		t.Fatalf("last row is %d", page.selectedKind())
+	}
+	d.keys("up")
+	if page.selectedKind() != themeAddEditor || !strings.Contains(d.view(), "Add new theme") {
+		t.Fatal("no row to add a theme in the editor")
+	}
+	body, err := os.ReadFile(filepath.Join("..", "..", "themes", "nord-default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(string(body)), Paste: true})
+	if page.mode != themesNaming || page.list.filter.Value() != "" {
+		t.Fatalf("pasted palette went to the search (mode %d)", page.mode)
+	}
+}
+
+func TestSearchRanksWithFzf(t *testing.T) {
+	path, err := exec.LookPath("fzf")
+	if err != nil {
+		t.Skip("fzf not installed")
+	}
+	fzfPath = path
+	t.Cleanup(func() { fzfPath = "" })
+	labels := []string{"gruvbox-dark", "dracula-default", "dracula-soft", "nord"}
+	if ranked, ok := fzfRank(labels, []int{0, 1, 2, 3}, "drcsft"); !ok || len(ranked) != 1 || ranked[0] != 2 {
+		t.Fatalf("fzf ranked %v, %v", ranked, ok)
+	}
+	if ranked, ok := fzfRank(labels, []int{0, 1, 2, 3}, "zzz"); !ok || len(ranked) != 0 {
+		t.Fatalf("no match gave %v, %v", ranked, ok)
+	}
+	// Rows that are not candidates, such as headings, are never returned.
+	if ranked, _ := fzfRank(labels, []int{0, 3}, "dracula"); len(ranked) != 0 {
+		t.Fatalf("ranked %v", ranked)
+	}
+}
+
+func TestSearchFallsBackToText(t *testing.T) {
+	if _, ok := fzfRank([]string{"a"}, []int{0}, "a"); ok {
+		t.Fatal("fzf used while disabled")
+	}
+	labels := []string{"gruvbox-dark", "dracula-default", "nord dark blue"}
+	if got := textRank(labels, []int{0, 1, 2}, "dark"); len(got) != 2 || got[0] != 0 || got[1] != 2 {
+		t.Fatalf("textRank = %v", got)
 	}
 }
 
@@ -156,7 +229,7 @@ func TestPageSwitching(t *testing.T) {
 
 func TestApplyClosesThenApplies(t *testing.T) {
 	d := newDriver(t, Options{})
-	d.keys("/dracula", "enter", "enter")
+	d.keys("dracula-def", "enter")
 	if d.app.after == nil {
 		t.Fatal("enter did not schedule an apply")
 	}
@@ -274,6 +347,9 @@ func TestThemeFiltersAndGroups(t *testing.T) {
 		for _, r := range page.rows {
 			if r.header != "" {
 				t.Fatal("a filtered view has headings")
+			}
+			if r.kind != themeItem {
+				continue
 			}
 			if dark := page.looks[page.items[r.item].Slug].Dark; dark != (want == "Dark") {
 				t.Fatalf("%s in %s", page.items[r.item].Slug, want)

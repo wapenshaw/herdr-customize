@@ -106,17 +106,25 @@ strip of its 16 colors (normal over bright). The selected theme is previewed on
 the right in a frame of its own accent color: a mock Herdr workspace, a line of
 status colors and the full palette.
 
+- Just type to search. Matches are ranked by `fzf` when it is installed
+  (`fzf --filter`, so fuzzy queries like `catlat` find `catppuccin-latte`);
+  without it the search matches plain text. **Backspace** and **ctrl+u** edit
+  the query; **Esc** clears it, then closes.
 - **↑**/**↓** move and the preview follows. **←**/**→** switch between all,
-  dark, light and your themes. **/** searches.
-- **t** shows the token table (which palette entry feeds which Herdr color)
-  in place of the mock.
-- **Enter** applies the theme and closes the popup. **Esc** clears a search,
-  then closes. **?** lists every key.
-- **a** opens an editor for a Ghostty-format palette; **c** imports one from the
-  clipboard. Either way you name it, and it is saved and applied.
-- **e** edits a user theme's token colors with a live preview. **s** saves and
-  applies; **Esc** discards the edits.
-- **d** deletes a user theme after confirmation. Bundled themes are read-only.
+  dark, light and your themes.
+- **Enter** applies the theme and closes the popup.
+- **ctrl+t** shows the token table (which palette entry feeds which Herdr
+  color) in place of the mock.
+- **ctrl+a**, or **Enter** on **＋ Add new theme…** at the bottom of the list,
+  opens a Ghostty-format template in your editor. **ctrl+v**, or **＋ Add from
+  clipboard…**, reads a palette from the clipboard; pasting one with your
+  terminal's paste works too. Either way you name it, and it is saved and
+  applied.
+- **ctrl+e** edits a user theme's token colors with a live preview. **s** saves
+  and applies; **Esc** discards the edits.
+- **ctrl+d** deletes a user theme after confirmation. Bundled themes are
+  read-only.
+- **?** lists every key.
 
 The applied theme is marked `●`; user themes are marked `★`. `VISUAL` and
 `EDITOR` are respected, including arguments such as `code --wait`. Fallback

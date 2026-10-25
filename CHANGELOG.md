@@ -9,8 +9,8 @@ match the `version` field in `herdr-plugin.toml`.
 - First release as `herdr-customize`, a standalone repository continuing
   [qintmb/herdr-theme-picker](https://github.com/qintmb/herdr-theme-picker)
   (its Go rewrite) under a new plugin id.
-- One Bubble Tea popup with four pages, replacing the fzf picker; fzf is no
-  longer needed. Panes and actions open it on any page.
+- One Bubble Tea popup with four pages, replacing the fzf picker; fzf is optional
+  and only ranks searches. Panes and actions open it on any page.
 - Themes: 112 bundled palettes, live preview, user themes from the clipboard
   or an editor, a token editor with live preview, `[theme.custom]` writes and
   terminal recoloring on Linux, macOS and Windows.
@@ -25,6 +25,10 @@ match the `version` field in `herdr-plugin.toml`.
 - Plugins page: a list with a panel for the selected plugin whose menu runs
   actions, settings, logs, update, enable/disable and removal; install and
   the marketplace are rows of the list. **?** shows every key of a page.
+- Themes search as you type, ranked by `fzf` when installed and by plain text
+  otherwise; theme commands moved to ctrl keys (ctrl+a add, ctrl+v paste,
+  ctrl+e edit, ctrl+d delete, ctrl+t tokens) with add rows at the bottom of
+  the list. Every page's **/** search uses fzf ranking too.
 - Plugin settings: **s** on a plugin edits the TOML and `.env` files in its
   config directory with types inferred from values and commented-out
   defaults, or taken from a `config-schema.json` the plugin ships.

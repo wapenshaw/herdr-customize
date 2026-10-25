@@ -1,7 +1,13 @@
 package ui
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -90,6 +96,8 @@ type list struct {
 	offset    int
 	filter    textinput.Model
 	filtering bool
+	// hideFilter leaves showing the query to the page.
+	hideFilter bool
 }
 
 func newList() list {
@@ -115,21 +123,88 @@ func (l *list) setRows(labels []string) {
 }
 
 func (l *list) refilter() {
-	terms := strings.Fields(strings.ToLower(l.filter.Value()))
+	query := strings.TrimSpace(l.filter.Value())
 	l.matches = l.matches[:0]
-	ranks := make(map[int]int)
-	for i, label := range l.labels {
-		if len(terms) > 0 && l.isHeader(i) {
-			continue
-		}
-		if rank := matchRank(strings.ToLower(label), terms); rank >= 0 {
+	if query == "" {
+		for i := range l.labels {
 			l.matches = append(l.matches, i)
+		}
+	} else {
+		var candidates []int
+		for i := range l.labels {
+			if !l.isHeader(i) {
+				candidates = append(candidates, i)
+			}
+		}
+		if ranked, ok := fzfRank(l.labels, candidates, query); ok {
+			l.matches = append(l.matches, ranked...)
+		} else {
+			l.matches = append(l.matches, textRank(l.labels, candidates, query)...)
+		}
+	}
+	l.cursor = min(l.cursor, max(len(l.matches)-1, 0))
+	l.skipHeaders(1)
+}
+
+// setQuery searches for query, starting at the best match.
+func (l *list) setQuery(query string) {
+	if query == l.filter.Value() {
+		return
+	}
+	l.filter.SetValue(query)
+	l.cursor = 0
+	l.refilter()
+}
+
+// fzfPath is the fzf that ranks searches; without one, textRank does.
+var fzfPath, _ = exec.LookPath("fzf")
+
+// fzfRank orders the candidate rows matching query by fzf's score, with
+// fzf's own matching rules. It reports false when fzf is missing or fails.
+func fzfRank(labels []string, candidates []int, query string) ([]int, bool) {
+	if fzfPath == "" {
+		return nil, false
+	}
+	var in bytes.Buffer
+	for _, i := range candidates {
+		fmt.Fprintf(&in, "%d\t%s\n", i, strings.ReplaceAll(labels[i], "\n", " "))
+	}
+	cmd := exec.Command(fzfPath, "--filter", query, "--delimiter", "\t", "--nth", "2..")
+	cmd.Stdin = &in
+	// The user's defaults could change the output; matching stays fzf's.
+	cmd.Env = append(os.Environ(), "FZF_DEFAULT_OPTS=", "FZF_DEFAULT_OPTS_FILE=")
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return []int{}, true // no match
+	}
+	if err != nil {
+		return nil, false
+	}
+	var ranked []int
+	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
+		index, _, _ := strings.Cut(line, "\t")
+		if i, err := strconv.Atoi(index); err == nil && i >= 0 && i < len(labels) {
+			ranked = append(ranked, i)
+		}
+	}
+	return ranked, true
+}
+
+// textRank is the search without fzf: every word of query must appear in
+// the label, best on the row's name.
+func textRank(labels []string, candidates []int, query string) []int {
+	terms := strings.Fields(strings.ToLower(query))
+	ranks := map[int]int{}
+	var out []int
+	for _, i := range candidates {
+		if rank := matchRank(strings.ToLower(labels[i]), terms); rank >= 0 {
+			out = append(out, i)
 			ranks[i] = rank
 		}
 	}
-	slices.SortStableFunc(l.matches, func(a, b int) int { return ranks[a] - ranks[b] })
-	l.cursor = min(l.cursor, max(len(l.matches)-1, 0))
-	l.skipHeaders(1)
+	slices.SortStableFunc(out, func(a, b int) int { return ranks[a] - ranks[b] })
+	return out
 }
 
 func (l *list) isHeader(i int) bool { return l.header != nil && l.header(i) }
@@ -263,7 +338,7 @@ func (l *list) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 // view renders the visible rows plus the filter line when one is active.
 func (l *list) view(height int, render func(i int, selected bool) string) string {
 	var lines []string
-	if l.filtering || l.filter.Value() != "" {
+	if !l.hideFilter && (l.filtering || l.filter.Value() != "") {
 		lines = append(lines, l.filter.View())
 		height--
 	}

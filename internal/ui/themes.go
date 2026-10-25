@@ -26,11 +26,21 @@ const (
 // themeFilters are the views ←/→ move between.
 var themeFilters = []string{"All", "Dark", "Light", "Yours"}
 
-// themeRow is a group heading or one theme.
+// themeRow is a group heading, one theme, or a row that adds themes.
 type themeRow struct {
 	header string
 	item   int
+	kind   int
 }
+
+// Rows pinned below the themes.
+const (
+	themeItem = iota
+	themeGap
+	themeAddEditor
+	themeAddClipboard
+	themeImport
+)
 
 type themesPage struct {
 	items      []theme.Item
@@ -73,7 +83,11 @@ type (
 
 func newThemesPage(edit string) *themesPage {
 	p := &themesPage{list: newList(), looks: map[string]theme.Look{}, startEdit: edit}
-	p.list.header = func(i int) bool { return i < len(p.rows) && p.rows[i].header != "" }
+	p.list.header = func(i int) bool {
+		return i < len(p.rows) && (p.rows[i].header != "" || p.rows[i].kind == themeGap)
+	}
+	// The page shows the query in its own search line.
+	p.list.hideFilter = true
 	return p
 }
 
@@ -109,6 +123,23 @@ func (p *themesPage) capturing() bool {
 
 func (p *themesPage) back() bool { return p.list.clearFilter() }
 
+// claims takes typed characters for the search, ahead of the app's letter
+// keys. ? still opens the key sheet, and 1–4 still switch pages until a
+// search has started.
+func (p *themesPage) claims(msg tea.KeyMsg) bool {
+	if p.mode != themesBrowse || p.remoteOnly || msg.Type != tea.KeyRunes || msg.Alt {
+		return false
+	}
+	text := string(msg.Runes)
+	if text == "?" {
+		return false
+	}
+	if p.list.filter.Value() == "" && len(text) == 1 && text >= "1" && text <= "4" {
+		return false
+	}
+	return true
+}
+
 func (p *themesPage) help() string {
 	switch p.mode {
 	case themesNaming:
@@ -123,35 +154,34 @@ func (p *themesPage) help() string {
 	if p.remoteOnly {
 		return ""
 	}
-	help := "↵ apply · ←/→ " + strings.ToLower(strings.Join(themeFilters, "/")) + " · / search · t tokens"
+	help := "type to search · ↵ apply · ←/→ " + strings.ToLower(strings.Join(themeFilters, "/")) + " · ctrl+a add · ctrl+v paste"
 	if item, ok := p.selectedItem(); ok && item.User {
-		help += " · e edit · d delete"
-	}
-	if p.legacy > 0 {
-		help += " · I import old themes"
+		help += " · ctrl+e edit · ctrl+d delete"
 	}
 	return help + " · ? keys"
 }
 
 func (p *themesPage) keys() []keyHint {
+	search := "type to search; fzf ranks matches when installed, plain text otherwise"
 	return []keyHint{
-		{"↑/↓ j/k", "move; the preview follows"},
-		{"←/→ h/l", "show all, dark, light or your themes"},
-		{"/", "search by name"},
+		{"a–z …", search},
+		{"⌫ ctrl+u", "delete a character, clear the search"},
+		{"↑/↓", "move; the preview follows"},
+		{"←/→", "show all, dark, light or your themes"},
 		{"↵", "apply the theme and close"},
-		{"t", "token table instead of the preview"},
+		{"ctrl+t", "token table instead of the preview"},
+		{"esc", "clear the search, then close"},
 		{"", "Your themes"},
-		{"a", "write a new palette in your editor"},
-		{"c", "add a palette from the clipboard (terminalcolors.com)"},
-		{"e", "edit a theme's token colors"},
-		{"d", "delete a theme"},
-		{"I", "import themes from herdr-theme-picker"},
-		{"r", "reload the list"},
+		{"ctrl+a", "add: write or paste a palette in your editor"},
+		{"ctrl+v", "add a palette from the clipboard (terminalcolors.com)"},
+		{"ctrl+e", "edit a ★ theme's token colors"},
+		{"ctrl+d", "delete a ★ theme"},
+		{"ctrl+r", "reload the list"},
 	}
 }
 
 func (p *themesPage) selectedItem() (theme.Item, bool) {
-	if i := p.list.selected(); i >= 0 && i < len(p.rows) && p.rows[i].header == "" {
+	if i := p.list.selected(); i >= 0 && i < len(p.rows) && p.rows[i].header == "" && p.rows[i].kind == themeItem {
 		return p.items[p.rows[i].item], true
 	}
 	return theme.Item{}, false
@@ -204,9 +234,15 @@ func (p *themesPage) rebuild() {
 			labels = append(labels, p.items[i].Slug)
 		}
 	}
+	p.rows = append(p.rows, themeRow{kind: themeGap}, themeRow{kind: themeAddEditor}, themeRow{kind: themeAddClipboard})
+	labels = append(labels, "", "add new theme in editor", "add theme from clipboard paste")
+	if p.legacy > 0 {
+		p.rows = append(p.rows, themeRow{kind: themeImport})
+		labels = append(labels, "import herdr-theme-picker themes")
+	}
 	p.list.setRows(labels)
 	for i, r := range p.rows {
-		if r.header == "" && p.items[r.item].Slug == keep.Slug {
+		if r.header == "" && r.kind == themeItem && p.items[r.item].Slug == keep.Slug {
 			p.list.selectRow(i)
 		}
 	}
@@ -245,13 +281,13 @@ func (p *themesPage) update(msg tea.Msg) tea.Cmd {
 			return setError(msg.err)
 		}
 		p.items, p.looks = msg.items, msg.looks
-		p.rebuild()
 		p.legacy = len(msg.legacy)
+		p.rebuild()
 		if len(msg.warnings) > 0 {
 			return setStatus(strings.Join(msg.warnings, "; "))
 		}
 		if p.legacy > 0 {
-			return setStatus(fmt.Sprintf("%d user theme(s) from herdr-theme-picker: press I to import them", p.legacy))
+			return setStatus(fmt.Sprintf("%d user theme(s) from herdr-theme-picker: import them from the bottom of the list", p.legacy))
 		}
 		return nil
 	case themeEditorDoneMsg:
@@ -311,53 +347,63 @@ func (p *themesPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if p.remoteOnly {
 		return nil
 	}
-	if handled, cmd := p.list.handleKey(msg); handled {
+	if msg.Type == tea.KeyRunes && !msg.Alt {
+		text := string(msg.Runes)
+		// A pasted palette is added rather than searched for.
+		if msg.Paste && strings.Contains(text, "palette") && strings.Contains(text, "\n") {
+			return p.askName(text)
+		}
+		p.list.setQuery(p.list.filter.Value() + strings.Join(strings.Fields(text), " "))
+		return nil
+	}
+	switch msg.String() {
+	case "backspace":
+		if q := []rune(p.list.filter.Value()); len(q) > 0 {
+			p.list.setQuery(string(q[:len(q)-1]))
+		}
+		return nil
+	case "ctrl+u":
+		p.list.setQuery("")
+		return nil
+	case "up", "down", "pgup", "pgdown", "home", "end":
+		_, cmd := p.list.handleKey(msg)
 		return cmd
 	}
 	item, ok := p.selectedItem()
 	switch msg.String() {
-	case "left", "h":
+	case "left":
 		p.filter = (p.filter + len(themeFilters) - 1) % len(themeFilters)
 		p.rebuild()
-	case "right", "l":
+	case "right":
 		p.filter = (p.filter + 1) % len(themeFilters)
 		p.rebuild()
-	case "t":
+	case "ctrl+t":
 		p.showTokens = !p.showTokens
 	case "enter":
-		if !ok {
-			return nil
+		if ok {
+			slug := item.Slug
+			return quitThen(func() error { return theme.ApplyTheme(slug) })
 		}
-		slug := item.Slug
-		return quitThen(func() error { return theme.ApplyTheme(slug) })
-	case "a":
-		path, err := theme.NewThemeFile()
-		if err != nil {
-			return setError(err)
+		switch p.selectedKind() {
+		case themeAddEditor:
+			return p.addInEditor()
+		case themeAddClipboard:
+			return p.addFromClipboard()
+		case themeImport:
+			return p.importLegacy()
 		}
-		cmd, err := theme.EditorCommand(path)
-		if err != nil {
-			os.Remove(path)
-			return setError(err)
-		}
-		return tea.ExecProcess(cmd, func(err error) tea.Msg { return themeEditorDoneMsg{path: path, err: err} })
-	case "c":
-		clip, err := theme.ReadClipboard()
-		if err != nil {
-			return setError(err)
-		}
-		if strings.TrimSpace(clip) == "" {
-			return setError(errors.New("clipboard is empty (copy a Ghostty theme from https://terminalcolors.com first)"))
-		}
-		return p.askName(clip)
-	case "e":
+	case "ctrl+a":
+		return p.addInEditor()
+	case "ctrl+v":
+		return p.addFromClipboard()
+	case "ctrl+e":
 		if !ok || !item.User {
 			return setError(errors.New("only ★ user-added themes can be edited"))
 		}
 		if err := p.beginEdit(item.Slug); err != nil {
 			return setError(err)
 		}
-	case "d":
+	case "ctrl+d":
 		if !ok || !item.User {
 			return setError(errors.New("only ★ user-added themes can be deleted"))
 		}
@@ -369,19 +415,53 @@ func (p *themesPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 			}
 			return tea.Batch(loadThemes, setStatus(fmt.Sprintf("deleted %q", slug)))
 		}}
-	case "r":
+	case "ctrl+r":
 		return loadThemes
-	case "I":
-		if p.legacy == 0 {
-			return setStatus("no herdr-theme-picker themes to import")
-		}
-		imported, err := theme.ImportLegacyThemes()
-		if err != nil {
-			return tea.Batch(loadThemes, setError(fmt.Errorf("imported %d: %w", len(imported), err)))
-		}
-		return tea.Batch(loadThemes, setStatus(fmt.Sprintf("imported %d theme(s): %s", len(imported), strings.Join(imported, ", "))))
 	}
 	return nil
+}
+
+func (p *themesPage) selectedKind() int {
+	if i := p.list.selected(); i >= 0 && i < len(p.rows) {
+		return p.rows[i].kind
+	}
+	return -1
+}
+
+// addInEditor opens a palette template in the user's editor.
+func (p *themesPage) addInEditor() tea.Cmd {
+	path, err := theme.NewThemeFile()
+	if err != nil {
+		return setError(err)
+	}
+	cmd, err := theme.EditorCommand(path)
+	if err != nil {
+		os.Remove(path)
+		return setError(err)
+	}
+	return tea.ExecProcess(cmd, func(err error) tea.Msg { return themeEditorDoneMsg{path: path, err: err} })
+}
+
+func (p *themesPage) addFromClipboard() tea.Cmd {
+	clip, err := theme.ReadClipboard()
+	if err != nil {
+		return setError(err)
+	}
+	if strings.TrimSpace(clip) == "" {
+		return setError(errors.New("clipboard is empty (copy a Ghostty theme from https://terminalcolors.com first)"))
+	}
+	return p.askName(clip)
+}
+
+func (p *themesPage) importLegacy() tea.Cmd {
+	if p.legacy == 0 {
+		return setStatus("no herdr-theme-picker themes to import")
+	}
+	imported, err := theme.ImportLegacyThemes()
+	if err != nil {
+		return tea.Batch(loadThemes, setError(fmt.Errorf("imported %d: %w", len(imported), err)))
+	}
+	return tea.Batch(loadThemes, setStatus(fmt.Sprintf("imported %d theme(s): %s", len(imported), strings.Join(imported, ", "))))
 }
 
 // askName validates a new palette, then prompts for its name.
@@ -472,7 +552,7 @@ func (p *themesPage) view(width, height int) string {
 		leftWidth = width
 	}
 	var lines []string
-	lines = append(lines, p.chips(), "")
+	lines = append(lines, p.chips(), p.searchLine())
 	listHeight := height - 4
 	if p.mode == themesNaming {
 		listHeight -= 2
@@ -480,8 +560,17 @@ func (p *themesPage) view(width, height int) string {
 	nameWidth := leftWidth - 14
 	lines = append(lines, fit(p.list.view(listHeight, func(i int, selected bool) string {
 		r := p.rows[i]
-		if r.header != "" {
+		switch {
+		case r.header != "":
 			return "  " + styleDim.Render(strings.ToUpper(r.header))
+		case r.kind == themeGap:
+			return ""
+		case r.kind == themeAddEditor:
+			return row(styleAccent.Render("＋ Add new theme…")+styleDim.Render("  ctrl+a"), selected)
+		case r.kind == themeAddClipboard:
+			return row(styleAccent.Render("＋ Add from clipboard…")+styleDim.Render("  ctrl+v"), selected)
+		case r.kind == themeImport:
+			return row(styleAccent.Render(fmt.Sprintf("↓ Import %d from herdr-theme-picker", p.legacy)), selected)
 		}
 		item := p.items[r.item]
 		marker := "  "
@@ -500,7 +589,7 @@ func (p *themesPage) view(width, height int) string {
 	if p.mode == themesNaming {
 		lines = append(lines, p.input.View(), "")
 	}
-	lines = append(lines, styleDim.Render("  c pastes one from terminalcolors.com"))
+	lines = append(lines, styleDim.Render("  palettes: terminalcolors.com → Ghostty"))
 	left := strings.Join(lines, "\n")
 	if width < 90 {
 		return left
@@ -510,6 +599,30 @@ func (p *themesPage) view(width, height int) string {
 		return left
 	}
 	return columns(left, leftWidth+1, p.card(item), height)
+}
+
+// searchLine shows the query, or how to start one.
+func (p *themesPage) searchLine() string {
+	query := p.list.filter.Value()
+	if query == "" {
+		how := "type to search"
+		if fzfPath != "" {
+			how += " (fzf)"
+		}
+		return styleDim.Render(" ⌕ " + how)
+	}
+	return styleAccent.Render(" ⌕ ") + query + styleSelected.Render("▏") + styleDim.Render(fmt.Sprintf("  %d match(es)", p.matches()))
+}
+
+// matches counts the themes the search finds.
+func (p *themesPage) matches() int {
+	n := 0
+	for _, i := range p.list.matches {
+		if p.rows[i].kind == themeItem && p.rows[i].header == "" {
+			n++
+		}
+	}
+	return n
 }
 
 // chips shows the filters with the current one highlighted.

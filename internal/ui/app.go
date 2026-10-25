@@ -221,7 +221,7 @@ func (a *app) View() string {
 	current := a.pages[a.active]
 	help := current.help()
 	if !current.capturing() {
-		help += " · tab next page · q quit"
+		help += " · tab next page · esc close"
 	}
 	status := ""
 	if a.status != "" {
@@ -257,6 +257,6 @@ func renderSheet(title string, hints []keyHint) string {
 		lines = append(lines, "  "+styleAccent.Render(padRight(h.key, width))+"  "+h.what)
 	}
 	lines = append(lines, "", "  "+styleAccent.Render(padRight("tab", width))+"  next page (shift+tab back, 1–4 jump)",
-		"  "+styleAccent.Render(padRight("q", width))+"  close")
+		"  "+styleAccent.Render(padRight("esc", width))+"  close (q too, except while typing a search)")
 	return strings.Join(lines, "\n")
 }
