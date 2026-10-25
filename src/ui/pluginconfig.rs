@@ -38,7 +38,7 @@ pub fn load(pl: &Plugin) -> impl FnOnce() -> Msg + Send + 'static {
     let (id, root) = (pl.id.clone(), pl.root.clone());
     move || {
         let cfg = plugins::config_dir(&id).and_then(|dir| pluginconfig::load(&dir, root.as_ref()));
-        Msg::PluginConfig { id, cfg: cfg.map_err(|e| format!("{e:#}")) }
+        Msg::PluginConfig { id, cfg }
     }
 }
 
@@ -51,10 +51,10 @@ impl PluginConfig {
         PluginConfig { plugin, cfg: None, err: None, rows: Vec::new(), list: List::new(), editing: false, input: TextInput::default(), pending: None, pending_file: String::new(), saving: 0 }
     }
 
-    fn loaded(&mut self, cfg: &Result<Config, String>) {
+    fn loaded(&mut self, cfg: &anyhow::Result<Config>) {
         (self.cfg, self.err) = match cfg {
             Ok(c) => (Some(c.clone()), None),
-            Err(e) => (None, Some(e.clone())),
+            Err(e) => (None, Some(format!("{e:#}"))),
         };
         let (mut rows, mut labels, mut headers) = (Vec::new(), Vec::new(), Vec::new());
         for (i, f) in self.cfg.iter().flat_map(|c| c.files.iter()).enumerate() {
@@ -106,7 +106,7 @@ impl PluginConfig {
                     ctx.spawn(load(&self.plugin));
                 }
                 match err {
-                    Some(e) => ctx.error(format!("{what}: {e}")),
+                    Some(e) => ctx.error(format!("{what}: {e:#}")),
                     None => ctx.status(format!("saved {what}; {} sees it the next time it reads its config", self.plugin.name)),
                 }
             }
@@ -211,7 +211,7 @@ impl PluginConfig {
         self.saving += 1;
         ctx.spawn(move || {
             let _guard = WRITES.lock().unwrap_or_else(|e| e.into_inner());
-            Msg::PluginConfigSaved { id, what, err: write().err().map(|e| format!("{e:#}")) }
+            Msg::PluginConfigSaved { id, what, err: write().err() }
         });
     }
 
@@ -255,7 +255,7 @@ impl PluginConfig {
         let (id, name) = (self.plugin.id.clone(), f.name.clone());
         ctx.exec(cmd, move |ok| match ok {
             Ok(()) => Msg::PluginConfigReload(id),
-            Err(e) => Msg::PluginConfigSaved { id, what: name, err: Some(format!("editor: {e}")) },
+            Err(e) => Msg::PluginConfigSaved { id, what: name, err: Some(e.context("editor")) },
         });
     }
 

@@ -125,7 +125,7 @@ fn interactive(ctx: &mut Ctx, what: String, args: Vec<String>) {
     match plugins::interactive(&args) {
         Ok(cmd) => ctx.exec(cmd, move |ok| match ok {
             Ok(()) => Msg::PluginOp { text: format!("{what} done"), err: None },
-            Err(_) => Msg::PluginOp { text: what, err: Some("cancelled or failed".into()) },
+            Err(_) => Msg::PluginOp { text: what, err: Some(anyhow::anyhow!("cancelled or failed")) },
         }),
         Err(e) => ctx.error(e),
     }
@@ -282,13 +282,13 @@ impl PluginsPage {
             Action::Update => self.update_one(p, ctx),
             Action::Toggle => {
                 let verb = if p.enabled { "disabled" } else { "enabled" };
-                ctx.spawn(move || Msg::PluginOp { text: format!("{verb} {}", p.name), err: plugins::set_enabled(&p.id, !p.enabled).err().map(|e| format!("{e:#}")) });
+                ctx.spawn(move || Msg::PluginOp { text: format!("{verb} {}", p.name), err: plugins::set_enabled(&p.id, !p.enabled).err() });
             }
             Action::Remove => {
                 let verb = if p.github() { "uninstall" } else { "unlink" };
                 self.ask = Some(Confirm::new(format!("{verb} {} ({})?", p.name, p.id), move |page: &mut PluginsPage, ctx| {
                     page.panel = false;
-                    ctx.spawn(move || Msg::PluginOp { text: format!("{verb}ed {}", p.name), err: plugins::remove(&p).err().map(|e| format!("{e:#}")) });
+                    ctx.spawn(move || Msg::PluginOp { text: format!("{verb}ed {}", p.name), err: plugins::remove(&p).err() });
                 }));
             }
             Action::Open if !p.github() => ctx.status(format!("{} is linked from a local checkout", p.name)),
@@ -305,7 +305,7 @@ impl PluginsPage {
         }
         if p.pinned() {
             return ctx.spawn(move || {
-                let sha = plugins::resolve_remote(&p.slug(), "").map_err(|e| format!("{e:#}"));
+                let sha = plugins::resolve_remote(&p.slug(), "");
                 Msg::Pin { plugin: p, sha }
             });
         }
@@ -397,7 +397,7 @@ impl PluginsPage {
         self.market_busy = true;
         let (query, sort) = (self.market_query.clone(), self.market_sort.clone());
         ctx.spawn(move || {
-            let results = plugins::search(&query, &sort, page, MARKET_PAGE).map_err(|e| format!("{e:#}"));
+            let results = plugins::search(&query, &sort, page, MARKET_PAGE);
             Msg::Market { query, sort, page, results }
         });
     }
@@ -453,7 +453,7 @@ impl PluginsPage {
     fn load_logs(&self, ctx: &mut Ctx) {
         let id = self.logs_for.clone();
         ctx.spawn(move || {
-            let logs = plugins::logs(&id, 50).map_err(|e| format!("{e:#}"));
+            let logs = plugins::logs(&id, 50);
             Msg::Logs { id, logs }
         });
     }
@@ -790,7 +790,7 @@ impl Page for PluginsPage {
                 self.loaded = true;
                 match list {
                     Ok(list) => (self.plugins, self.load_err) = (list.clone(), None),
-                    Err(e) => self.load_err = Some(e.clone()),
+                    Err(e) => self.load_err = Some(format!("{e:#}")),
                 }
                 self.details.clear();
                 self.rebuild();
@@ -813,7 +813,7 @@ impl Page for PluginsPage {
                 }
                 self.market_busy = false;
                 match results {
-                    Err(e) => self.market_err = Some(e.clone()),
+                    Err(e) => self.market_err = Some(format!("{e:#}")),
                     Ok(results) => {
                         let repos = self.repos.get_or_insert_default();
                         if *page == 1 {
@@ -833,11 +833,11 @@ impl Page for PluginsPage {
                     let labels = self.logs.iter().map(|l| format!("{} {}", l.trigger(), l.status)).collect();
                     self.logs_list.set_rows(labels, Vec::new());
                 }
-                Err(e) => self.logs_err = Some(e.clone()),
+                Err(e) => self.logs_err = Some(format!("{e:#}")),
             },
             Msg::PluginOp { text, err } => {
                 match err {
-                    Some(e) => ctx.error(format!("{text}: {e}")),
+                    Some(e) => ctx.error(format!("{text}: {e:#}")),
                     None => ctx.status(text.clone()),
                 }
                 ctx.spawn(load_plugins);

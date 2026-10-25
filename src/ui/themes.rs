@@ -64,7 +64,7 @@ fn load_themes() -> Msg {
             let looks = items.iter().filter_map(|i| Some((i.slug.clone(), theme::load_look(&i.slug).ok()?))).collect();
             Msg::ThemesLoaded { items, looks, warnings, err: None }
         }
-        Err(e) => Msg::ThemesLoaded { items: Vec::new(), looks: HashMap::new(), warnings: Vec::new(), err: Some(format!("{e:#}")) },
+        Err(e) => Msg::ThemesLoaded { items: Vec::new(), looks: HashMap::new(), warnings: Vec::new(), err: Some(e) },
     }
 }
 

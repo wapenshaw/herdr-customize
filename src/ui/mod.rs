@@ -132,18 +132,18 @@ pub enum Msg {
     /// The key reference matching the installed Herdr.
     Reference(Reference),
     Saved(Saved),
-    Plugins(Result<Vec<Plugin>, String>),
+    Plugins(Result<Vec<Plugin>>),
     // Themes
     RemoteOnly(bool),
     ThemesLoaded {
         items: Vec<Item>,
         looks: HashMap<String, Look>,
         warnings: Vec<String>,
-        err: Option<String>,
+        err: Option<anyhow::Error>,
     },
     ThemeEditorDone {
         path: PathBuf,
-        ok: Result<(), String>,
+        ok: Result<()>,
     },
     // Plugins
     Checks(HashMap<String, Status>),
@@ -151,21 +151,21 @@ pub enum Msg {
         query: String,
         sort: String,
         page: usize,
-        results: Result<Results, String>,
+        results: Result<Results>,
     },
     PluginOp {
         text: String,
-        err: Option<String>,
+        err: Option<anyhow::Error>,
     },
     Pin {
         plugin: Plugin,
-        sha: Result<String, String>,
+        sha: Result<String>,
     },
     Logs {
         id: String,
-        logs: Result<Vec<Log>, String>,
+        logs: Result<Vec<Log>>,
     },
-    RegistryEdited(Result<(), String>),
+    RegistryEdited(Result<()>),
     PluginDetail {
         id: String,
         settings: String,
@@ -173,12 +173,12 @@ pub enum Msg {
     },
     PluginConfig {
         id: String,
-        cfg: Result<Config, String>,
+        cfg: Result<Config>,
     },
     PluginConfigSaved {
         id: String,
         what: String,
-        err: Option<String>,
+        err: Option<anyhow::Error>,
     },
     PluginConfigPick(u64),
     PluginConfigReload(String),
@@ -196,7 +196,7 @@ pub enum Msg {
     Issues(CheckResult),
     RawEdited {
         path: PathBuf,
-        ok: Result<(), String>,
+        ok: Result<()>,
     },
 }
 
@@ -208,7 +208,7 @@ pub struct Shared {
 
 type Job = Box<dyn FnOnce() -> Msg + Send>;
 type After = Box<dyn FnOnce() -> Result<()>>;
-type ExecDone = Box<dyn FnOnce(Result<(), String>) -> Msg>;
+type ExecDone = Box<dyn FnOnce(Result<()>) -> Msg>;
 
 enum Effect {
     Status(String, bool),
@@ -263,7 +263,7 @@ impl Ctx<'_> {
     }
 
     /// Runs cmd on the terminal, with the popup suspended until it exits.
-    pub fn exec(&mut self, cmd: Command, done: impl FnOnce(Result<(), String>) -> Msg + 'static) {
+    pub fn exec(&mut self, cmd: Command, done: impl FnOnce(Result<()>) -> Msg + 'static) {
         self.fx.push(Effect::Exec(cmd, Box::new(done)));
     }
 
@@ -564,7 +564,7 @@ fn load_reference() -> Msg {
 }
 
 fn load_plugins() -> Msg {
-    Msg::Plugins(crate::plugins::list().map_err(|e| format!("{e:#}")))
+    Msg::Plugins(crate::plugins::list())
 }
 
 /// Shows the popup until the user leaves it.
@@ -629,8 +629,8 @@ fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Msg>, rx: &Receiver<Ms
             term.clear()?;
             let ok = match status {
                 Ok(s) if s.success() => Ok(()),
-                Ok(s) => Err(format!("exited with {s}")),
-                Err(e) => Err(e.to_string()),
+                Ok(s) => Err(anyhow::anyhow!("exited with {s}")),
+                Err(e) => Err(e.into()),
             };
             app.dispatch(done(ok));
             dirty = true;
