@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 
 use anyhow::{Context, Result, bail};
 use regex::Regex;
@@ -177,6 +177,10 @@ fn type_of(value: &Value) -> &'static str {
     }
 }
 
+/// Orders writes to plugin config files. They have no herdr config check
+/// and are never config.toml, so they do not wait on config::SAVING.
+static WRITES: Mutex<()> = Mutex::new(());
+
 impl File {
     /// Writes key, creating the file when needed. Load again to see it.
     pub fn set(&self, key: &str, value: &Value) -> Result<()> {
@@ -208,6 +212,7 @@ impl File {
         if self.format == Format::Other {
             bail!("{} is not a TOML or .env file", self.name);
         }
+        let _guard = WRITES.lock().unwrap_or_else(|e| e.into_inner());
         let old = match fs::read_to_string(&self.path) {
             Ok(t) => t,
             Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),

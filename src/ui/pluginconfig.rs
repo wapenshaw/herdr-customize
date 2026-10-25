@@ -1,8 +1,6 @@
 //! The Plugins page screen for one plugin's own settings: every file in its
 //! Herdr config directory, typed by its config-schema.json or by inference.
 
-use std::sync::Mutex;
-
 use ratatui::text::Line;
 
 use super::values::{self, Pending, edit_text, effective, format_value, options, parse_value, strip};
@@ -12,9 +10,6 @@ use crate::config::Value;
 use crate::pluginconfig::{self, Config, Entry, File, Format, SCHEMA_FILE};
 use crate::plugins::{self, Plugin};
 use crate::schema;
-
-/// Keeps writes to plugin config files in order.
-static WRITES: Mutex<()> = Mutex::new(());
 
 pub struct PluginConfig {
     pub plugin: Plugin,
@@ -143,7 +138,7 @@ impl PluginConfig {
             "enter" | " " => {
                 if e.key.kind == schema::BOOLEAN {
                     let current = matches!(effective(&e.key, e.value.as_ref()), Value::Boolean(true));
-                    return self.save(&f, &e.key.key, Value::Boolean(!current), ctx);
+                    return self.save(&f, &e.key.key, Some(Value::Boolean(!current)), ctx);
                 }
                 if !options(&e.key).is_empty() && (!e.key.open() || key.is(" ")) {
                     return self.cycle(&f, &e, "right", ctx);
@@ -156,9 +151,7 @@ impl PluginConfig {
                 if !e.set() {
                     return ctx.status(format!("{} already uses the default", e.key.key));
                 }
-                self.assume(&f.name, &e.key.key, None);
-                let key = e.key.key.clone();
-                self.run(format!("{key} default"), move || f.unset(&key), ctx);
+                self.save(&f, &e.key.key, None, ctx);
             }
             _ => {}
         }
@@ -172,7 +165,7 @@ impl PluginConfig {
                 let Some((f, Some(e))) = self.current() else { return };
                 let (f, e) = (f.clone(), e.clone());
                 match parse_value(&e.key, &self.input.value()) {
-                    Ok(value) => self.save(&f, &e.key.key, value, ctx),
+                    Ok(value) => self.save(&f, &e.key.key, Some(value), ctx),
                     Err(err) => {
                         self.editing = true;
                         ctx.error(err);
@@ -193,19 +186,18 @@ impl PluginConfig {
         }
     }
 
-    /// Writes key, showing the new value at once.
-    fn save(&mut self, f: &File, key: &str, value: Value, ctx: &mut Ctx) {
-        self.assume(&f.name, key, Some(value.clone()));
-        let (f, key2) = (f.clone(), key.to_string());
-        self.run(key.to_string(), move || f.set(&key2, &value), ctx);
-    }
-
-    fn run(&mut self, what: String, write: impl FnOnce() -> anyhow::Result<()> + Send + 'static, ctx: &mut Ctx) {
-        let id = self.plugin.id.clone();
+    /// Writes key, or removes it when value is None, showing the new value
+    /// at once.
+    fn save(&mut self, f: &File, key: &str, value: Option<Value>, ctx: &mut Ctx) {
+        self.assume(&f.name, key, value.clone());
         self.saving += 1;
+        let (id, f, key) = (self.plugin.id.clone(), f.clone(), key.to_string());
         ctx.spawn(move || {
-            let _guard = WRITES.lock().unwrap_or_else(|e| e.into_inner());
-            Msg::PluginConfigSaved { id, what, err: write().err() }
+            let (what, result) = match &value {
+                Some(v) => (key.clone(), f.set(&key, v)),
+                None => (format!("{key} default"), f.unset(&key)),
+            };
+            Msg::PluginConfigSaved { id, what, err: result.err() }
         });
     }
 
@@ -225,7 +217,7 @@ impl PluginConfig {
         let Some(p) = pick else { return };
         let file = self.cfg.iter().flat_map(|c| c.files.iter()).find(|f| p.file.as_ref() == Some(&f.name)).cloned();
         if let Some(f) = file {
-            self.save(&f, &p.key, p.value, ctx);
+            self.save(&f, &p.key, Some(p.value), ctx);
         }
     }
 
