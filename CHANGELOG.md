@@ -4,6 +4,23 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.3.0](https://github.com/wapenshaw/herdr-customize/compare/v0.2.0...v0.3.0) (2026-10-25)
+
+
+### Features
+
+* **bind:** bind a key to the popup from the command line ([1028bc0](https://github.com/wapenshaw/herdr-customize/commit/1028bc02391f476a5cc388d91544281ebdbeaf91))
+
+
+### Bug Fixes
+
+* **scripts:** hash the windows download without get-filehash ([a68fa3c](https://github.com/wapenshaw/herdr-customize/commit/a68fa3cf6e139a33ebf58b0cd6c27fc677902c6e))
+
+
+### Performance
+
+* **scripts:** hide the windows download progress bar ([867ea5f](https://github.com/wapenshaw/herdr-customize/commit/867ea5f9d5e6a0ac97f006648d940d00a6e58b07))
+
 ## [0.2.0](https://github.com/wapenshaw/herdr-customize/compare/v0.1.2...v0.2.0) (2026-10-25)
 
 
