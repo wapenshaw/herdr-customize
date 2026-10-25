@@ -8,13 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/wapenshaw/herdr-customize/internal/theme"
 	"github.com/wapenshaw/herdr-customize/tests/testutil"
 )
 
-func TestMain(m *testing.M) { testutil.Main(m) }
+func TestMain(m *testing.M) {
+	cursorMode = cursor.CursorStatic
+	testutil.Main(m)
+}
 
 // driver runs an app without a terminal, executing commands synchronously.
 type driver struct {
@@ -37,7 +41,8 @@ func (d *driver) send(msg tea.Msg) {
 	d.run(cmd)
 }
 
-// run executes cmd and feeds its messages back, skipping slow ticks.
+// run executes cmd and feeds its messages back. Commands that take longer
+// than the timeout are timers and are dropped.
 func (d *driver) run(cmd tea.Cmd) {
 	d.t.Helper()
 	if cmd == nil {
@@ -48,7 +53,7 @@ func (d *driver) run(cmd tea.Cmd) {
 	var msg tea.Msg
 	select {
 	case msg = <-done:
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		return
 	}
 	switch m := msg.(type) {

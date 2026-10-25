@@ -30,6 +30,7 @@ type page interface {
 }
 
 type app struct {
+	shared        *shared
 	pages         []page
 	active        int
 	width, height int
@@ -84,11 +85,12 @@ func Run(opts Options) error {
 }
 
 func newApp(opts Options) *app {
-	a := &app{pages: []page{
+	sh := newShared()
+	a := &app{shared: sh, pages: []page{
 		newThemesPage(opts.EditTheme),
-		newPluginsPage(),
-		newKeysPage(),
-		newSettingsPage(),
+		newPluginsPage(sh),
+		newKeysPage(sh),
+		newSettingsPage(sh),
 	}}
 	for i, p := range a.pages {
 		if strings.EqualFold(p.title(), opts.Tab) {
@@ -99,9 +101,9 @@ func newApp(opts Options) *app {
 }
 
 func (a *app) Init() tea.Cmd {
-	cmds := make([]tea.Cmd, len(a.pages))
-	for i, p := range a.pages {
-		cmds[i] = p.init()
+	cmds := []tea.Cmd{loadReference, loadPlugins}
+	for _, p := range a.pages {
+		cmds = append(cmds, p.init())
 	}
 	return tea.Batch(cmds...)
 }
@@ -114,6 +116,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusMsg:
 		a.status, a.statusErr = msg.text, msg.err
 		return a, nil
+	case referenceMsg:
+		a.shared.ref = msg.ref
+	case savedMsg:
+		a.status, a.statusErr = msg.describe()
 	case quitThenMsg:
 		a.after = msg.fn
 		return a, tea.Quit

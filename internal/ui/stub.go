@@ -11,6 +11,5 @@ func (p *stubPage) view(width, height int) string { return "coming soon" }
 func (p *stubPage) help() string                  { return "" }
 func (p *stubPage) capturing() bool               { return false }
 
-func newPluginsPage() page  { return &stubPage{name: "Plugins"} }
-func newKeysPage() page     { return &stubPage{name: "Keys"} }
-func newSettingsPage() page { return &stubPage{name: "Settings"} }
+func newPluginsPage(*shared) page  { return &stubPage{name: "Plugins"} }
+func newSettingsPage(*shared) page { return &stubPage{name: "Settings"} }

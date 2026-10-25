@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -59,8 +60,17 @@ func columns(left string, leftWidth int, right string, height int) string {
 	return strings.Join(out, "\n")
 }
 
-func newInput(prompt, value string) textinput.Model {
+// cursorMode is static in tests so no blink timers are left pending.
+var cursorMode = cursor.CursorBlink
+
+func newTextInput() textinput.Model {
 	in := textinput.New()
+	in.Cursor.SetMode(cursorMode)
+	return in
+}
+
+func newInput(prompt, value string) textinput.Model {
+	in := newTextInput()
 	in.Prompt = prompt
 	in.SetValue(value)
 	in.CursorEnd()
@@ -70,7 +80,10 @@ func newInput(prompt, value string) textinput.Model {
 
 // list is a scrolling, filterable selection over n rows.
 type list struct {
-	labels    []string
+	labels []string
+	// header marks rows that title a group; the cursor skips them and a
+	// search hides them.
+	header    func(i int) bool
 	matches   []int
 	cursor    int
 	offset    int
@@ -79,7 +92,7 @@ type list struct {
 }
 
 func newList() list {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = "/"
 	return list{filter: in}
 }
@@ -103,11 +116,31 @@ func (l *list) refilter() {
 	terms := strings.Fields(strings.ToLower(l.filter.Value()))
 	l.matches = l.matches[:0]
 	for i, label := range l.labels {
+		if len(terms) > 0 && l.isHeader(i) {
+			continue
+		}
 		if matchesAll(strings.ToLower(label), terms) {
 			l.matches = append(l.matches, i)
 		}
 	}
 	l.cursor = min(l.cursor, max(len(l.matches)-1, 0))
+	l.skipHeaders(1)
+}
+
+func (l *list) isHeader(i int) bool { return l.header != nil && l.header(i) }
+
+// skipHeaders moves the cursor off a header row, in direction dir first.
+func (l *list) skipHeaders(dir int) {
+	for _, d := range []int{dir, -dir} {
+		c := l.cursor
+		for c >= 0 && c < len(l.matches) && l.isHeader(l.matches[c]) {
+			c += d
+		}
+		if c >= 0 && c < len(l.matches) {
+			l.cursor = c
+			return
+		}
+	}
 }
 
 // matchesAll reports whether every term appears in s as a subsequence.
@@ -175,25 +208,27 @@ func (l *list) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, cmd
 		}
 	}
+	dir := 1
 	switch msg.String() {
 	case "/":
 		l.filtering = true
 		return true, l.filter.Focus()
 	case "up", "k", "ctrl+p":
-		l.cursor = max(l.cursor-1, 0)
+		l.cursor, dir = max(l.cursor-1, 0), -1
 	case "down", "j", "ctrl+n":
 		l.cursor = min(l.cursor+1, max(len(l.matches)-1, 0))
 	case "pgup", "ctrl+u":
-		l.cursor = max(l.cursor-10, 0)
+		l.cursor, dir = max(l.cursor-10, 0), -1
 	case "pgdown", "ctrl+d":
 		l.cursor = min(l.cursor+10, max(len(l.matches)-1, 0))
 	case "home", "g":
 		l.cursor = 0
 	case "end", "G":
-		l.cursor = max(len(l.matches)-1, 0)
+		l.cursor, dir = max(len(l.matches)-1, 0), -1
 	default:
 		return false, nil
 	}
+	l.skipHeaders(dir)
 	return true, nil
 }
 
