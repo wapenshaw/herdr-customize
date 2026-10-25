@@ -3,11 +3,9 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::sync::LazyLock;
 
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use regex::Regex;
 
 use super::values::{self, *};
 use super::widgets::*;
@@ -15,7 +13,7 @@ use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc, save};
 use crate::config::{self, Doc, Value};
 use crate::herdr;
 use crate::schema::{self, Reference};
-use crate::theme::preview::rgb;
+use crate::theme::{self, preview::rgb};
 
 /// Names saves of the whole file from the editor in the status line.
 const RAW_WHAT: &str = "config.toml";
@@ -278,7 +276,7 @@ impl SettingsPage {
         }
         let mut spans = Vec::new();
         if let Value::String(s) = value
-            && HEX_COLOR.is_match(s)
+            && theme::is_hex(s, true)
         {
             spans.push(styled(Style::new().fg(rgb(s)), "██ "));
         }
@@ -334,8 +332,6 @@ fn unknown_keys(table: &toml::Table, reference: &Reference, prefix: &[String]) -
     }
     out
 }
-
-static HEX_COLOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#[0-9a-fA-F]{6}$").unwrap());
 
 impl Page for SettingsPage {
     fn title(&self) -> &'static str {

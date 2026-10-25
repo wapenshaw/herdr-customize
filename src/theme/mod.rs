@@ -146,13 +146,19 @@ pub fn slugify(name: &str) -> String {
     s.trim_matches('-').to_string()
 }
 
-fn is_hex(color: &str) -> bool {
-    let hex = color.strip_prefix('#').unwrap_or(color);
+/// Whether color is rrggbb, with a leading # optional unless require_hash
+/// is set. Herdr's config needs the #; Ghostty palettes do not.
+pub fn is_hex(color: &str, require_hash: bool) -> bool {
+    let hex = match color.strip_prefix('#') {
+        Some(hex) => hex,
+        None if require_hash => return false,
+        None => color,
+    };
     hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 fn normalize_color(color: &str) -> Result<String> {
-    if !is_hex(color) {
+    if !is_hex(color, false) {
         bail!("invalid color {color:?}: expected #rrggbb");
     }
     Ok(format!("#{}", color.trim_start_matches('#').to_lowercase()))
@@ -170,7 +176,7 @@ pub fn parse_rgb(hex: &str) -> (u8, u8, u8) {
 
 /// Darkens #rrggbb by percent.
 pub fn darken(hex: &str, percent: u32) -> String {
-    if !is_hex(hex) {
+    if !is_hex(hex, false) {
         return hex.to_string();
     }
     let (r, g, b) = parse_rgb(hex);
@@ -603,6 +609,12 @@ pub(crate) mod tests {
     pub const BODY: &str = "background = #1e1e2e\nforeground = #CDD6F4\nselection-background = #585b70 # sel\n\
 palette = 0=#45475a\npalette = 1=#f38ba8\npalette = 2=#a6e3a1\npalette = 3=#f9e2af\npalette = 4=#89b4fa\npalette = 5=#f5c2e7\npalette = 6=#94e2d5\npalette = 7=#bac2de\n\
 palette = 8=#585b70\npalette = 9=#f38ba8\npalette = 10=#a6e3a1\npalette = 11=#f9e2af\npalette = 12=#89b4fa\npalette = 13=#f5c2e7\npalette = 14=#94e2d5\npalette = 15=#a6adc8\n";
+
+    #[test]
+    fn hex_colors_need_a_hash_only_when_asked() {
+        assert!(is_hex("#1e1e2E", true) && is_hex("1e1e2e", false) && is_hex("#1e1e2e", false));
+        assert!(!is_hex("1e1e2e", true) && !is_hex("#1e1e2", false) && !is_hex("#1e1e2g", true));
+    }
 
     #[test]
     fn oversized_palettes_are_refused() {
