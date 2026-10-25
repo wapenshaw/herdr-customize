@@ -541,6 +541,22 @@ fn theme_block_is_checked_and_not_reloaded() {
     assert!(config.contains("[theme.custom]\npanel_bg = ") && config.contains("[theme.custom.dark]\naccent = \"#ffffff\""), "{config}");
 }
 
+// Themes and the process scan cost the popup's start, so they wait until
+// the Themes page is shown.
+#[test]
+fn themes_load_when_their_page_opens() {
+    {
+        let _env = isolated();
+        let jobs = |tab| App::new(tab).jobs.len();
+        assert_eq!(jobs("themes"), jobs("settings") + 2);
+    }
+    let mut d = Driver::new("keys", "");
+    assert!(!d.screen().contains("dracula"));
+    d.press(&["tab"]);
+    assert_eq!(PAGES[d.app.active], "themes");
+    assert!(d.screen().to_lowercase().contains("dracula"), "{}", d.screen());
+}
+
 /// Opens the plugins page on seven GitHub plugins, two of them one repo and ref.
 fn seven_github_plugins() -> Driver {
     let mut d = Driver::new("themes", "");
