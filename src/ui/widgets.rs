@@ -1,10 +1,6 @@
 //! Drawing helpers and the small widgets every page shares: a text field, a
 //! filterable list and a yes/no question.
 
-use std::io::Write;
-use std::process::{Command, Stdio};
-use std::sync::LazyLock;
-
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthChar;
@@ -359,7 +355,7 @@ impl List {
             (0..self.labels.len()).collect()
         } else {
             let candidates: Vec<usize> = (0..self.labels.len()).filter(|&i| !self.is_header(i)).collect();
-            fzf_rank(&self.labels, &candidates, &query).unwrap_or_else(|| text_rank(&self.labels, &candidates, &query))
+            text_rank(&self.labels, &candidates, &query)
         };
         self.cursor = self.cursor.min(self.matches.len().saturating_sub(1));
         self.skip_headers(1);
@@ -496,40 +492,9 @@ impl List {
     }
 }
 
-/// The fzf that ranks searches; without one, text_rank does.
-pub static FZF: LazyLock<Option<std::path::PathBuf>> = LazyLock::new(|| crate::proc::look_path("fzf"));
-
-/// Orders the candidate rows matching query by fzf's score, with fzf's own
-/// matching rules. None when fzf is missing or fails.
-fn fzf_rank(labels: &[String], candidates: &[usize], query: &str) -> Option<Vec<usize>> {
-    let fzf = FZF.as_ref()?;
-    let mut child = Command::new(fzf)
-        .args(["--filter", query, "--delimiter", "\t", "--nth", "2.."])
-        // The user's defaults could change the output; matching stays fzf's.
-        .env("FZF_DEFAULT_OPTS", "")
-        .env("FZF_DEFAULT_OPTS_FILE", "")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    let input: String = candidates.iter().map(|&i| format!("{i}\t{}\n", labels[i].replace('\n', " "))).collect();
-    let mut stdin = child.stdin.take()?;
-    // Written from a thread so a full pipe cannot stall both sides.
-    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
-    let out = child.wait_with_output().ok()?;
-    let _ = writer.join();
-    match out.status.code() {
-        Some(0) => {}
-        Some(1) => return Some(Vec::new()), // no match
-        _ => return None,
-    }
-    Some(String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.split('\t').next()?.parse().ok()).filter(|&i: &usize| i < labels.len()).collect())
-}
-
-/// The search without fzf: every word of query must appear in the label,
-/// best on the row's name.
-pub fn text_rank(labels: &[String], candidates: &[usize], query: &str) -> Vec<usize> {
+/// Orders the candidate rows matching query: every word of query must
+/// appear in the label, best on the row's name.
+fn text_rank(labels: &[String], candidates: &[usize], query: &str) -> Vec<usize> {
     let query = query.to_lowercase();
     let terms: Vec<&str> = query.split_whitespace().collect();
     let mut ranked: Vec<(usize, usize)> = candidates.iter().filter_map(|&i| match_rank(&labels[i].to_lowercase(), &terms).map(|r| (r, i))).collect();

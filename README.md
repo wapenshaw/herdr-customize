@@ -114,10 +114,10 @@ Themes are grouped as in use, yours, dark and light. Each row shows a strip of
 the theme's 16 colors. The preview on the right draws a mock Herdr workspace in
 the selected theme, with a line of status colors and the full palette.
 
-- Type to search. With `fzf` installed, matches are ranked by `fzf --filter`,
-  so `catlat` finds `catppuccin-latte`. Without it, the search matches plain
-  text. **Backspace** and **ctrl+u** edit the query. **Esc** clears it, and a
-  second **Esc** closes the popup.
+- Type to search. Matches in a theme's name rank first, and letters typed in
+  order match too, so `catlat` finds `catppuccin-latte`. **Backspace** and
+  **ctrl+u** edit the query. **Esc** clears it, and a second **Esc** closes
+  the popup.
 - **↑**/**↓** move through the list. **←**/**→** switch between all, dark,
   light and your themes.
 - **Enter** applies the selected theme and closes the popup.

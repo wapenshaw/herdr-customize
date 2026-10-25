@@ -333,8 +333,7 @@ impl ThemesPage {
     fn search_line(&self) -> Line<'static> {
         let query = self.list.query();
         if query.is_empty() {
-            let how = if FZF.is_some() { "type to search (fzf)" } else { "type to search" };
-            return line(dim(format!(" ⌕ {how}")));
+            return line(dim(" ⌕ type to search"));
         }
         let matches = self.list.matches.iter().filter(|&&i| matches!(self.rows[i], Row::Theme(_))).count();
         Line::from(vec![accent(" ⌕ "), raw(query), styled(SELECTED, "▏"), dim(format!("  {matches} match(es)"))])
@@ -591,7 +590,7 @@ impl Page for ThemesPage {
 
     fn sheet(&self) -> Vec<Hint> {
         vec![
-            ("a–z …", "type to search; fzf ranks matches when installed, plain text otherwise"),
+            ("a–z …", "type to search; letters in order match too, names rank first"),
             ("⌫ ctrl+u", "delete a character, clear the search"),
             ("↑/↓", "move; the preview follows"),
             ("←/→", "show all, dark, light or your themes"),
