@@ -361,14 +361,28 @@ impl App {
             timers: Vec::new(),
             execs: Vec::new(),
         };
-        let mut fx = vec![Effect::Spawn(Box::new(load_reference)), Effect::Spawn(Box::new(load_plugins))];
-        for page in &mut app.pages {
-            let mut ctx = Ctx { sh: &app.sh, fx: Vec::new() };
-            page.init(&mut ctx);
+        app.apply(vec![Effect::Spawn(Box::new(load_reference)), Effect::Spawn(Box::new(load_plugins))]);
+        app.each_page(|page, ctx| page.init(ctx));
+        app
+    }
+
+    /// Runs f on page i with a fresh Ctx and applies its effects.
+    fn with_page(&mut self, i: usize, f: impl FnOnce(&mut dyn Page, &mut Ctx)) {
+        let mut ctx = Ctx { sh: &self.sh, fx: Vec::new() };
+        f(self.pages[i].as_mut(), &mut ctx);
+        let fx = ctx.fx;
+        self.apply(fx);
+    }
+
+    /// Runs f on every page, then applies all their effects at once.
+    fn each_page(&mut self, mut f: impl FnMut(&mut dyn Page, &mut Ctx)) {
+        let mut fx = Vec::new();
+        for page in &mut self.pages {
+            let mut ctx = Ctx { sh: &self.sh, fx: Vec::new() };
+            f(page.as_mut(), &mut ctx);
             fx.extend(ctx.fx);
         }
-        app.apply(fx);
-        app
+        self.apply(fx);
     }
 
     fn apply(&mut self, fx: Vec<Effect>) {
@@ -382,10 +396,7 @@ impl App {
                 Effect::Goto(i, msg) => {
                     self.active = i;
                     if let Some(mut msg) = msg {
-                        let mut ctx = Ctx { sh: &self.sh, fx: Vec::new() };
-                        self.pages[i].update(&mut msg, &mut ctx);
-                        let fx = ctx.fx;
-                        self.apply(fx);
+                        self.with_page(i, |page, ctx| page.update(&mut msg, ctx));
                     }
                 }
                 Effect::Spawn(job) => self.jobs.push(job),
@@ -403,13 +414,7 @@ impl App {
             Msg::Saved(saved) => (self.status, self.status_err) = saved.describe(),
             _ => {}
         }
-        let mut fx = Vec::new();
-        for page in &mut self.pages {
-            let mut ctx = Ctx { sh: &self.sh, fx: Vec::new() };
-            page.update(&mut msg, &mut ctx);
-            fx.extend(ctx.fx);
-        }
-        self.apply(fx);
+        self.each_page(|page, ctx| page.update(&mut msg, ctx));
     }
 
     /// Delivers queued messages.
@@ -464,10 +469,7 @@ impl App {
                 _ => {}
             }
         }
-        let mut ctx = Ctx { sh: &self.sh, fx: Vec::new() };
-        self.pages[self.active].key(&key, &mut ctx);
-        let fx = ctx.fx;
-        self.apply(fx);
+        self.with_page(self.active, |page, ctx| page.key(&key, ctx));
     }
 
     pub fn view(&mut self, width: usize, height: usize) -> Vec<Line<'static>> {
@@ -516,8 +518,7 @@ impl App {
     /// to the next one.
     fn fire_timers(&mut self) -> (bool, Option<Duration>) {
         let now = Instant::now();
-        let (due, rest): (Vec<_>, Vec<_>) = self.timers.drain(..).partition(|(at, _)| *at <= now);
-        self.timers = rest;
+        let due: Vec<_> = self.timers.extract_if(.., |(at, _)| *at <= now).collect();
         let fired = !due.is_empty();
         for (_, msg) in due {
             self.dispatch(msg);
@@ -570,7 +571,6 @@ fn load_plugins() -> Msg {
 pub fn run(tab: &str) -> Result<()> {
     let mut app = App::new(tab);
     let (tx, rx) = mpsc::channel();
-    let mut term = enter()?;
     // Installed once: enter() runs again after every editor exit, and a hook
     // per run would chain a leave() for each of them.
     let hook = std::panic::take_hook();
@@ -578,6 +578,7 @@ pub fn run(tab: &str) -> Result<()> {
         let _ = leave();
         hook(info);
     }));
+    let mut term = enter()?;
     let result = event_loop(&mut app, &mut term, &tx, &rx);
     leave()?;
     result?;
