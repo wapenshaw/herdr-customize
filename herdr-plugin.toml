@@ -2,7 +2,7 @@ id = "herdr-customize"
 name = "Herdr Customize"
 version = "0.1.0"
 min_herdr_version = "0.8.0"
-description = "Customize Herdr from a popup: themes today; plugins, keybindings and settings next."
+description = "Customize Herdr from one popup: themes, plugins, keybindings and settings."
 platforms = ["linux", "macos", "windows"]
 
 [[build]]
@@ -13,19 +13,62 @@ command = ["go", "build", "-trimpath", "-ldflags=-s -w", "-o", "herdr-customize"
 platforms = ["windows"]
 command = ["go", "build", "-trimpath", "-ldflags=-s -w", "-o", "herdr-customize.exe", "./cmd/herdr-customize"]
 
+# One entrypoint per page; tab moves between pages once the popup is open.
 [[panes]]
-id = "picker"
+id = "themes"
 title = "Herdr Customize"
 placement = "popup"
 width = "80%"
 height = "70%"
-command = ["./herdr-customize", "picker"]
+command = ["./herdr-customize", "ui", "themes"]
+
+[[panes]]
+id = "plugins"
+title = "Herdr Customize"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["./herdr-customize", "ui", "plugins"]
+
+[[panes]]
+id = "keys"
+title = "Herdr Customize"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["./herdr-customize", "ui", "keys"]
+
+[[panes]]
+id = "settings"
+title = "Herdr Customize"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["./herdr-customize", "ui", "settings"]
 
 [[actions]]
 id = "open"
 title = "Customize: themes"
 contexts = ["workspace"]
-command = ["./herdr-customize", "open"]
+command = ["./herdr-customize", "open", "themes"]
+
+[[actions]]
+id = "plugins"
+title = "Customize: plugins"
+contexts = ["workspace"]
+command = ["./herdr-customize", "open", "plugins"]
+
+[[actions]]
+id = "keys"
+title = "Customize: keybindings"
+contexts = ["workspace"]
+command = ["./herdr-customize", "open", "keys"]
+
+[[actions]]
+id = "settings"
+title = "Customize: settings"
+contexts = ["workspace"]
+command = ["./herdr-customize", "open", "settings"]
 
 [[actions]]
 id = "sync"

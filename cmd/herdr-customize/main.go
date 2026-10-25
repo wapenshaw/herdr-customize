@@ -24,6 +24,7 @@ const usage = `Usage: herdr-customize [command]
   add [--clipboard]                  add a theme from an editor or the clipboard
   edit <slug>                        edit a user theme's token colors
   delete <slug>                      delete a user theme
+  import-themes                      copy user themes from herdr-theme-picker
 
 Themes are written to this machine's Herdr config. Clients attached with
 herdr --remote use their own machine's config: run herdr-customize there.`
@@ -159,6 +160,16 @@ func run(args []string) error {
 			return err
 		}
 		return ui.Run(ui.Options{Tab: "themes", EditTheme: args[1]})
+
+	case "import-themes":
+		imported, err := theme.ImportLegacyThemes()
+		for _, slug := range imported {
+			fmt.Println("imported", slug)
+		}
+		if len(imported) == 0 && err == nil {
+			fmt.Println("no herdr-theme-picker user themes to import")
+		}
+		return err
 
 	case "delete":
 		if len(args) != 2 {

@@ -53,26 +53,26 @@ func StateDir() string {
 	// Herdr supplies the variable above to plugin commands. Standalone
 	// picker/sync runs use the same location so both share user themes and
 	// the applied marker.
-	if managed := managedStateDir(); managed != "" {
+	if managed := managedStateDir(PluginID); managed != "" {
 		return managed
 	}
 	return filepath.Join(".", ".state")
 }
 
-func managedStateDir() string {
+func managedStateDir(id string) string {
 	if state := os.Getenv("XDG_STATE_HOME"); state != "" {
-		return filepath.Join(state, "herdr", "plugins", PluginID)
+		return filepath.Join(state, "herdr", "plugins", id)
 	}
 	if runtime.GOOS == "windows" {
 		if local := os.Getenv("LOCALAPPDATA"); local != "" {
-			return filepath.Join(local, "herdr", "plugins", PluginID)
+			return filepath.Join(local, "herdr", "plugins", id)
 		}
 		if profile := os.Getenv("USERPROFILE"); profile != "" {
-			return filepath.Join(profile, "AppData", "Local", "herdr", "plugins", PluginID)
+			return filepath.Join(profile, "AppData", "Local", "herdr", "plugins", id)
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".local", "state", "herdr", "plugins", PluginID)
+		return filepath.Join(home, ".local", "state", "herdr", "plugins", id)
 	}
 	return ""
 }

@@ -40,12 +40,15 @@ type themesPage struct {
 	editTok   map[string]string
 	editCur   int
 	startEdit string
+	// legacy counts herdr-theme-picker user themes not imported yet.
+	legacy int
 }
 
 type (
 	themesLoadedMsg struct {
 		items    []theme.Item
 		warnings []string
+		legacy   []string
 		err      error
 	}
 	themeEditorDoneMsg struct {
@@ -75,7 +78,7 @@ func (p *themesPage) init() tea.Cmd {
 
 func loadThemes() tea.Msg {
 	items, warnings, err := theme.Themes()
-	return themesLoadedMsg{items: items, warnings: warnings, err: err}
+	return themesLoadedMsg{items: items, warnings: warnings, legacy: theme.LegacyThemes(), err: err}
 }
 
 func (p *themesPage) capturing() bool {
@@ -98,7 +101,11 @@ func (p *themesPage) help() string {
 	if p.remoteOnly {
 		return ""
 	}
-	return "↵ apply · / search · a add · c add from clipboard · e edit ★ · d delete ★"
+	help := "↵ apply · / search · a add · c add from clipboard · e edit ★ · d delete ★"
+	if p.legacy > 0 {
+		help += " · I import old themes"
+	}
+	return help
 }
 
 func (p *themesPage) selectedItem() (theme.Item, bool) {
@@ -121,8 +128,12 @@ func (p *themesPage) update(msg tea.Msg) tea.Cmd {
 		}
 		p.list.setRows(labels)
 		p.previews = map[string]string{}
+		p.legacy = len(msg.legacy)
 		if len(msg.warnings) > 0 {
 			return setStatus(strings.Join(msg.warnings, "; "))
+		}
+		if p.legacy > 0 {
+			return setStatus(fmt.Sprintf("%d user theme(s) from herdr-theme-picker: press I to import them", p.legacy))
 		}
 		return nil
 	case themeEditorDoneMsg:
@@ -234,6 +245,15 @@ func (p *themesPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		}}
 	case "r":
 		return loadThemes
+	case "I":
+		if p.legacy == 0 {
+			return setStatus("no herdr-theme-picker themes to import")
+		}
+		imported, err := theme.ImportLegacyThemes()
+		if err != nil {
+			return tea.Batch(loadThemes, setError(fmt.Errorf("imported %d: %w", len(imported), err)))
+		}
+		return tea.Batch(loadThemes, setStatus(fmt.Sprintf("imported %d theme(s): %s", len(imported), strings.Join(imported, ", "))))
 	}
 	return nil
 }

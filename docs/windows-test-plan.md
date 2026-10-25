@@ -1,7 +1,7 @@
 # Windows test plan
 
-Native checks for the `go-rewrite` branch. The code cross-compiles and the
-Windows-only tests compile on macOS, but nothing below has run on Windows yet.
+Native checks for Windows. The code cross-compiles and the Windows-only tests
+compile on macOS, but nothing below has run on Windows yet.
 
 Reference setup: a Windows laptop running `herdr --remote <mac>` in Windows
 Terminal, with the Mac as the Herdr server.
@@ -11,9 +11,8 @@ Terminal, with the Mac as the Herdr server.
 ```powershell
 git clone https://github.com/wapenshaw/herdr-customize.git
 cd herdr-customize
-git checkout go-rewrite
 go version          # 1.24 or newer
-fzf --version       # must be on PATH
+git --version       # for plugin update checks
 go build -o herdr-customize.exe ./cmd/herdr-customize
 ```
 
@@ -50,13 +49,13 @@ In a Windows Terminal tab **outside** Herdr, while another tab runs
 `herdr --remote <mac>`:
 
 ```powershell
-.\herdr-customize.exe picker
+.\herdr-customize.exe ui themes
 ```
 
 | Check | Expected |
 | --- | --- |
-| fzf opens with the theme list | Search is at the top; `✓` marks the current theme. |
-| Preview pane | Swatches render via pwsh or powershell with no quoting errors; it updates as you move. |
+| The popup opens on the Themes page | Tabs at the top; `✓` marks the current theme; **/** searches. |
+| Preview | Swatches render beside the list and update as you move. Box-drawing and `█` characters are not garbled. |
 | Press Enter on a theme with clearly different colors | The popup closes. A warning says reload failed (no local server) and suggests `prefix+shift+r`. Exit code is 0. |
 | Config | Your config now ends with `[theme.custom]`; the rest is untouched. On the first change of the day, `config.toml.bak-YYYYMMDD` exists. If the config was missing, it was created. |
 | Herdr window before reload | Pane text, prompt colors, background, and foreground already show the new palette (OSC 4/10/11 through the console helper). |
@@ -91,11 +90,11 @@ Get-Process herdr | Select-Object Id, ProcessName, StartTime
 
 | Action | Expected |
 | --- | --- |
-| Copy a Ghostty palette, choose **+ Add from clipboard…**, enter a name | Read via `Get-Clipboard`; saved, applied, and marked `★`. |
-| **Tab** (add with editor), with `$env:EDITOR` unset | Notepad opens a template; saving and closing adds the theme. |
-| `$env:EDITOR = 'code --wait'`, then **Tab** | VS Code opens and the picker waits. |
-| **Ctrl-E** on a `★` theme, change one hex, choose **Save & apply** | The override is saved, then applied. |
-| **Ctrl-D** on a `★` theme, answer `y` | The theme is removed. The bundled themes are still there. |
+| Copy a Ghostty palette, press **c**, enter a name | Read via `Get-Clipboard`; saved, applied, and marked `★`. |
+| **a** (add with editor), with `$env:EDITOR` unset | Notepad opens a template; saving and closing asks for a name and adds the theme. |
+| `$env:EDITOR = 'code --wait'`, then **a** | VS Code opens and the popup waits, then redraws cleanly. |
+| **e** on a `★` theme, **Enter** on a token, type a hex, **Enter**, then **s** | The preview changes live; the override is saved, then applied. |
+| **d** on a `★` theme, answer `y` | The theme is removed. The bundled themes are still there. |
 | Apply an unknown slug: `.\herdr-customize.exe apply nonexistent` | Fails with message containing terminalcolors.com link; exit 1. |
 
 ## 5. Config edge cases
@@ -121,10 +120,28 @@ herdr server reload-config
 
 | Check | Expected |
 | --- | --- |
-| `prefix+t` in the local Windows Herdr | The fzf popup opens. Enter applies and reloads with no warning; the window recolors. |
+| `prefix+t` in the local Windows Herdr | The popup opens. Enter applies and reloads with no warning; the window recolors. |
 | Customize: sync terminal colors action | Recolors the local Herdr window. |
 | `Get-Process herdr-customize` while idle | Nothing running; no background daemon. |
 | Mac attached to this Windows server via `--remote`, no local Windows client | `prefix+t` from the Mac shows "Themes belong to your client machine". |
+
+## 7. Plugins, Keys and Settings (local Windows server)
+
+These need a local Herdr server on Windows with the plugin linked (step 6).
+Point `$env:HERDR_CONFIG_PATH` at a copy of your config first, or back it up.
+
+| Action | Expected |
+| --- | --- |
+| Plugins page | Installed plugins are listed; after a moment each GitHub plugin shows `●` or `↑` (needs `git` on PATH). |
+| **Enter** on a plugin, **Enter** on one of its actions | The popup closes, then the action runs (for example its own popup opens). No console window flashes. |
+| **i**, type `owner/repo`, **Enter** | The popup gives way to `herdr plugin install` with its trust prompt; answering and pressing Enter returns to the list. |
+| **o** on a GitHub plugin | The repository opens in the default browser. |
+| **c** | `%APPDATA%\herdr\plugins.json` (or the file beside your config) opens in your editor. |
+| **m**, then **/** and a word | Marketplace results load and filter; **Enter** on one asks before installing. |
+| Keys page, **Enter** on `zoom`, **ctrl+r**, press `ctrl+alt+z`, **Enter** | `config.toml` gets `zoom = "ctrl+alt+z"` under `[keys]`; CRLF endings are kept; Herdr reloads. |
+| Keys page, **n**, key `x`, **Enter** | Refused: a plain key would intercept typing. |
+| Settings page, **Enter** on a boolean | Toggles and saves; `herdr config check` runs first. |
+| Settings page, **E**, break the TOML, save and close | Not saved; the status says why. **E** reopens your edited copy. |
 
 ## What to report back
 
