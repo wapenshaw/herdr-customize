@@ -18,7 +18,7 @@ use anyhow::{Context, Result, bail};
 
 const USAGE: &str = "Usage: herdr-customize [command]
 
-  ui [themes|plugins|keys|settings]  open the customize popup (default: themes)
+  ui [settings|keys|themes|plugins]  open the customize popup (default: themes)
   open [page]                        open the popup as a Herdr plugin pane
   bind [key]                         bind a key to the popup (default: prefix+t)
   apply <slug>                       apply a theme

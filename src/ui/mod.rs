@@ -31,7 +31,7 @@ use crate::plugins::Plugin;
 use crate::schema::{self, Reference};
 use widgets::*;
 
-pub const PAGES: [&str; 4] = ["themes", "plugins", "keys", "settings"];
+pub const PAGES: [&str; 4] = ["settings", "keys", "themes", "plugins"];
 
 /// One key press, named the way the pages match on it: "a", "A", " ",
 /// "enter", "ctrl+c", "shift+tab", "pgdown". A paste comes whole.
@@ -311,7 +311,8 @@ pub struct App {
 impl App {
     pub fn new(tab: &str) -> App {
         let sh = Shared { store: Arc::new(Store::default_store()), reference: schema::bundled() };
-        let pages: Vec<Box<dyn Page>> = vec![Box::new(themes::ThemesPage::new()), Box::new(plugins::PluginsPage::new()), Box::new(keys::KeysPage::new()), Box::new(settings::SettingsPage::new())];
+        // In PAGES order.
+        let pages: Vec<Box<dyn Page>> = vec![Box::new(settings::SettingsPage::new()), Box::new(keys::KeysPage::new()), Box::new(themes::ThemesPage::new()), Box::new(plugins::PluginsPage::new())];
         let active = PAGES.iter().position(|p| p.eq_ignore_ascii_case(tab)).unwrap_or(0);
         let mut app = App {
             sh,
@@ -442,9 +443,10 @@ impl App {
             tabs.push(if i == self.active { styled(TAB_ACTIVE, label) } else { dim(label) });
         }
         let page = &mut self.pages[self.active];
+        // Tab leads, so a narrow popup clips the page's own keys instead.
         let mut help = page.help();
         if !page.capturing() {
-            help += " · tab next page · esc close";
+            help = format!("tab next page · {help} · esc close");
         }
         let status = match (self.status.is_empty(), self.status_err) {
             (true, _) => Line::default(),
@@ -494,6 +496,8 @@ fn render_sheet(title: &str, hints: &[Hint]) -> Vec<Line<'static>> {
     let w = hints.iter().map(|(k, _)| width(k)).max().unwrap_or(0).max(3);
     let mut lines = vec![line(heading(format!("Keys · {title}"))), Line::default()];
     let hint = |k: &str, what: &str| Line::from(vec![raw("  "), accent(pad(k, w)), raw(format!("  {what}"))]);
+    lines.push(hint("tab", "next page (shift+tab back, 1–4 jump)"));
+    lines.push(Line::default());
     for (k, what) in hints {
         if k.is_empty() {
             lines.push(Line::default());
@@ -503,7 +507,6 @@ fn render_sheet(title: &str, hints: &[Hint]) -> Vec<Line<'static>> {
         }
     }
     lines.push(Line::default());
-    lines.push(hint("tab", "next page (shift+tab back, 1–4 jump)"));
     lines.push(hint("esc", "close (q too, except while typing a search)"));
     lines
 }
