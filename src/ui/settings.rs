@@ -17,7 +17,7 @@ use crate::herdr;
 use crate::schema::{self, Reference};
 use crate::theme::preview::rgb;
 
-/// Names saves of the whole file from the editor.
+/// Names saves of the whole file from the editor in the status line.
 const RAW_WHAT: &str = "config.toml";
 
 /// A section title, or a setting with its value (None when unset).
@@ -138,13 +138,9 @@ impl SettingsPage {
         a.value = value.clone();
         a.inflight += 1;
         self.apply_assumed();
-        let store = ctx.sh.store.clone();
-        ctx.spawn(move || {
-            let saved = save(&store, what, move |doc| match &value {
-                Some(v) => doc.set(&path, v),
-                None => doc.unset(&path).map(|_| ()),
-            });
-            Msg::SettingSaved { name, saved }
+        ctx.save(what, name, move |doc| match &value {
+            Some(v) => doc.set(&path, v),
+            None => doc.unset(&path).map(|_| ()),
         });
     }
 
@@ -247,7 +243,7 @@ impl SettingsPage {
         };
         let store = ctx.sh.store.clone();
         ctx.spawn(move || {
-            let mut saved = save(&store, RAW_WHAT.into(), |d| {
+            let mut saved = save(&store, RAW_WHAT.into(), None, |d| {
                 *d = doc;
                 Ok(())
             });
@@ -337,22 +333,19 @@ impl Page for SettingsPage {
 
     fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
         match msg {
-            Msg::SettingSaved { name, saved } => {
-                match self.assumed.get_mut(name) {
-                    Some(a) if a.inflight > 1 => a.inflight -= 1,
-                    _ => {
-                        self.assumed.remove(name);
-                    }
-                }
-                // Every page, and the status line, hears about the save.
-                ctx.send(Msg::Saved(std::mem::take(saved)));
-            }
             Msg::Reference(_) => self.rebuild(ctx.sh),
-            Msg::Saved(Saved { what, result, err }) => {
-                self.rebuild(ctx.sh);
-                if what == RAW_WHAT && err.is_none() {
-                    self.raw = None;
+            Msg::Saved(Saved { key, result, err, .. }) => {
+                match key {
+                    Some(key) => match self.assumed.get_mut(key) {
+                        Some(a) if a.inflight > 1 => a.inflight -= 1,
+                        _ => {
+                            self.assumed.remove(key);
+                        }
+                    },
+                    None if err.is_none() => self.raw = None,
+                    None => {}
                 }
+                self.rebuild(ctx.sh);
                 if err.is_none() && result.changed {
                     ctx.spawn(check(ctx.sh));
                 }

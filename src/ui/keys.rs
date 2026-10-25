@@ -219,13 +219,13 @@ impl KeysPage {
                 let values = split_values(&self.input.value());
                 let path = key.path();
                 if values.is_empty() {
-                    return ctx.save(format!("{action} default"), move |doc| doc.unset(&path).map(|_| ()));
+                    return ctx.save(format!("{action} default"), key.key, move |doc| doc.unset(&path).map(|_| ()));
                 }
                 let value = match values.as_slice() {
                     [one] => Value::String(one.clone()),
                     _ => Value::Array(values.into_iter().map(Value::String).collect()),
                 };
-                ctx.save(action, move |doc| doc.set(&path, &value));
+                ctx.save(action, key.key, move |doc| doc.set(&path, &value));
             }
             _ => {
                 self.input.handle(key);
@@ -274,8 +274,8 @@ impl KeysPage {
                 Ok(fields) => {
                     self.mode = Mode::Browse;
                     match f.index {
-                        None => ctx.save("new command", move |doc| doc.append_array_table(&command_path(), &fields)),
-                        Some(i) => ctx.save("command", move |doc| doc.update_array_table(&command_path(), i, &fields)),
+                        None => ctx.save("new command", COMMAND_PATH.join("."), move |doc| doc.append_array_table(&command_path(), &fields)),
+                        Some(i) => ctx.save("command", COMMAND_PATH.join("."), move |doc| doc.update_array_table(&command_path(), i, &fields)),
                     }
                 }
             },
@@ -580,7 +580,7 @@ impl Page for KeysPage {
             (Kind::Builtin { action, changed: false, .. }, "x") => ctx.status(format!("{action} already uses the default")),
             (Kind::Builtin { key, action, .. }, "x") => {
                 let path = key.path();
-                ctx.save(format!("{action} default"), move |doc| doc.unset(&path).map(|_| ()));
+                ctx.save(format!("{action} default"), key.key.clone(), move |doc| doc.unset(&path).map(|_| ()));
             }
             (Kind::Command { index, entry, .. }, "enter") => {
                 self.form = CommandForm::new(entry.clone(), Some(*index));
@@ -589,7 +589,7 @@ impl Page for KeysPage {
             (Kind::Command { index, .. }, "d") => {
                 let index = *index;
                 self.ask = Some(Confirm::new(format!("Delete {}?", r.owner), move |_: &mut KeysPage, ctx| {
-                    ctx.save("command removal", move |doc| doc.delete_array_table(&command_path(), index));
+                    ctx.save("command removal", COMMAND_PATH.join("."), move |doc| doc.delete_array_table(&command_path(), index));
                 }));
             }
             (Kind::PluginAction { qualified, title }, "enter") => self.bind_action(qualified, title),
