@@ -54,34 +54,44 @@ func TestSettingsToggleUsesDefault(t *testing.T) {
 	}
 }
 
-func TestSettingsArrowsCycleEnums(t *testing.T) {
+func TestSettingsEnterCyclesEnums(t *testing.T) {
 	d, page, path := settingsDriver(t, "[terminal]\nnew_cwd = \"home\"\n")
 	page.selectKey(t, "terminal.new_cwd")
 	if !strings.Contains(d.view(), "[home]") || !strings.Contains(d.view(), "follow") {
 		t.Fatalf("values not shown on the row:\n%s", d.view())
 	}
-	d.keys("right")
-	if d.app.active != 3 {
-		t.Fatal("right switched pages instead of cycling")
-	}
+	d.keys("enter")
 	if got := readConfig(t, path); got != "[terminal]\nnew_cwd = \"current\"\n" {
 		t.Fatalf("got:\n%s", got)
 	}
-	d.keys("left", "left")
+	// Space steps too, and the last value wraps to the first.
+	d.keys(" ", " ")
 	if got := readConfig(t, path); got != "[terminal]\nnew_cwd = \"follow\"\n" {
 		t.Fatalf("got:\n%s", got)
 	}
-	// Left wraps from the first value to the last; a default value cycles too.
+	// A default value steps from where it is.
 	page.selectKey(t, "ui.tab_bar_position")
-	d.keys("left")
+	d.keys("enter")
 	if got := readConfig(t, path); !strings.Contains(got, "tab_bar_position = \"bottom\"") {
 		t.Fatalf("got:\n%s", got)
 	}
-	// Rows without values still let the arrows switch pages.
-	page.selectKey(t, "ui.sidebar_width")
-	d.keys("right")
-	if d.app.active != 0 {
-		t.Fatalf("right on a number row went to page %d", d.app.active)
+}
+
+func TestSettingsArrowsSwitchPages(t *testing.T) {
+	d, page, path := settingsDriver(t, "")
+	for _, key := range []string{"terminal.new_cwd", "terminal.kitty_graphics", "ui.sidebar_width"} {
+		page.selectKey(t, key)
+		d.keys("right")
+		if d.app.active != 0 {
+			t.Fatalf("right on %s stayed on page %d", key, d.app.active)
+		}
+		d.keys("left")
+		if d.app.active != 3 {
+			t.Fatalf("left did not come back to Settings")
+		}
+	}
+	if got := readConfig(t, path); got != "" {
+		t.Fatalf("arrows changed the config:\n%s", got)
 	}
 }
 
@@ -89,17 +99,28 @@ func TestSettingsCyclingSavesOnce(t *testing.T) {
 	_, page, path := settingsDriver(t, "")
 	page.selectKey(t, "ui.host_cursor") // auto, native, drawn; default auto
 	r := page.current()
-	page.cycle(r, "right")
-	page.cycle(r, "right")
+	page.cycle(r)
+	page.cycle(r)
 	if page.pending == nil || page.pending.value != "drawn" {
 		t.Fatalf("pending = %+v", page.pending)
 	}
 	if cmd := page.update(pendingSaveMsg{seq: 1}); cmd != nil {
 		t.Fatal("an earlier press saved")
 	}
-	saved := page.update(pendingSaveMsg{seq: page.pending.seq})()
-	if msg := saved.(savedMsg); msg.err != nil {
-		t.Fatal(msg.err)
+	save := page.update(pendingSaveMsg{seq: page.pending.seq})
+	// Until the save reports back, even a reload from disk shows the new
+	// value rather than flashing the old one.
+	page.update(savedMsg{what: "another key"})
+	if r := page.current(); r.value != "drawn" || !r.set {
+		t.Fatalf("row shows %v while saving", r.value)
+	}
+	saved := save()
+	if msg := saved.(settingSavedMsg); msg.saved.err != nil {
+		t.Fatal(msg.saved.err)
+	}
+	page.update(saved)
+	if len(page.assumed) != 0 {
+		t.Fatalf("assumed values left: %v", page.assumed)
 	}
 	if got := readConfig(t, path); got != "[ui]\nhost_cursor = \"drawn\"\n" {
 		t.Fatalf("got:\n%s", got)
@@ -112,7 +133,7 @@ func TestSettingsOpenChoicesAcceptOtherValues(t *testing.T) {
 	if !strings.Contains(d.view(), "other…") {
 		t.Fatal("open choice has no way to type a value")
 	}
-	d.keys("right", "right")
+	d.keys(" ", " ")
 	if got := readConfig(t, path); !strings.Contains(got, `right_click_passthrough_modifier = "alt"`) {
 		t.Fatalf("got:\n%s", got)
 	}

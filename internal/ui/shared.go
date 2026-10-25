@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -19,6 +20,9 @@ import (
 type shared struct {
 	store *config.Store
 	ref   *schema.Reference
+	// saving keeps saves in order, so one cannot load the file before
+	// another has written it and undo it.
+	saving sync.Mutex
 }
 
 func newShared() *shared {
@@ -68,6 +72,8 @@ func loadPlugins() tea.Msg {
 // save applies edit to the config in the background.
 func (s *shared) save(what string, edit func(*config.Doc) error) tea.Cmd {
 	return func() tea.Msg {
+		s.saving.Lock()
+		defer s.saving.Unlock()
 		result, err := s.store.Update(edit)
 		return savedMsg{what: what, result: result, err: err}
 	}

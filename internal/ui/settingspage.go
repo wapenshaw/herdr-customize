@@ -53,12 +53,21 @@ type settingsPage struct {
 	issues  []string
 	mode    settingsMode
 	input   textinput.Model
-	// pending is a value picked with ←/→ that is saved once the keys stop.
+	// pending is a value picked with ↵/space that is saved once the keys stop.
 	pending *pendingValue
 	ask     *confirm
 	// raw holds an edit of the whole file that failed the check, so the next
 	// edit starts from it rather than losing the work.
 	raw []byte
+	// assumed holds values being saved, shown until their saves report back
+	// so a row does not flash its old value.
+	assumed map[string]assumedValue
+}
+
+type assumedValue struct {
+	value    any
+	set      bool
+	inflight int
 }
 
 type pendingValue struct {
@@ -68,14 +77,19 @@ type pendingValue struct {
 	seq   int
 }
 
-// pickDelay is how long ←/→ must rest before the picked value is saved, so
+// pickDelay is how long ↵/space must rest before the picked value is saved, so
 // cycling through values writes the config once.
 var pickDelay = 400 * time.Millisecond
 
 type (
 	pendingSaveMsg struct{ seq int }
-	issuesMsg      struct{ result herdr.CheckResult }
-	rawEditedMsg   struct {
+	// settingSavedMsg wraps the savedMsg of one key's save.
+	settingSavedMsg struct {
+		name  string
+		saved savedMsg
+	}
+	issuesMsg    struct{ result herdr.CheckResult }
+	rawEditedMsg struct {
 		path string
 		err  error
 	}
@@ -85,7 +99,7 @@ type (
 const rawWhat = "config.toml"
 
 func newSettingsPage(sh *shared) page {
-	p := &settingsPage{sh: sh, list: newList()}
+	p := &settingsPage{sh: sh, list: newList(), assumed: map[string]assumedValue{}}
 	p.list.header = func(i int) bool { return i < len(p.rows) && p.rows[i].header != "" }
 	return p
 }
@@ -115,9 +129,9 @@ func (p *settingsPage) help() string {
 	case r.unknown != nil:
 		return "x remove · / search · E edit config.toml"
 	case r.key.Open():
-		return "←/→ pick · ↵ type a value · x reset · / search · E edit config.toml"
+		return "space next value · ↵ type a value · x reset · / search · E edit config.toml"
 	case len(options(r.key)) > 0:
-		return "←/→ pick · x reset · / search · E edit config.toml"
+		return "↵ next value · x reset · / search · E edit config.toml"
 	}
 	return "↵ change · x reset · / search · E edit config.toml"
 }
@@ -160,6 +174,7 @@ func (p *settingsPage) rebuild() {
 		}
 	}
 	p.rows = rows
+	p.applyAssumed()
 	labels := make([]string, len(rows))
 	for i, r := range rows {
 		if r.header != "" {
@@ -209,8 +224,42 @@ func coversPrefix(ref *schema.Reference, prefix string) bool {
 	return false
 }
 
+// write saves one key, or removes it when set is false. The row shows the
+// new value at once.
+func (p *settingsPage) write(what string, path []string, value any, set bool) tea.Cmd {
+	name := strings.Join(path, ".")
+	a := p.assumed[name]
+	p.assumed[name] = assumedValue{value: value, set: set, inflight: a.inflight + 1}
+	p.applyAssumed()
+	save := p.sh.save(what, func(doc *config.Doc) error {
+		if !set {
+			_, err := doc.Unset(path)
+			return err
+		}
+		return doc.Set(path, value)
+	})
+	return func() tea.Msg { return settingSavedMsg{name: name, saved: save().(savedMsg)} }
+}
+
+func (p *settingsPage) applyAssumed() {
+	for i := range p.rows {
+		if a, ok := p.assumed[p.rows[i].name()]; ok && p.rows[i].header == "" {
+			p.rows[i].value, p.rows[i].set = a.value, a.set
+		}
+	}
+}
+
 func (p *settingsPage) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case settingSavedMsg:
+		if a := p.assumed[msg.name]; a.inflight > 1 {
+			a.inflight--
+			p.assumed[msg.name] = a
+		} else {
+			delete(p.assumed, msg.name)
+		}
+		// Every page, and the status line, hears about the save.
+		return func() tea.Msg { return msg.saved }
 	case referenceMsg:
 		p.rebuild()
 	case savedMsg:
@@ -257,11 +306,14 @@ func (p *settingsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch msg.String() {
-	case "left", "right":
-		return p.cycle(r, msg.String())
 	case "enter", " ":
 		if r.unknown != nil {
 			return nil
+		}
+		// Space steps through the listed values of a setting that also
+		// takes others; Enter types one.
+		if msg.String() == " " && r.key.Open() {
+			return p.cycle(r)
 		}
 		return p.edit(r)
 	case "x":
@@ -280,10 +332,7 @@ func (p *settingsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (p *settingsPage) unset(what string, path []string) tea.Cmd {
-	return p.sh.save(what, func(doc *config.Doc) error {
-		_, err := doc.Unset(path)
-		return err
-	})
+	return p.write(what, path, nil, false)
 }
 
 // edit starts changing r: booleans toggle, enums move to the next value and
@@ -296,11 +345,10 @@ func (p *settingsPage) edit(r *settingRow) tea.Cmd {
 			def, _ := k.DefaultValue()
 			current, _ = def.(bool)
 		}
-		path := k.Path()
-		return p.sh.save(k.Key, func(doc *config.Doc) error { return doc.Set(path, !current) })
+		return p.write(k.Key, k.Path(), !current, true)
 	}
 	if len(options(k)) > 0 && !k.Open() {
-		return p.cycle(r, "right")
+		return p.cycle(r)
 	}
 	return p.editText(r)
 }
@@ -384,29 +432,16 @@ func (p *settingsPage) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 			return setError(err)
 		}
 		p.mode = settingsBrowse
-		path := r.key.Path()
-		return p.sh.save(r.key.Key, func(doc *config.Doc) error { return doc.Set(path, value) })
+		return p.write(r.key.Key, r.key.Path(), value, true)
 	}
 	var cmd tea.Cmd
 	p.input, cmd = p.input.Update(msg)
 	return cmd
 }
 
-// claims takes ←/→ on rows with values to pick, ahead of page switching.
-func (p *settingsPage) claims(msg tea.KeyMsg) bool {
-	if p.mode != settingsBrowse || p.list.filtering {
-		return false
-	}
-	if key := msg.String(); key != "left" && key != "right" {
-		return false
-	}
-	r := p.current()
-	return r != nil && r.unknown == nil && len(options(r.key)) > 0
-}
-
-// cycle moves r to the previous or next listed value. The save waits for
-// pickDelay so cycling through several values writes once.
-func (p *settingsPage) cycle(r *settingRow, dir string) tea.Cmd {
+// cycle moves r to the next listed value, wrapping around. The save waits
+// for pickDelay so stepping through several values writes once.
+func (p *settingsPage) cycle(r *settingRow) tea.Cmd {
 	var opts []option
 	for _, o := range options(r.key) {
 		if !o.custom {
@@ -420,17 +455,7 @@ func (p *settingsPage) cycle(r *settingRow, dir string) tea.Cmd {
 	if p.pending != nil && p.pending.key == r.key.Key {
 		value = p.pending.value
 	}
-	i := selectedOption(opts, value)
-	switch {
-	case i < 0 && dir == "left":
-		i = len(opts) - 1
-	case i < 0:
-		i = 0
-	case dir == "left":
-		i = (i + len(opts) - 1) % len(opts)
-	default:
-		i = (i + 1) % len(opts)
-	}
+	i := (selectedOption(opts, value) + 1) % len(opts)
 	var flush tea.Cmd
 	if p.pending != nil && p.pending.key != r.key.Key {
 		flush = p.flush()
@@ -450,7 +475,7 @@ func (p *settingsPage) flush() tea.Cmd {
 		return nil
 	}
 	p.pending = nil
-	return p.sh.save(pending.key, func(doc *config.Doc) error { return doc.Set(pending.path, pending.value) })
+	return p.write(pending.key, pending.path, pending.value, true)
 }
 
 // option is one value offered in place on a setting's row.
@@ -598,9 +623,11 @@ func (p *settingsPage) rawEdited(msg rawEditedMsg) tea.Cmd {
 	}
 	// Kept until the save succeeds, so a rejected edit can be resumed.
 	p.raw = data
-	store := p.sh.store
+	sh := p.sh
 	return func() tea.Msg {
-		result, err := store.Save(doc)
+		sh.saving.Lock()
+		defer sh.saving.Unlock()
+		result, err := sh.store.Save(doc)
 		if err != nil {
 			err = fmt.Errorf("%w (press E to keep editing)", err)
 		}

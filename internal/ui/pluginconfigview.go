@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -29,11 +30,17 @@ type pluginConfig struct {
 	list    list
 	editing bool
 	input   textinput.Model
-	// pending is a value picked with ←/→ in pendingFile, saved after
+	// pending is a value picked with ↵/space in pendingFile, saved after
 	// pickDelay like on the Settings page.
 	pending     *pendingValue
 	pendingFile string
+	// saving counts saves still running; the files are read again once the
+	// last one is done, and until then rows show the values being saved.
+	saving int
 }
+
+// pluginConfigWrites keeps writes to plugin config files in order.
+var pluginConfigWrites sync.Mutex
 
 type (
 	pluginConfigMsg struct {
@@ -115,28 +122,16 @@ func (c *pluginConfig) help() string {
 	case e == nil || e.ReadOnly:
 		return "E edit file · / search · r reload · esc back"
 	case e.Key.Open():
-		return "←/→ pick · ↵ type a value · x reset · E edit file · esc back"
+		return "space next value · ↵ type a value · x reset · E edit file · esc back"
 	case len(options(e.Key)) > 0:
-		return "←/→ pick · x reset · E edit file · / search · esc back"
+		return "↵ next value · x reset · E edit file · / search · esc back"
 	}
 	return "↵ change · x reset · E edit file · / search · esc back"
 }
 
-// claims takes ←/→ on settings with values to pick, and esc so a picked
-// value is saved before going back.
+// claims takes esc so a picked value is saved before going back.
 func (c *pluginConfig) claims(msg tea.KeyMsg) bool {
-	if c.editing || c.list.filtering {
-		return false
-	}
-	switch msg.String() {
-	case "esc":
-		return true
-	case "left", "right":
-	default:
-		return false
-	}
-	_, e := c.current()
-	return e != nil && !e.ReadOnly && len(options(e.Key)) > 0
+	return !c.editing && !c.list.filtering && msg.String() == "esc"
 }
 
 func (c *pluginConfig) update(msg tea.Msg) tea.Cmd {
@@ -147,7 +142,11 @@ func (c *pluginConfig) update(msg tea.Msg) tea.Cmd {
 		if msg.id != c.plugin.ID {
 			return nil
 		}
-		reload := loadPluginConfig(c.plugin)
+		c.saving = max(c.saving-1, 0)
+		var reload tea.Cmd
+		if c.saving == 0 {
+			reload = loadPluginConfig(c.plugin)
+		}
 		if msg.err != nil {
 			return tea.Batch(reload, setError(fmt.Errorf("%s: %w", msg.what, msg.err)))
 		}
@@ -193,15 +192,13 @@ func (c *pluginConfig) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return setStatus(e.Key.Key + " is a list of tables; press E to edit the file")
 	}
 	switch msg.String() {
-	case "left", "right":
-		return c.cycle(f, e, msg.String())
 	case "enter", " ":
 		if e.Key.Type == schema.TypeBoolean {
 			current, _ := effective(asRow(e)).(bool)
 			return c.save(f, e.Key.Key, !current)
 		}
-		if len(options(e.Key)) > 0 && !e.Key.Open() {
-			return c.cycle(f, e, "right")
+		if len(options(e.Key)) > 0 && (!e.Key.Open() || msg.String() == " ") {
+			return c.cycle(f, e)
 		}
 		text := ""
 		if e.Set {
@@ -217,6 +214,7 @@ func (c *pluginConfig) handleKey(msg tea.KeyMsg) tea.Cmd {
 			return setStatus(e.Key.Key + " already uses the default")
 		}
 		key := e.Key.Key
+		e.Value, e.Set = nil, false
 		return c.run(f, key+" default", func() error { return f.Unset(key) })
 	}
 	return nil
@@ -245,17 +243,28 @@ func (c *pluginConfig) handleEditKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
+// save writes key, showing the new value at once.
 func (c *pluginConfig) save(f *pluginconfig.File, key string, value any) tea.Cmd {
+	for _, e := range f.Entries {
+		if e.Key.Key == key {
+			e.Value, e.Set = value, true
+		}
+	}
 	return c.run(f, key, func() error { return f.Set(key, value) })
 }
 
 func (c *pluginConfig) run(f *pluginconfig.File, what string, write func() error) tea.Cmd {
 	id := c.plugin.ID
-	return func() tea.Msg { return pluginConfigSavedMsg{id: id, what: what, err: write()} }
+	c.saving++
+	return func() tea.Msg {
+		pluginConfigWrites.Lock()
+		defer pluginConfigWrites.Unlock()
+		return pluginConfigSavedMsg{id: id, what: what, err: write()}
+	}
 }
 
-// cycle moves e to the previous or next listed value, saving after a pause.
-func (c *pluginConfig) cycle(f *pluginconfig.File, e *pluginconfig.Entry, dir string) tea.Cmd {
+// cycle moves e to the next listed value, saving after a pause.
+func (c *pluginConfig) cycle(f *pluginconfig.File, e *pluginconfig.Entry) tea.Cmd {
 	var opts []option
 	for _, o := range options(e.Key) {
 		if !o.custom {
@@ -270,17 +279,7 @@ func (c *pluginConfig) cycle(f *pluginconfig.File, e *pluginconfig.Entry, dir st
 	if same {
 		value = c.pending.value
 	}
-	i := selectedOption(opts, value)
-	switch {
-	case i < 0 && dir == "left":
-		i = len(opts) - 1
-	case i < 0:
-		i = 0
-	case dir == "left":
-		i = (i + len(opts) - 1) % len(opts)
-	default:
-		i = (i + 1) % len(opts)
-	}
+	i := (selectedOption(opts, value) + 1) % len(opts)
 	var flush tea.Cmd
 	if c.pending != nil && !same {
 		flush = c.flush()

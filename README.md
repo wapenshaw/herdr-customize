@@ -227,8 +227,8 @@ plugin:
   **x** removes the line again.
 - Other files (scripts, JSON) are listed; **Enter** opens them in your editor.
 
-The keys work as on the Settings page: **←**/**→** for on/off and listed
-values, **Enter** to edit, **x** to reset, **E** to open the file. Edits keep
+The keys work as on the Settings page: **Enter** or **Space** steps through
+on/off and listed values, **Enter** edits the rest, **x** to reset, **E** to open the file. Edits keep
 comments and layout and back the file up once a day. Herdr does not check
 plugin settings: the plugin reads them itself, and some only apply after it
 restarts.
@@ -277,12 +277,13 @@ pages), grouped as in Herdr's config reference. Set values are highlighted and
 marked `*`; the rest show their default.
 
 - Settings with a fixed set of values show them on the row with the current one
-  in brackets. **←**/**→** cycle through them and save once you stop. Booleans
-  show `off`/`on` the same way; **Enter** also toggles them.
+  in brackets. **Enter** or **Space** steps to the next value (wrapping
+  around) and saves once you stop. Booleans show `off`/`on` the same way.
+  **←**/**→** always switch pages.
 - The values come from the config reference for your Herdr version: enum values,
   plus names a string setting's description lists ("Accepts ctrl, alt, …").
-  Those settings also take other values: pick `other…` or press **Enter** to type
-  one.
+  Those settings also take other values: **Space** steps through the listed
+  ones and **Enter** types any value.
 - **Enter** on any other setting edits the value. Lists are entered as TOML,
   e.g. `["codex", "claude"]`.
 - **x** restores the default by removing the key.
