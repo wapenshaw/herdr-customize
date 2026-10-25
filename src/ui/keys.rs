@@ -81,7 +81,6 @@ enum Mode {
     Browse,
     Editing,
     Form,
-    Confirm,
 }
 
 pub struct KeysPage {
@@ -541,14 +540,10 @@ impl Page for KeysPage {
     }
 
     fn key(&mut self, key: &Key, ctx: &mut Ctx) {
+        if Confirm::handle(self.ask.take(), self, key, ctx) {
+            return;
+        }
         match self.mode {
-            Mode::Confirm => {
-                self.mode = Mode::Browse;
-                if let Some(ask) = self.ask.take() {
-                    ask.answer(self, key, ctx);
-                }
-                return;
-            }
             Mode::Editing => return self.edit_key(key, ctx),
             Mode::Form => return self.form_key(key, ctx),
             Mode::Browse => {}
@@ -593,7 +588,6 @@ impl Page for KeysPage {
             }
             (Kind::Command { index, .. }, "d") => {
                 let index = *index;
-                self.mode = Mode::Confirm;
                 self.ask = Some(Confirm::new(format!("Delete {}?", r.owner), move |_: &mut KeysPage, ctx| {
                     ctx.save("command removal", move |doc| doc.delete_array_table(&command_path(), index));
                 }));
@@ -612,7 +606,8 @@ impl Page for KeysPage {
         let conflicts = self.rows.iter().filter(|r| !r.clashes.is_empty()).count();
         let rows = self.list.window(list_height);
         let body = self.list.render(rows, |i, s| self.draw_row(i, s));
-        let mut lines = vec![if conflicts > 0 && self.mode == Mode::Browse { line(warn(format!("{conflicts} bindings share a key with another binding (⚠)"))) } else { Line::default() }];
+        let mut lines =
+            vec![if conflicts > 0 && self.mode == Mode::Browse && self.ask.is_none() { line(warn(format!("{conflicts} bindings share a key with another binding (⚠)"))) } else { Line::default() }];
         lines.extend(body);
         let mut lines = fit(lines, width, list_height + 1);
         lines.extend(detail);
@@ -620,11 +615,13 @@ impl Page for KeysPage {
     }
 
     fn help(&self) -> String {
+        if let Some(help) = Confirm::help(&self.ask) {
+            return help;
+        }
         match self.mode {
             Mode::Editing if self.recording => return "press the key to record · esc stop recording".into(),
             Mode::Editing => return "↵ save · ctrl+r record a key · empty resets to default · esc cancel".into(),
             Mode::Form => return "tab/shift+tab field · ctrl+←/→ change type · ↵ save · esc cancel".into(),
-            Mode::Confirm => return format!("{} [y/N]", self.ask.as_ref().map_or("", |a| &a.question)),
             Mode::Browse => {}
         }
         match self.current().map(|r| &r.kind) {
@@ -637,7 +634,7 @@ impl Page for KeysPage {
     }
 
     fn capturing(&self) -> bool {
-        self.mode != Mode::Browse || self.list.filtering
+        self.mode != Mode::Browse || self.ask.is_some() || self.list.filtering
     }
 
     fn back(&mut self) -> bool {

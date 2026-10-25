@@ -64,7 +64,6 @@ struct Assumed {
 enum Mode {
     Browse,
     Editing,
-    Confirm,
 }
 
 pub struct SettingsPage {
@@ -514,16 +513,11 @@ impl Page for SettingsPage {
     }
 
     fn key(&mut self, key: &Key, ctx: &mut Ctx) {
-        match self.mode {
-            Mode::Confirm => {
-                self.mode = Mode::Browse;
-                if let Some(ask) = self.ask.take() {
-                    ask.answer(self, key, ctx);
-                }
-                return;
-            }
-            Mode::Editing => return self.edit_key(key, ctx),
-            Mode::Browse => {}
+        if Confirm::handle(self.ask.take(), self, key, ctx) {
+            return;
+        }
+        if self.mode == Mode::Editing {
+            return self.edit_key(key, ctx);
         }
         if self.list.handle(key) {
             // Moving away saves a value still waiting on its delay.
@@ -545,7 +539,6 @@ impl Page for SettingsPage {
                 }
                 let (path, name) = (r.path(), r.name());
                 if r.unknown.is_some() {
-                    self.mode = Mode::Confirm;
                     self.ask = Some(Confirm::new(format!("Remove {name} from config.toml?"), move |p: &mut SettingsPage, ctx| p.write(name, path, None, ctx)));
                 } else {
                     self.write(format!("{name} default"), path, None, ctx);
@@ -588,10 +581,11 @@ impl Page for SettingsPage {
     }
 
     fn help(&self) -> String {
-        match self.mode {
-            Mode::Editing => return "↵ save · esc cancel".into(),
-            Mode::Confirm => return format!("{} [y/N]", self.ask.as_ref().map_or("", |a| &a.question)),
-            Mode::Browse => {}
+        if let Some(help) = Confirm::help(&self.ask) {
+            return help;
+        }
+        if self.mode == Mode::Editing {
+            return "↵ save · esc cancel".into();
         }
         match self.current() {
             None => "/ search · E edit config.toml",
@@ -604,7 +598,7 @@ impl Page for SettingsPage {
     }
 
     fn capturing(&self) -> bool {
-        self.mode != Mode::Browse || self.list.filtering
+        self.mode != Mode::Browse || self.ask.is_some() || self.list.filtering
     }
 
     fn back(&mut self) -> bool {
