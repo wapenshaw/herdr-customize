@@ -9,7 +9,7 @@ The plugin is written in Rust. The first, Go implementation is kept on the
 - `src/ui/`: the ratatui popup. `mod.rs` holds the event loop, `Msg`, `Ctx`
   effects and the `Page` trait; `themes.rs`, `plugins.rs`, `keys.rs`,
   `settings.rs` are the pages, `pluginconfig.rs` the plugin settings screen,
-  `widgets.rs` shared styles, input and lists, and `tests.rs` the UI driver.
+  `values.rs` the value editing both settings screens share, `widgets.rs` shared styles, input and lists, and `tests.rs` the UI driver.
 - `src/config.rs`: in-place `config.toml` edits with `toml_edit`, `herdr config check` gating, backups, and reloads.
 - `src/schema/`: Herdr's config reference (bundled `reference.json` plus per-version cache).
 - `src/keys.rs`: key parsing, Herdr's binding rules, and conflict detection.

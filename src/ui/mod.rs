@@ -7,6 +7,7 @@ mod pluginconfig;
 mod plugins;
 mod settings;
 mod themes;
+mod values;
 mod widgets;
 
 use std::collections::{HashMap, VecDeque};
