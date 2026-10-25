@@ -15,6 +15,10 @@ locks, schema fetch per Herdr version, marketplace search, update checks,
 plugin settings with `config-schema.json`, the token editor, the Ghostty
 fragment, and the detached action runner.
 
+fzf ranking was later removed from `main`: it forked `fzf` on every
+keystroke, and the in-process ranking already covers names, substrings and
+letters in order.
+
 Dropped, because they were not worth carrying:
 
 | Dropped | Why |
