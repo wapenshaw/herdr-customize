@@ -16,7 +16,31 @@ use crate::theme::{self, Item, Look, Saved, TokenRow, Tokens};
 const CLIENT_SETUP: &str = "Themes belong to your client machine.\n\nOpen a local terminal outside Herdr and run:\n\n  herdr-customize ui themes\n\nThen use Reload config in the Herdr client you want to update.\nInstall herdr-customize locally if you are connected to a remote server.\nThis server's theme and terminal colors are left unchanged.";
 
 /// The views ←/→ move between.
-const FILTERS: [&str; 4] = ["All", "Dark", "Light", "Yours"];
+#[derive(Clone, Copy, PartialEq)]
+enum Filter {
+    All,
+    Dark,
+    Light,
+    Yours,
+}
+
+impl Filter {
+    const ALL: [Filter; 4] = [Filter::All, Filter::Dark, Filter::Light, Filter::Yours];
+
+    fn name(self) -> &'static str {
+        match self {
+            Filter::All => "All",
+            Filter::Dark => "Dark",
+            Filter::Light => "Light",
+            Filter::Yours => "Yours",
+        }
+    }
+
+    /// The view n places to the right, wrapping around.
+    fn next(self, n: usize) -> Filter {
+        Filter::ALL[(self as usize + n) % Filter::ALL.len()]
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
@@ -40,7 +64,7 @@ pub struct ThemesPage {
     items: Vec<Item>,
     looks: HashMap<String, Look>,
     rows: Vec<Row>,
-    filter: usize,
+    filter: Filter,
     show_tokens: bool,
     list: List,
     mode: Mode,
@@ -77,7 +101,7 @@ impl ThemesPage {
             items: Vec::new(),
             looks: HashMap::new(),
             rows: Vec::new(),
-            filter: 0,
+            filter: Filter::All,
             show_tokens: false,
             list,
             mode: Mode::Browse,
@@ -105,12 +129,12 @@ impl ThemesPage {
         self.looks.get(&item.slug).is_none_or(|l| l.dark)
     }
 
-    fn shown(&self, filter: usize, item: &Item) -> bool {
-        match FILTERS[filter] {
-            "Dark" => self.dark(item),
-            "Light" => !self.dark(item),
-            "Yours" => item.user,
-            _ => true,
+    fn shown(&self, filter: Filter, item: &Item) -> bool {
+        match filter {
+            Filter::All => true,
+            Filter::Dark => self.dark(item),
+            Filter::Light => !self.dark(item),
+            Filter::Yours => item.user,
         }
     }
 
@@ -122,14 +146,14 @@ impl ThemesPage {
             if !self.shown(self.filter, item) {
                 continue;
             }
-            let g = match FILTERS[self.filter] {
-                "Dark" => 2,
-                "Light" => 3,
-                "Yours" => 1,
-                _ if item.applied => 0,
-                _ if item.user => 1,
-                _ if self.dark(item) => 2,
-                _ => 3,
+            let g = match self.filter {
+                Filter::Dark => 2,
+                Filter::Light => 3,
+                Filter::Yours => 1,
+                Filter::All if item.applied => 0,
+                Filter::All if item.user => 1,
+                Filter::All if self.dark(item) => 2,
+                Filter::All => 3,
             };
             groups[g].push(i);
         }
@@ -138,7 +162,7 @@ impl ThemesPage {
             if groups[g].is_empty() {
                 continue;
             }
-            if self.filter == 0 {
+            if self.filter == Filter::All {
                 rows.push(Row::Header(name));
                 labels.push(name.to_string());
             }
@@ -277,11 +301,11 @@ impl ThemesPage {
         let item = self.selected_item().cloned();
         match key.name.as_str() {
             "left" => {
-                self.filter = (self.filter + FILTERS.len() - 1) % FILTERS.len();
+                self.filter = self.filter.next(Filter::ALL.len() - 1);
                 self.rebuild();
             }
             "right" => {
-                self.filter = (self.filter + 1) % FILTERS.len();
+                self.filter = self.filter.next(1);
                 self.rebuild();
             }
             "ctrl+t" => self.show_tokens = !self.show_tokens,
@@ -321,10 +345,10 @@ impl ThemesPage {
     /// The filters with the current one highlighted.
     fn chips(&self) -> Line<'static> {
         let mut spans = vec![raw(" ")];
-        for (i, name) in FILTERS.iter().enumerate() {
-            let count = self.items.iter().filter(|item| self.shown(i, item)).count();
-            let label = format!(" {name} {count} ");
-            spans.push(if i == self.filter { styled(TAB_ACTIVE, label) } else { dim(label) });
+        for filter in Filter::ALL {
+            let count = self.items.iter().filter(|item| self.shown(filter, item)).count();
+            let label = format!(" {} {count} ", filter.name());
+            spans.push(if filter == self.filter { styled(TAB_ACTIVE, label) } else { dim(label) });
         }
         Line::from(spans)
     }
