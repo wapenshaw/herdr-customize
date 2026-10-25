@@ -346,3 +346,18 @@ fn key_sheet_opens_and_closes() {
     d.press(&["x"]);
     assert!(!d.screen().contains("Keys · Plugins"));
 }
+
+// A theme apply must pass Herdr's config check like any other config edit,
+// and must leave the reload until after the terminal sync.
+#[test]
+fn theme_block_is_checked_and_not_reloaded() {
+    let d = Driver::new("themes", "[theme.custom.dark]\naccent = \"#ffffff\"\n");
+    let checks = d.herdr_calls("config check");
+    let pal = crate::theme::parse_palette_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/dracula-default")).unwrap();
+    let saved = crate::theme::write_custom_block(&sandbox().join("config.toml"), &pal.tokens()).unwrap();
+    assert!(saved.changed);
+    assert_eq!(d.herdr_calls("config check"), checks + 1);
+    assert_eq!(d.herdr_calls("server reload-config"), 0);
+    let config = d.config();
+    assert!(config.contains("[theme.custom]\npanel_bg = ") && config.contains("[theme.custom.dark]\naccent = \"#ffffff\""), "{config}");
+}
