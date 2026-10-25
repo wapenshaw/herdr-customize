@@ -274,6 +274,21 @@ impl Ctx<'_> {
     }
 }
 
+/// Loads the config for a page, recording the failure in err; a page then
+/// shows an empty document with the error above it.
+pub fn load_doc(store: &Store, err: &mut Option<String>) -> Doc {
+    match store.load() {
+        Ok(doc) => {
+            *err = None;
+            doc
+        }
+        Err(e) => {
+            *err = Some(format!("{e:#}"));
+            Doc::default()
+        }
+    }
+}
+
 /// Saves through store; Store keeps saves in order.
 fn save(store: &Store, what: String, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Saved {
     match store.update(edit) {

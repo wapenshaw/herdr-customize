@@ -11,7 +11,7 @@ use ratatui::text::{Line, Span};
 use regex::Regex;
 
 use super::widgets::*;
-use super::{Ctx, Key, Msg, Page, Saved, Shared, save};
+use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc, save};
 use crate::config::{self, Doc, Value};
 use crate::herdr;
 use crate::schema::{self, Reference};
@@ -109,16 +109,9 @@ impl SettingsPage {
     }
 
     fn rebuild(&mut self, sh: &Shared) {
-        let doc = match sh.store.load() {
-            Ok(doc) => {
-                self.load_err = None;
-                doc
-            }
-            Err(e) => {
-                self.load_err = Some(format!("{e:#}"));
-                Doc::default()
-            }
-        };
+        // Decoded once: a lookup per key would re-serialize and re-parse the
+        // whole document each time.
+        let table = load_doc(&sh.store, &mut self.load_err).decoded();
         let mut rows = Vec::new();
         for section in &sh.reference.sections {
             // Keybindings and themes have their own pages.
@@ -127,14 +120,14 @@ impl SettingsPage {
             }
             rows.push(SettingRow { header: Some(section.title.clone()), ..Default::default() });
             for k in &section.keys {
-                rows.push(SettingRow { value: doc.get(&k.path()), key: k.clone(), ..Default::default() });
+                rows.push(SettingRow { value: config::lookup(&table, &k.path()).cloned(), key: k.clone(), ..Default::default() });
             }
         }
-        let unknown = unknown_keys(&doc.decoded(), &sh.reference, &[]);
+        let unknown = unknown_keys(&table, &sh.reference, &[]);
         if !unknown.is_empty() {
             rows.push(SettingRow { header: Some("Not Herdr settings".into()), ..Default::default() });
             for path in unknown {
-                rows.push(SettingRow { value: doc.get(&path), unknown: Some(path), ..Default::default() });
+                rows.push(SettingRow { value: config::lookup(&table, &path).cloned(), unknown: Some(path), ..Default::default() });
             }
         }
         self.rows = rows;

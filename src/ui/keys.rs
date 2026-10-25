@@ -7,8 +7,8 @@ use anyhow::{Result, anyhow, bail};
 use ratatui::text::{Line, Span};
 
 use super::widgets::*;
-use super::{Ctx, Key, Msg, Page, Shared};
-use crate::config::{Doc, Field, Value};
+use super::{Ctx, Key, Msg, Page, Shared, load_doc};
+use crate::config::{self, Field, Value};
 use crate::keys::{self, Binding};
 use crate::plugins::Plugin;
 use crate::schema;
@@ -120,19 +120,13 @@ impl KeysPage {
 
     /// Reads the config and recomputes rows, conflicts and problems.
     fn rebuild(&mut self, sh: &Shared) {
-        let doc = match sh.store.load() {
-            Ok(doc) => {
-                self.load_err = None;
-                doc
-            }
-            Err(e) => {
-                self.load_err = Some(format!("{e:#}"));
-                Doc::default()
-            }
-        };
+        let doc = load_doc(&sh.store, &mut self.load_err);
+        // Decoded once: a lookup per key would re-serialize and re-parse the
+        // whole document each time.
+        let table = doc.decoded();
         let mut rows = vec![KeyRow::new(Kind::Header, "Herdr actions".into())];
         for k in sh.reference.section("keys").map(|s| s.keys.as_slice()).unwrap_or_default() {
-            let current = doc.get(&k.path());
+            let current = config::lookup(&table, &k.path()).cloned();
             let changed = current.is_some();
             let mut values = keys::values(current.or_else(|| k.default_value()).as_ref());
             let action = k.key.trim_start_matches("keys.").to_string();
