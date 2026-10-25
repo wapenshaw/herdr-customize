@@ -1,0 +1,95 @@
+name: Bug report
+description: A page of the popup misbehaves, or a change does not reach Herdr or your terminal
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the popup does not open at all, check `herdr plugin list` first:
+        the plugin has to be installed and enabled, and a key has to be bound
+        to `herdr-customize.open` (see the README's "Bind a key").
+
+  - type: dropdown
+    id: page
+    attributes:
+      label: Page
+      options:
+        - Themes
+        - Plugins
+        - Keys
+        - Settings
+        - Install or update
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you pressed, and what the popup, Herdr or your terminal did.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. Open the popup
+        2. Press Tab to reach Settings
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: herdr-customize version
+      description: From `herdr plugin list`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: herdr-version
+    attributes:
+      label: Herdr version
+      description: From `herdr --version`.
+      placeholder: "herdr 0.9.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal emulator
+      description: Theme sync depends on it, and on whether Herdr runs over SSH.
+      placeholder: "Windows Terminal, Ghostty, WezTerm over SSH, …"
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: >-
+        The part of `config.toml` the bug touches, if any. Remove anything you
+        would rather not publish.
+      render: toml

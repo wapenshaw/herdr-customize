@@ -376,6 +376,9 @@ title builders, sounds and notifications, and restoring config backups.
 
 ## Development
 
+How changes are made here (branches, commits, pull requests and releases) is
+in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```sh
 cargo test
 cargo clippy --all-targets

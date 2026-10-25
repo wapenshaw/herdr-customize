@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing
+    url: https://github.com/wapenshaw/herdr-customize/blob/main/CONTRIBUTING.md
+    about: What needs an issue first, how changes are made here, and how to get set up.
+  - name: Report a vulnerability
+    url: https://github.com/wapenshaw/herdr-customize/security/advisories/new
+    about: Anything exploitable goes here privately, not into a public issue.
+  - name: Herdr itself
+    url: https://herdr.dev
+    about: A bug in the terminal rather than in this plugin belongs with Herdr.
