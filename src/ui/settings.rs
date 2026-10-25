@@ -20,10 +20,14 @@ use crate::theme::preview::rgb;
 /// Names saves of the whole file from the editor in the status line.
 const RAW_WHAT: &str = "config.toml";
 
-/// A section title, or a setting with its value (None when unset).
+enum Row {
+    Header(String),
+    Setting(SettingRow),
+}
+
+/// A setting with its value (None when unset).
 #[derive(Debug, Clone, Default)]
 struct SettingRow {
-    header: Option<String>,
     key: schema::Key,
     /// A key in config.toml that Herdr does not document.
     unknown: Option<Vec<String>>,
@@ -54,7 +58,7 @@ enum Mode {
 }
 
 pub struct SettingsPage {
-    rows: Vec<SettingRow>,
+    rows: Vec<Row>,
     list: List,
     load_err: Option<String>,
     issues: Vec<String>,
@@ -90,7 +94,10 @@ impl SettingsPage {
     }
 
     fn current(&self) -> Option<&SettingRow> {
-        self.rows.get(self.list.selected()?).filter(|r| r.header.is_none())
+        match self.rows.get(self.list.selected()?)? {
+            Row::Setting(r) => Some(r),
+            Row::Header(_) => None,
+        }
     }
 
     fn rebuild(&mut self, sh: &Shared) {
@@ -103,28 +110,37 @@ impl SettingsPage {
             if section.id == "keys" || section.id == "theme" {
                 continue;
             }
-            rows.push(SettingRow { header: Some(section.title.clone()), ..Default::default() });
+            rows.push(Row::Header(section.title.clone()));
             for k in &section.keys {
-                rows.push(SettingRow { value: config::lookup(&table, &k.path()).cloned(), key: k.clone(), ..Default::default() });
+                rows.push(Row::Setting(SettingRow { value: config::lookup(&table, &k.path()).cloned(), key: k.clone(), unknown: None }));
             }
         }
         let unknown = unknown_keys(&table, &sh.reference, &[]);
         if !unknown.is_empty() {
-            rows.push(SettingRow { header: Some("Not Herdr settings".into()), ..Default::default() });
+            rows.push(Row::Header("Not Herdr settings".into()));
             for path in unknown {
-                rows.push(SettingRow { value: config::lookup(&table, &path).cloned(), unknown: Some(path), ..Default::default() });
+                rows.push(Row::Setting(SettingRow { value: config::lookup(&table, &path).cloned(), unknown: Some(path), ..Default::default() }));
             }
         }
         self.rows = rows;
         self.apply_assumed();
-        let labels = self.rows.iter().map(|r| r.header.clone().unwrap_or_else(|| format!("{} {}", r.name(), r.key.description))).collect();
-        let headers = self.rows.iter().map(|r| r.header.is_some()).collect();
+        let labels = self
+            .rows
+            .iter()
+            .map(|r| match r {
+                Row::Header(h) => h.clone(),
+                Row::Setting(r) => format!("{} {}", r.name(), r.key.description),
+            })
+            .collect();
+        let headers = self.rows.iter().map(|r| matches!(r, Row::Header(_))).collect();
         self.list.set_rows(labels, headers);
     }
 
     fn apply_assumed(&mut self) {
         for r in &mut self.rows {
-            if let Some(a) = self.assumed.get(&r.name()).filter(|_| r.header.is_none()) {
+            if let Row::Setting(r) = r
+                && let Some(a) = self.assumed.get(&r.name())
+            {
                 r.value = a.value.clone();
             }
         }
@@ -410,10 +426,10 @@ impl Page for SettingsPage {
         let key_width = (width / 3).clamp(24, 40);
         let rows = self.list.window(list_height);
         let body = self.list.render(rows, |i, selected| {
-            let r = &self.rows[i];
-            if let Some(h) = &r.header {
-                return line(heading(h.clone()));
-            }
+            let r = match &self.rows[i] {
+                Row::Header(h) => return line(heading(h.clone())),
+                Row::Setting(r) => r,
+            };
             let mut spans = vec![raw(pad(&r.name(), key_width)), raw(" ")];
             let opts = if r.unknown.is_none() { options(&r.key) } else { Vec::new() };
             if opts.is_empty() {
