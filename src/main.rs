@@ -72,7 +72,7 @@ fn run(args: &[String]) -> Result<()> {
             }
         }
         ("invoke-after-close", 3) => {
-            let pid = arg(1).unwrap().parse().with_context(|| format!("invalid pid {:?}", args[1]))?;
+            let pid = args[1].parse().with_context(|| format!("invalid pid {:?}", args[1]))?;
             plugins::run_invoke_after_close(pid, &args[2])?;
         }
         ("herdr-run", _) => std::process::exit(plugins::run_interactive(&args[1..])),
