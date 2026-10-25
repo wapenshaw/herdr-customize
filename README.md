@@ -423,17 +423,17 @@ steps are in [the Windows test plan](docs/windows-test-plan.md).
 
 ### Releases
 
-Bump `version` in `Cargo.toml` and `herdr-plugin.toml`, then push a matching
-tag:
+[release-please](https://github.com/googleapis/release-please) cuts releases
+from the Conventional Commits on `main`. It keeps a release pull request open
+that bumps the version in `Cargo.toml`, `Cargo.lock` and `herdr-plugin.toml`
+and writes `CHANGELOG.md`. Merging that pull request tags `vX.Y.Z` and opens
+a draft release. The release workflow then builds the binaries listed under
+[Install](#install), attaches them with `SHA256SUMS` and publishes the draft,
+so an install never finds a release without its binaries.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The release workflow builds the binaries listed under [Install](#install) and
-publishes them with `SHA256SUMS`. Installs of that version download them from
-then on. Until a release exists, installs build from source.
+Running the release workflow by hand builds every target without releasing
+anything. Given the tag of an existing release, it rebuilds that release's
+binaries and replaces them.
 
 ### Go version
 

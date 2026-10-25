@@ -51,7 +51,9 @@ Use temporary directories and isolate state and config paths. The UI driver poin
 
 ## Releases
 
-Release binaries come from `.github/workflows/release.yml` on a `vX.Y.Z` tag that matches `version` in `Cargo.toml` (keep `herdr-plugin.toml` in step). `scripts/fetch-or-build.*` download the asset for the checkout's version and verify it against `SHA256SUMS`; asset names are `herdr-customize-<target>[.exe]`, so keep the scripts and the workflow matrix in sync. Test the scripts with `HERDR_CUSTOMIZE_RELEASE_BASE` pointing at a local server and a fake `cargo` on `PATH`.
+release-please (`release-please-config.json`, `.release-please-manifest.json`) owns versions, tags and `CHANGELOG.md`: it bumps `Cargo.toml`, `Cargo.lock` and `herdr-plugin.toml` in its release pull request, so never edit any of them by hand. Its pull request is opened with the workflow's own token, so CI does not run on it and the maintainer merges it through the admin bypass. Merging that pull request tags `vX.Y.Z` and opens a draft release; `.github/workflows/release.yml` builds the binaries, attaches them with `SHA256SUMS` and publishes the draft. `scripts/fetch-or-build.*` download the asset for the checkout's version and verify it against `SHA256SUMS`; asset names are `herdr-customize-<target>[.exe]`, so keep the scripts and the workflow matrix in sync. Test the scripts with `HERDR_CUSTOMIZE_RELEASE_BASE` pointing at a local server and a fake `cargo` on `PATH`.
+
+GitHub Actions minutes are limited. Never start a workflow (a manual run, a pushed tag, or a pull request) unless the maintainer asks for it; check locally first.
 
 ## Commit & Pull Request Guidelines
 
