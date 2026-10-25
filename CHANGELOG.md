@@ -4,6 +4,13 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.1.1](https://github.com/wapenshaw/herdr-customize/compare/v0.1.0...v0.1.1) (2026-10-25)
+
+
+### Refactoring
+
+* **fsutil:** let localtime_r pick the time_t type ([be66fc9](https://github.com/wapenshaw/herdr-customize/commit/be66fc94a9e2c1c8c1e871d93cb2160d6679e343))
+
 ## [0.1.0] - 2026-10-25
 
 - First release as `herdr-customize`, a standalone repository continuing
