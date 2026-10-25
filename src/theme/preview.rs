@@ -91,7 +91,7 @@ pub fn render_swatch(tokens: &Tokens, label: &str) -> String {
     lines.push(Line::default());
     let panel = tokens.get("panel_bg").cloned().unwrap_or_default();
     let mut strip = vec![Span::raw(" ")];
-    strip.extend(["red", "green", "yellow", "blue", "mauve", "teal", "peach", "accent"].iter().map(|t| paint(tokens.get(t).map(String::as_str).unwrap_or(""), &panel, "  ")));
+    strip.extend(["red", "green", "yellow", "blue", "mauve", "teal", "peach", "accent"].iter().map(|t| paint(tokens.get(t).map_or("", String::as_str), &panel, "  ")));
     lines.push(Line::from(strip));
     lines.push(Line::default());
     lines.extend(render_token_table(tokens));

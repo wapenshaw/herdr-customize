@@ -119,6 +119,7 @@ pub fn check(p: &Plugin) -> Status {
 /// Checks every GitHub plugin in parallel, keyed by plugin id.
 pub fn check_all(list: &[Plugin]) -> HashMap<String, Status> {
     std::thread::scope(|s| {
+        #[allow(clippy::needless_collect, reason = "every check must start before the first join")]
         let handles: Vec<_> = list.iter().filter(|p| p.github()).map(|p| (p.id.clone(), s.spawn(|| check(p)))).collect();
         handles.into_iter().map(|(id, h)| (id, h.join().unwrap_or_default())).collect()
     })

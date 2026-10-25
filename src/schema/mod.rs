@@ -58,7 +58,7 @@ pub struct Section {
 }
 
 /// One config key.
-#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 pub struct Key {
     pub key: String,
     #[serde(rename = "type", default)]

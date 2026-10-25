@@ -5,7 +5,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, TableLike};
@@ -415,7 +415,7 @@ impl Store {
 
     /// Loads the config, applies edit, and saves the result.
     pub fn update(&self, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Result<SaveResult> {
-        let _guard = SAVING.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = SAVING.lock().unwrap_or_else(PoisonError::into_inner);
         let mut doc = self.load()?;
         edit(&mut doc)?;
         self.save(&doc)
@@ -436,7 +436,7 @@ impl Store {
             return Ok(result);
         }
         Doc::parse(&data)?;
-        let dir = self.path.parent().unwrap_or(Path::new("."));
+        let dir = self.path.parent().unwrap_or_else(|| Path::new("."));
         fs::create_dir_all(dir)?;
         let (issues, check) = self.new_issues(dir, &data, original.is_none())?;
         if !issues.is_empty() {

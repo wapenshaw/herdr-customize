@@ -295,7 +295,7 @@ impl TextInput {
         let before: String = self.value[..self.pos].iter().collect();
         spans.push(raw(before));
         if self.focused {
-            let at = self.value.get(self.pos).map_or(" ".to_string(), |c| c.to_string());
+            let at = self.value.get(self.pos).map_or_else(|| " ".to_string(), ToString::to_string);
             spans.push(styled(Style::new().add_modifier(Modifier::REVERSED), at));
             spans.push(raw(self.value.iter().skip(self.pos + 1).collect::<String>()));
         } else {
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn text_rank_prefers_names() {
-        let labels: Vec<String> = ["dracula a vampire", "nord cold", "catppuccin-mocha warm", "vampire-light dracula"].iter().map(|s| s.to_string()).collect();
+        let labels: Vec<String> = ["dracula a vampire", "nord cold", "catppuccin-mocha warm", "vampire-light dracula"].iter().map(ToString::to_string).collect();
         assert_eq!(text_rank(&labels, &[0, 1, 2, 3], "dracula"), [0, 3]);
         assert_eq!(text_rank(&labels, &[0, 1, 2, 3], "cmoc"), [2]);
         assert!(text_rank(&labels, &[0, 1, 2, 3], "zzz").is_empty());
