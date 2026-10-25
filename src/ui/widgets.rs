@@ -440,22 +440,13 @@ impl List {
                 }
             }
         }
-        let last = self.matches.len().saturating_sub(1);
-        let mut dir = 1;
-        match key.name.as_str() {
-            "/" => {
-                self.filtering = true;
-                self.filter.focus();
-                return true;
-            }
-            "up" | "k" | "ctrl+p" => (self.cursor, dir) = (self.cursor.saturating_sub(1), -1),
-            "down" | "j" | "ctrl+n" => self.cursor = (self.cursor + 1).min(last),
-            "pgup" | "ctrl+u" => (self.cursor, dir) = (self.cursor.saturating_sub(10), -1),
-            "pgdown" | "ctrl+d" => self.cursor = (self.cursor + 10).min(last),
-            "home" | "g" => self.cursor = 0,
-            "end" | "G" => (self.cursor, dir) = (last, -1),
-            _ => return false,
+        if key.is("/") {
+            self.filtering = true;
+            self.filter.focus();
+            return true;
         }
+        let Some((cursor, dir)) = step_cursor(self.cursor, self.matches.len(), key) else { return false };
+        self.cursor = cursor;
         self.skip_headers(dir);
         true
     }
@@ -490,6 +481,21 @@ impl List {
         }
         lines
     }
+}
+
+/// Moves a cursor over len rows for the list navigation keys. Returns the
+/// new position and the direction it moved, or None for any other key.
+pub fn step_cursor(cursor: usize, len: usize, key: &Key) -> Option<(usize, isize)> {
+    let last = len.saturating_sub(1);
+    Some(match key.name.as_str() {
+        "up" | "k" | "ctrl+p" => (cursor.saturating_sub(1), -1),
+        "down" | "j" | "ctrl+n" => ((cursor + 1).min(last), 1),
+        "pgup" | "ctrl+u" => (cursor.saturating_sub(10), -1),
+        "pgdown" | "ctrl+d" => ((cursor + 10).min(last), 1),
+        "home" | "g" => (0, 1),
+        "end" | "G" => (last, -1),
+        _ => return None,
+    })
 }
 
 /// Orders the candidate rows matching query: every word of query must
@@ -572,6 +578,14 @@ mod tests {
         assert_eq!(text_rank(&labels, &[0, 1, 2, 3], "dracula"), [0, 3]);
         assert_eq!(text_rank(&labels, &[0, 1, 2, 3], "cmoc"), [2]);
         assert!(text_rank(&labels, &[0, 1, 2, 3], "zzz").is_empty());
+    }
+
+    #[test]
+    fn cursor_steps_stay_in_range() {
+        let step = |cursor, key| step_cursor(cursor, 3, &Key::named(key)).map(|(c, _)| c);
+        assert_eq!((step(0, "up"), step(2, "down"), step(1, "pgdown"), step(1, "G")), (Some(0), Some(2), Some(2), Some(2)));
+        assert_eq!(step(1, "x"), None);
+        assert_eq!(step_cursor(0, 0, &Key::named("end")), Some((0, -1)));
     }
 
     #[test]

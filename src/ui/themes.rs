@@ -249,6 +249,10 @@ impl ThemesPage {
     }
 
     fn editor_key(&mut self, key: &Key, ctx: &mut Ctx) {
+        if let Some((cursor, _)) = step_cursor(self.edit_cursor, self.edit_rows.len(), key) {
+            self.edit_cursor = cursor;
+            return;
+        }
         match key.name.as_str() {
             "esc" | "q" => {
                 self.mode = Mode::Browse;
@@ -256,8 +260,6 @@ impl ThemesPage {
                     ctx.status("edits discarded");
                 }
             }
-            "up" | "k" => self.edit_cursor = self.edit_cursor.saturating_sub(1),
-            "down" | "j" => self.edit_cursor = (self.edit_cursor + 1).min(self.edit_rows.len().saturating_sub(1)),
             "enter" if let Some(r) = self.edit_rows.get(self.edit_cursor) => {
                 self.input = TextInput::new(format!("{}: ", r.token), &r.color);
                 self.mode = Mode::EditingColor;

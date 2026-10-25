@@ -538,12 +538,11 @@ impl PluginsPage {
             return false;
         };
         let items = self.menu(&p);
-        let last = items.len().saturating_sub(1);
+        if let Some((cursor, _)) = step_cursor(self.menu_cursor, items.len(), key) {
+            self.menu_cursor = cursor;
+            return true;
+        }
         match key.name.as_str() {
-            "up" | "k" => self.menu_cursor = self.menu_cursor.saturating_sub(1),
-            "down" | "j" => self.menu_cursor = (self.menu_cursor + 1).min(last),
-            "home" | "g" => self.menu_cursor = 0,
-            "end" | "G" => self.menu_cursor = last,
             "left" | "h" | "esc" => self.panel = false,
             "enter" | " " => {
                 if let Some(item) = items.into_iter().nth(self.menu_cursor) {
