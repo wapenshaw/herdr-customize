@@ -445,7 +445,7 @@ impl PluginsPage {
                 });
             }
             "o" => {
-                let url = format!("https://github.com/{}", repo.full_name);
+                let url = plugins::github_url(&repo.full_name);
                 match proc::open_url(&url) {
                     Ok(()) => ctx.status(format!("opened {url}")),
                     Err(e) => ctx.error(e),
