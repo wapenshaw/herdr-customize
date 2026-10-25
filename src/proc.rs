@@ -2,8 +2,10 @@
 //! the user's editor. Herdr tears down a popup's whole process group (or job
 //! object on Windows) when it closes, so a helper runs in its own session.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -44,6 +46,49 @@ fn detach(command: impl Fn() -> Command) -> std::io::Result<()> {
         return Ok(());
     }
     command().creation_flags(flags).spawn().map(drop)
+}
+
+/// Runs cmd like Command::output, but gives up once timeout passes, killing
+/// it if it still runs. A descendant can hold the pipes open after cmd exits,
+/// so reading them has the same deadline.
+pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
+    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let (tx, rx) = mpsc::channel();
+    let read = |pipe: Option<Box<dyn Read + Send>>, is_err: bool| {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            let _ = tx.send((is_err, buf));
+        });
+    };
+    read(child.stdout.take().map(|p| Box::new(p) as _), false);
+    read(child.stderr.take().map(|p| Box::new(p) as _), true);
+    let deadline = Instant::now() + timeout;
+    let give_up = |mut child: std::process::Child| -> Result<Output> {
+        let _ = child.kill();
+        let _ = child.wait();
+        bail!("gave up after {timeout:?}")
+    };
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    for _ in 0..2 {
+        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok((is_err, buf)) => *(if is_err { &mut stderr } else { &mut stdout }) = buf,
+            Err(_) => return give_up(child),
+        }
+    }
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() > deadline {
+            return give_up(child);
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    Ok(Output { status, stdout, stderr })
 }
 
 /// Waits until pid has exited or timeout passes, and reports whether it exited.
@@ -236,5 +281,34 @@ mod tests {
         assert_eq!(split_editor(r#"ed "a \"b\"""#).unwrap(), ["ed", r#"a "b""#]);
         assert!(split_editor("'open").is_err());
         assert!(split_editor("   ").is_err());
+    }
+
+    // A program that never answers must not hold up its caller.
+    #[test]
+    fn output_within_kills_a_hung_program() {
+        let mut cmd = if cfg!(windows) { Command::new("ping") } else { Command::new("sleep") };
+        if cfg!(windows) {
+            cmd.args(["-n", "30", "127.0.0.1"]);
+        } else {
+            cmd.arg("30");
+        }
+        let start = Instant::now();
+        assert!(output_within(&mut cmd, Duration::from_millis(200)).is_err());
+        assert!(start.elapsed() < Duration::from_secs(5));
+        let mut cmd = if cfg!(windows) { Command::new("cmd") } else { Command::new("sh") };
+        cmd.args(if cfg!(windows) { ["/C", "echo hi"] } else { ["-c", "echo hi"] });
+        let out = output_within(&mut cmd, Duration::from_secs(10)).unwrap();
+        assert!(out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "hi");
+    }
+
+    // A descendant that keeps the output pipe open after its parent exits
+    // must not hold up the caller either.
+    #[test]
+    fn output_within_stops_waiting_on_inherited_pipes() {
+        let mut cmd = if cfg!(windows) { Command::new("cmd") } else { Command::new("sh") };
+        cmd.args(if cfg!(windows) { ["/C", "start /b ping -n 4 127.0.0.1"] } else { ["-c", "sleep 3 &"] });
+        let start = Instant::now();
+        assert!(output_within(&mut cmd, Duration::from_millis(200)).is_err());
+        assert!(start.elapsed() < Duration::from_millis(1500), "{:?}", start.elapsed());
     }
 }

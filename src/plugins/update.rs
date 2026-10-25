@@ -5,7 +5,7 @@ use std::process::Command;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -61,14 +61,14 @@ pub fn resolve_remote(slug: &str, git_ref: &str) -> Result<String> {
         return Ok(git_ref.into());
     }
     let wanted = candidates(git_ref);
-    let out = Command::new("git")
-        .args(["ls-remote", &format!("{}/{slug}", git_base()), "HEAD"])
+    let mut cmd = Command::new("git");
+    cmd.args(["ls-remote", &format!("{}/{slug}", git_base()), "HEAD"])
         .args(&wanted)
         // Never prompt for credentials, and give up on a stalled connection.
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_HTTP_LOW_SPEED_LIMIT", "1000")
-        .env("GIT_HTTP_LOW_SPEED_TIME", "5")
-        .output()?;
+        .env("GIT_HTTP_LOW_SPEED_TIME", "5");
+    let out = proc::output_within(&mut cmd, Duration::from_secs(20)).with_context(|| format!("git ls-remote {slug}"))?;
     if !out.status.success() {
         bail!("git ls-remote {slug}: {}", String::from_utf8_lossy(&out.stderr).trim());
     }
@@ -114,29 +114,36 @@ fn remote_version(p: &Plugin, commit: &str) -> Result<String> {
     Ok(toml::from_str::<Manifest>(&body)?.version)
 }
 
-/// Compares an installed GitHub plugin with its remote ref.
-pub fn check(p: &Plugin) -> Status {
-    if !p.github() {
-        return Status::default();
+/// The GitHub plugins in list, grouped by the repo and ref they follow so
+/// each group needs one ls-remote.
+pub fn check_groups(list: &[Plugin]) -> Vec<Vec<Plugin>> {
+    let mut groups: Vec<Vec<Plugin>> = Vec::new();
+    for p in list.iter().filter(|p| p.github()) {
+        let same = |q: &Plugin| q.slug().eq_ignore_ascii_case(&p.slug()) && q.git_ref() == p.git_ref();
+        match groups.iter_mut().find(|g| same(&g[0])) {
+            Some(g) => g.push(p.clone()),
+            None => groups.push(vec![p.clone()]),
+        }
     }
-    // An exact-commit pin cannot drift, and ls-remote cannot resolve one.
-    if p.pinned() {
-        return Status { state: State::Current, remote: p.source.commit.clone(), ..Default::default() };
-    }
-    match resolve_remote(&p.slug(), p.git_ref()) {
-        Err(e) => Status { state: State::Failed, error: e.to_string(), ..Default::default() },
-        Ok(remote) if remote.eq_ignore_ascii_case(&p.source.commit) => Status { state: State::Current, remote, ..Default::default() },
-        Ok(remote) => Status { state: State::Behind, version: remote_version(p, &remote).unwrap_or_default(), remote, ..Default::default() },
-    }
+    groups
 }
 
-/// Checks every GitHub plugin in parallel, keyed by plugin id.
-pub fn check_all(list: &[Plugin]) -> HashMap<String, Status> {
-    std::thread::scope(|s| {
-        #[allow(clippy::needless_collect, reason = "every check must start before the first join")]
-        let handles: Vec<_> = list.iter().filter(|p| p.github()).map(|p| (p.id.clone(), s.spawn(|| check(p)))).collect();
-        handles.into_iter().map(|(id, h)| (id, h.join().unwrap_or_default())).collect()
-    })
+/// Compares each plugin in a group from check_groups with their shared
+/// remote ref, keyed by plugin id.
+pub fn check_group(group: &[Plugin]) -> Vec<(String, Status)> {
+    let mut remote = None;
+    let mut check = |p: &Plugin| {
+        // An exact-commit pin cannot drift, and ls-remote cannot resolve one.
+        if p.pinned() {
+            return Status { state: State::Current, remote: p.source.commit.clone(), ..Default::default() };
+        }
+        match remote.get_or_insert_with(|| resolve_remote(&p.slug(), p.git_ref()).map_err(|e| format!("{e:#}"))) {
+            Err(e) => Status { state: State::Failed, error: e.clone(), ..Default::default() },
+            Ok(r) if r.eq_ignore_ascii_case(&p.source.commit) => Status { state: State::Current, remote: r.clone(), ..Default::default() },
+            Ok(r) => Status { state: State::Behind, version: remote_version(p, r).unwrap_or_default(), remote: r.clone(), ..Default::default() },
+        }
+    };
+    group.iter().map(|p| (p.id.clone(), check(p))).collect()
 }
 
 /// Whether update checks can run.
@@ -168,6 +175,19 @@ mod tests {
         assert_eq!(candidates("refs/heads/fix/x"), ["refs/heads/fix/x"]);
         assert_eq!(candidates("refs/tags/v1"), ["refs/tags/v1^{}", "refs/tags/v1"]);
         assert_eq!(candidates("main"), ["refs/tags/main^{}", "refs/tags/main", "refs/heads/main"]);
+    }
+
+    // Two installs of one repo and ref must share a check, and no other.
+    #[test]
+    fn groups_share_a_repo_and_ref() {
+        let gh = |id: &str, repo: &str, r: &str| {
+            let mut p = plugin(r, "abc");
+            (p.id, p.source.kind, p.source.owner, p.source.repo) = (id.into(), "github".into(), "o".into(), repo.into());
+            p
+        };
+        let list = [gh("a", "r", "main"), gh("b", "R", "main"), gh("c", "r", "v1"), plugin("main", "abc")];
+        let ids: Vec<Vec<String>> = check_groups(&list).iter().map(|g| g.iter().map(|p| p.id.clone()).collect()).collect();
+        assert_eq!(ids, [vec!["a", "b"], vec!["c"]]);
     }
 
     #[test]

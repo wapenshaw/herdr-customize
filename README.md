@@ -242,8 +242,9 @@ clipboard.
 
 The list on the left shows each plugin's version and update state: `●` up to
 date, `↑` an update is available, `?` the check failed, `⌂` linked from a
-local checkout. The checks run `git ls-remote` against the installed ref and
-need no GitHub token. **Install from GitHub…** and **Browse the
+local checkout. The checks run `git ls-remote` against the installed ref, once
+per repo and ref and four at a time, give up after 20 seconds, and need no
+GitHub token. **Install from GitHub…** and **Browse the
 marketplace…** sit below the plugins.
 
 The panel on the right describes the selected plugin and lists what you can do

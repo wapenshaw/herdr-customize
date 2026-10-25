@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 pub use market::{MARKET_TOPIC, Repo, Results, search};
-pub use update::{State, Status, check_all, have_git, resolve_remote};
+pub use update::{State, Status, check_group, check_groups, have_git, resolve_remote};
 
 use crate::{config, herdr, proc};
 

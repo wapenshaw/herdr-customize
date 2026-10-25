@@ -541,6 +541,49 @@ fn theme_block_is_checked_and_not_reloaded() {
     assert!(config.contains("[theme.custom]\npanel_bg = ") && config.contains("[theme.custom.dark]\naccent = \"#ffffff\""), "{config}");
 }
 
+/// Opens the plugins page on seven GitHub plugins, two of them one repo and ref.
+fn seven_github_plugins() -> Driver {
+    let mut d = Driver::new("themes", "");
+    let gh = |id: &str, repo: &str| {
+        format!(
+            r#"{{"plugin_id":"{id}","name":"{id}","version":"1","enabled":true,"plugin_root":"/x","source":{{"kind":"github","owner":"o","repo":"{repo}","requested_ref":"main","resolved_commit":"0"}},"actions":[]}}"#
+        )
+    };
+    let list = [gh("a", "one"), gh("b", "one"), gh("c", "two"), gh("d", "three"), gh("e", "four"), gh("f", "five"), gh("g", "six")];
+    fs::write(sandbox().join("plugins.json"), format!(r#"{{"result":{{"plugins":[{}]}}}}"#, list.join(","))).unwrap();
+    d.app.dispatch(Msg::PluginList(crate::plugins::list()));
+    d.press(&["tab"]);
+    d
+}
+
+// A reload while checks still run must not start more than the cap allows.
+#[test]
+fn plugin_checks_stay_capped_across_reloads() {
+    if !crate::plugins::have_git() {
+        return;
+    }
+    let mut d = seven_github_plugins();
+    // The jobs are dropped unrun, so the first reload's checks never finish.
+    let mut reload = || {
+        d.app.dispatch(Msg::PluginList(crate::plugins::list()));
+        d.app.settle();
+        std::mem::take(&mut d.app.jobs).len()
+    };
+    let (first, second) = (reload(), reload());
+    assert_eq!(first - second, 4);
+}
+
+// Installs that follow one repo and ref must share one update check.
+#[test]
+fn plugin_checks_share_a_repo_and_ref() {
+    let mut d = seven_github_plugins();
+    assert_eq!(PAGES[d.app.active], "plugins");
+    assert_eq!(d.git_checks(), if crate::plugins::have_git() { 6 } else { 0 });
+    if crate::plugins::have_git() {
+        assert!(d.screen().contains("7 not"), "{}", d.screen());
+    }
+}
+
 // Opening the popup on another page must not start update checks.
 #[test]
 fn plugin_checks_wait_for_the_page() {
