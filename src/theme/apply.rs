@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{Item, Table};
@@ -17,8 +17,7 @@ use crate::{fsutil, herdr, terminal};
 /// effort: the config is the truth, and a manual reload repairs either.
 pub fn apply_theme(slug: &str) -> Result<()> {
     let cfg = config::path();
-    let palette_path = resolve_palette(slug).with_context(|| format!("cannot resolve theme {slug:?}"))?;
-    let pal = parse_palette_file(&palette_path).with_context(|| format!("invalid palette for {slug:?}"))?;
+    let (pal, palette_path) = load_palette(slug)?;
     fs::create_dir_all(state_dir()).context("create state directory")?;
     let _lock = fsutil::lock(&applied_file().with_extension("lock")).context("lock theme selection")?;
     write_custom_block(&cfg, &pal.tokens()).context("failed to write the custom theme block")?;
@@ -36,6 +35,13 @@ pub fn apply_theme(slug: &str) -> Result<()> {
     }
     println!("Applied theme {slug:?}.");
     Ok(())
+}
+
+/// The palette for slug, bundled or user-added, with the file it came from.
+fn load_palette(slug: &str) -> Result<(Palette, PathBuf)> {
+    let path = resolve_palette(slug).with_context(|| format!("cannot resolve theme {slug:?}"))?;
+    let pal = parse_palette_file(&path).with_context(|| format!("invalid palette for {slug:?}"))?;
+    Ok((pal, path))
 }
 
 /// Replaces the base tokens of [theme.custom], keeping the auto_switch
@@ -144,8 +150,7 @@ pub fn sync_applied_theme(client_pid: &str) -> Result<()> {
     if slug.is_empty() {
         return Ok(());
     }
-    let palette_path = resolve_palette(&slug).with_context(|| format!("resolve theme {slug:?}"))?;
-    let pal = parse_palette_file(&palette_path).with_context(|| format!("parse theme {slug:?}"))?;
+    let (pal, palette_path) = load_palette(&slug)?;
     // A config edited independently, or a failed marker write, must never
     // resurrect stale terminal colors from the previous selection.
     let cfg = config::path();
