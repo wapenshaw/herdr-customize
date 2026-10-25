@@ -82,7 +82,7 @@ impl Plugin {
 
     /// The plugin's GitHub page, at the installed commit for subdir plugins.
     pub fn repo_url(&self) -> String {
-        let mut url = format!("https://github.com/{}", self.slug());
+        let mut url = github_url(&self.slug());
         if !self.source.subdir.is_empty() && !self.source.commit.is_empty() {
             url += &format!("/tree/{}/{}", self.source.commit, self.source.subdir);
         }
@@ -108,18 +108,25 @@ pub fn list() -> Result<Vec<Plugin>> {
     parse_list(&herdr::run(&["plugin", "list", "--json"]).context("herdr plugin list")?)
 }
 
+/// The GitHub page for an owner/repo slug.
+pub fn github_url(slug: &str) -> String {
+    format!("https://github.com/{slug}")
+}
+
+/// Herdr's JSON envelope: the payload sits under "result".
+#[derive(Deserialize)]
+struct Envelope<T> {
+    result: T,
+}
+
 /// Decodes herdr plugin list --json output.
 pub fn parse_list(data: &str) -> Result<Vec<Plugin>> {
-    #[derive(Deserialize)]
-    struct Payload {
-        result: Inner,
-    }
     #[derive(Deserialize)]
     struct Inner {
         #[serde(default)]
         plugins: Vec<Plugin>,
     }
-    Ok(serde_json::from_str::<Payload>(data).context("unexpected herdr plugin list output")?.result.plugins)
+    Ok(serde_json::from_str::<Envelope<Inner>>(data).context("unexpected herdr plugin list output")?.result.plugins)
 }
 
 pub fn set_enabled(id: &str, enabled: bool) -> Result<()> {
@@ -169,16 +176,12 @@ impl Log {
 /// The most recent command logs for a plugin, newest first.
 pub fn logs(id: &str, limit: usize) -> Result<Vec<Log>> {
     #[derive(Deserialize)]
-    struct Payload {
-        result: Inner,
-    }
-    #[derive(Deserialize)]
     struct Inner {
         #[serde(default)]
         logs: Vec<Log>,
     }
     let out = herdr::run(&["plugin", "log", "list", "--plugin", id, "--limit", &limit.to_string()])?;
-    let mut logs = serde_json::from_str::<Payload>(&out).context("herdr plugin log list")?.result.logs;
+    let mut logs = serde_json::from_str::<Envelope<Inner>>(&out).context("herdr plugin log list")?.result.logs;
     logs.reverse();
     Ok(logs)
 }
