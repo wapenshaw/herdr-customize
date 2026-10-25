@@ -2,7 +2,7 @@
 //! can do (→ or ↵ enters it, ← or esc leaves). The marketplace, recent runs
 //! and a plugin's settings are screens of their own.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::LazyLock;
 use std::time::SystemTime;
 
@@ -20,7 +20,7 @@ use crate::proc;
 
 /// What this page's background work reports, its settings screen's included.
 pub enum Msg {
-    Checks(HashMap<String, Status>),
+    Checks { round: u64, statuses: Vec<(String, Status)> },
     Market { query: String, sort: String, page: usize, results: anyhow::Result<Results> },
     Op { text: String, err: Option<anyhow::Error> },
     Pin { plugin: Box<Plugin>, sha: anyhow::Result<String> },
@@ -40,6 +40,9 @@ impl From<Msg> for ui::Msg {
 
 /// How many results each marketplace request fetches.
 const MARKET_PAGE: usize = 50;
+
+/// How many update checks run at once.
+const CHECKS_AT_ONCE: usize = 4;
 
 #[derive(PartialEq)]
 enum Screen {
@@ -102,7 +105,14 @@ pub struct PluginsPage {
     rows: Vec<Row>,
     list: List,
     statuses: HashMap<String, Status>,
-    checking: bool,
+    /// Update check groups not yet started.
+    waiting: VecDeque<Vec<Plugin>>,
+    /// Update check groups not yet reported.
+    checking: usize,
+    /// Tells this round of checks from an earlier one still reporting.
+    round: u64,
+    /// Checks running, this round's and earlier ones'.
+    running: usize,
     /// Update checks and details wait until the page is first shown.
     shown: bool,
     have_git: bool,
@@ -186,7 +196,10 @@ impl PluginsPage {
             rows: Vec::new(),
             list: List::new(),
             statuses: HashMap::new(),
-            checking: false,
+            waiting: VecDeque::new(),
+            checking: 0,
+            round: 0,
+            running: 0,
             shown: false,
             have_git: plugins::have_git(),
             market: List::new(),
@@ -260,16 +273,28 @@ impl PluginsPage {
         if !self.have_git {
             return;
         }
-        self.checking = true;
-        let list = self.plugins.clone();
-        ctx.spawn(move || Msg::Checks(plugins::check_all(&list)).into());
+        self.round += 1;
+        self.statuses.clear();
+        self.waiting = plugins::check_groups(&self.plugins).into();
+        self.checking = self.waiting.len();
+        self.next_checks(ctx);
+    }
+
+    fn next_checks(&mut self, ctx: &mut Ctx) {
+        while self.running < CHECKS_AT_ONCE
+            && let Some(group) = self.waiting.pop_front()
+        {
+            self.running += 1;
+            let round = self.round;
+            ctx.spawn(move || Msg::Checks { round, statuses: plugins::check_group(&group) }.into());
+        }
     }
 
     fn update_info(&self, p: &Plugin) -> String {
         let status = self.statuses.get(&p.id).cloned().unwrap_or_default();
         match () {
             _ if !self.have_git => "install git to check".into(),
-            _ if self.checking => "checking…".into(),
+            _ if self.checking > 0 && !self.statuses.contains_key(&p.id) => "checking…".into(),
             _ if p.pinned() => format!("pinned to {}", short(p.git_ref())),
             _ if status.state == State::Behind && !status.version.is_empty() && status.version != p.version => format!("{} → {}", p.version, status.version),
             _ if status.state == State::Behind => format!("→ {}", short(&status.remote)),
@@ -354,7 +379,7 @@ impl PluginsPage {
         if !self.have_git {
             return ctx.error("install git to check for updates");
         }
-        if self.checking {
+        if self.checking > 0 {
             return ctx.status("still checking for updates");
         }
         let (mut ids, mut names) = (Vec::new(), Vec::new());
@@ -594,7 +619,7 @@ impl PluginsPage {
         if !self.have_git {
             return line(dim("install git to check for updates"));
         }
-        if self.checking {
+        if self.checking > 0 {
             return line(dim("checking for updates…"));
         }
         let count = |state| self.statuses.values().filter(|s| s.state == state).count();
@@ -829,9 +854,13 @@ impl Page for PluginsPage {
             ui::Msg::Plugins(Msg::Detail { id, settings, last }) => {
                 self.details.insert(id.clone(), Detail { settings: std::mem::take(settings), last: std::mem::take(last) });
             }
-            ui::Msg::Plugins(Msg::Checks(statuses)) => {
-                self.checking = false;
-                self.statuses = std::mem::take(statuses);
+            ui::Msg::Plugins(Msg::Checks { round, statuses }) => {
+                self.running -= 1;
+                if *round == self.round {
+                    self.checking -= 1;
+                    self.statuses.extend(std::mem::take(statuses));
+                }
+                self.next_checks(ctx);
             }
             ui::Msg::Plugins(Msg::Market { query, sort, page, results }) => {
                 if *query != self.market_query || *sort != self.market_sort {
