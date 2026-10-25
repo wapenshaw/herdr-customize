@@ -51,6 +51,12 @@ func Main(m *testing.M) {
 		json.NewEncoder(os.Stdout).Encode(os.Args[1:])
 		os.Exit(0)
 	}
+	if script := os.Getenv("HERDR_TEST_FAKE_HERDR"); script != "" {
+		exe, _ := os.Executable()
+		if strings.TrimSuffix(filepath.Base(exe), ".exe") == "herdr" {
+			os.Exit(runFakeHerdr(script))
+		}
+	}
 	if script := os.Getenv("THEME_TEST_FZF_SCRIPT"); script != "" {
 		exe, _ := os.Executable()
 		if strings.TrimSuffix(filepath.Base(exe), ".exe") == "fzf" {
@@ -147,4 +153,80 @@ func FakeFZF(t *testing.T, steps ...FZFStep) string {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("HERDR_BIN_PATH", filepath.Join(dir, "herdr"+suffix))
 	return script
+}
+
+// HerdrResponse is one scripted answer of the fake herdr. Args must equal the
+// invocation's arguments joined by spaces. When ConfigContains is set, the
+// response applies only if the file at HERDR_CONFIG_PATH contains it.
+type HerdrResponse struct {
+	Args           string
+	ConfigContains string
+	Stdout         string
+	Exit           int
+}
+
+// FakeHerdr installs a scripted herdr as HERDR_BIN_PATH and returns the log
+// file that records each invocation's arguments, one per line. Unscripted
+// invocations exit 0 silently.
+func FakeHerdr(t *testing.T, responses ...HerdrResponse) string {
+	t.Helper()
+	dir := t.TempDir()
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		suffix = ".exe"
+	}
+	bin := filepath.Join(dir, "herdr"+suffix)
+	CopyExecutable(t, bin)
+	script := filepath.Join(dir, "herdr.json")
+	data, err := json.Marshal(responses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	WriteFile(t, script, string(data))
+	t.Setenv("HERDR_TEST_FAKE_HERDR", script)
+	t.Setenv("HERDR_BIN_PATH", bin)
+	return script + ".log"
+}
+
+func runFakeHerdr(script string) int {
+	data, err := os.ReadFile(script)
+	if err != nil {
+		return 2
+	}
+	var responses []HerdrResponse
+	if json.Unmarshal(data, &responses) != nil {
+		return 2
+	}
+	args := strings.Join(os.Args[1:], " ")
+	if log, err := os.OpenFile(script+".log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+		fmt.Fprintln(log, args)
+		log.Close()
+	}
+	for _, response := range responses {
+		if response.Args != args {
+			continue
+		}
+		if response.ConfigContains != "" {
+			config, _ := os.ReadFile(os.Getenv("HERDR_CONFIG_PATH"))
+			if !strings.Contains(string(config), response.ConfigContains) {
+				continue
+			}
+		}
+		fmt.Print(response.Stdout)
+		return response.Exit
+	}
+	return 0
+}
+
+// HerdrCalls returns the invocations recorded in a FakeHerdr log.
+func HerdrCalls(t *testing.T, log string) []string {
+	t.Helper()
+	data, err := os.ReadFile(log)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 }

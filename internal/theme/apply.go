@@ -4,9 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
+	"github.com/wapenshaw/herdr-customize/internal/herdr"
 	"github.com/wapenshaw/herdr-customize/internal/instance"
 	"github.com/wapenshaw/herdr-customize/internal/terminal"
 )
@@ -59,14 +58,4 @@ func ApplyTheme(slug string) error {
 
 // ReloadHerdr executes 'herdr server reload-config'. A machine that only
 // connects with herdr --remote has no local server; the user reloads instead.
-func ReloadHerdr() error {
-	herdrBin := os.Getenv("HERDR_BIN_PATH")
-	if herdrBin == "" {
-		herdrBin = "herdr"
-	}
-	out, err := exec.Command(herdrBin, "server", "reload-config").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
+func ReloadHerdr() error { return herdr.Reload() }

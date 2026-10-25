@@ -1,6 +1,6 @@
 //go:build !windows
 
-package theme
+package fsutil
 
 import "os"
 

@@ -5,35 +5,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/wapenshaw/herdr-customize/internal/config"
 )
 
 // PluginID is the Herdr plugin id from herdr-plugin.toml.
 const PluginID = "herdr-customize"
 
 // ConfigPath returns the location of Herdr's config.toml across platforms.
-func ConfigPath() string {
-	if custom := os.Getenv("HERDR_CONFIG_PATH"); custom != "" {
-		return custom
-	}
-	// Match Herdr's precedence on every OS, including Windows.
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "herdr", "config.toml")
-	}
-	if runtime.GOOS == "windows" {
-		if appData := os.Getenv("APPDATA"); appData != "" {
-			return filepath.Join(appData, "herdr", "config.toml")
-		}
-		if profile := os.Getenv("USERPROFILE"); profile != "" {
-			return filepath.Join(profile, "AppData", "Roaming", "herdr", "config.toml")
-		}
-	}
-
-	// Default fallback: XDG or ~/.config
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".config", "herdr", "config.toml")
-	}
-	return "config.toml"
-}
+func ConfigPath() string { return config.Path() }
 
 // PluginRoot returns the directory containing plugin assets (themes, herdr-plugin.toml).
 func PluginRoot() string {

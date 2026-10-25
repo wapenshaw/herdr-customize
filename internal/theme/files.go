@@ -7,49 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/wapenshaw/herdr-customize/internal/fsutil"
 	"github.com/wapenshaw/herdr-customize/internal/instance"
 )
 
 // atomicWriteFile keeps readers from observing truncated configs, indexes or palettes.
-// Resolve an existing symlink so updating a linked config preserves the link.
 func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
-	if info, err := os.Lstat(path); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			path, err = filepath.EvalSymlinks(path)
-			if err != nil {
-				return err
-			}
-			info, err = os.Stat(path)
-			if err != nil {
-				return err
-			}
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("not a regular file: %s", path)
-		}
-		mode = info.Mode().Perm()
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".theme-picker-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-	if err := f.Chmod(mode); err != nil {
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return replaceFile(f.Name(), path)
+	return fsutil.AtomicWrite(path, data, mode)
 }
 
 // readIndex returns an index file's unique non-blank entries, split into

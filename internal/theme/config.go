@@ -9,10 +9,11 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pelletier/go-toml/v2/unstable"
+
+	"github.com/wapenshaw/herdr-customize/internal/fsutil"
 )
 
 // WriteCustomBlock replaces or appends the [theme.custom] section in Herdr's config.toml.
@@ -35,28 +36,8 @@ func WriteCustomBlock(cfgPath string, tokens map[string]string) error {
 		return atomicWriteFile(cfgPath, updated, 0o600)
 	}
 	// Keep one backup of the original config each day. Never overwrite it.
-	bak := cfgPath + ".bak-" + time.Now().Format("20060102")
-	f, err := os.OpenFile(bak, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err == nil {
-		_, writeErr := f.Write(data)
-		if writeErr == nil {
-			writeErr = f.Sync()
-		}
-		closeErr := f.Close()
-		if err := errors.Join(writeErr, closeErr); err != nil {
-			cleanupErr := os.Remove(bak)
-			return errors.Join(fmt.Errorf("config backup failed: %w", err), cleanupErr)
-		}
-	} else if !errors.Is(err, os.ErrExist) {
-		return fmt.Errorf("config backup failed: %w", err)
-	} else {
-		info, statErr := os.Lstat(bak)
-		if statErr != nil {
-			return fmt.Errorf("check config backup: %w", statErr)
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("config backup is not a regular file: %s", bak)
-		}
+	if err := fsutil.DailyBackup(cfgPath, data); err != nil {
+		return err
 	}
 	return atomicWriteFile(cfgPath, updated, 0o600)
 }
