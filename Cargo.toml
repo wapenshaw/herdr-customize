@@ -2,6 +2,7 @@
 name = "herdr-customize"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.89"
 description = "Customize Herdr from one popup: themes, plugins, keybindings and settings."
 license = "MIT"
 publish = false
@@ -9,7 +10,6 @@ publish = false
 [dependencies]
 anyhow = "1"
 crossterm = "0.28"
-libc = "0.2"
 ratatui = "0.29"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
@@ -18,6 +18,21 @@ toml = "0.8"
 toml_edit = "0.22"
 unicode-width = "0.2"
 ureq = { version = "2", default-features = false, features = ["tls"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Wdk_System_Threading",
+    "Win32_Foundation",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_Time",
+    "Win32_UI_Shell",
+] }
 
 [profile.release]
 lto = true

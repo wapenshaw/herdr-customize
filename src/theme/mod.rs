@@ -16,7 +16,7 @@ use regex::Regex;
 
 pub use apply::{apply_theme, only_remote_clients, sync_applied_theme};
 
-use crate::config::env;
+use crate::config::{self, env};
 use crate::{fsutil, proc};
 
 /// The Herdr plugin id from herdr-plugin.toml.
@@ -128,10 +128,18 @@ pub fn state_dir() -> PathBuf {
         return state.into();
     }
     if let Some(xdg) = env("XDG_STATE_HOME") {
-        return Path::new(&xdg).join("herdr/plugins").join(PLUGIN_ID);
+        return Path::new(&xdg).join("herdr").join("plugins").join(PLUGIN_ID);
     }
-    match env("HOME") {
-        Some(home) => Path::new(&home).join(".local/state/herdr/plugins").join(PLUGIN_ID),
+    if cfg!(windows) {
+        if let Some(local) = env("LOCALAPPDATA") {
+            return Path::new(&local).join("herdr").join("plugins").join(PLUGIN_ID);
+        }
+        if let Some(profile) = env("USERPROFILE") {
+            return Path::new(&profile).join("AppData").join("Local").join("herdr").join("plugins").join(PLUGIN_ID);
+        }
+    }
+    match config::home() {
+        Some(home) => home.join(".local").join("state").join("herdr").join("plugins").join(PLUGIN_ID),
         None => ".state".into(),
     }
 }
@@ -609,7 +617,8 @@ fn pick_editor() -> String {
             return v;
         }
     }
-    ["nvim", "nano"].iter().find(|n| proc::look_path(n).is_some()).map(|n| n.to_string()).unwrap_or_else(|| "vi".into())
+    let fallback = if cfg!(windows) { "notepad.exe" } else { "vi" };
+    ["nvim", "nano"].iter().find(|n| proc::look_path(n).is_some()).map_or(fallback, |n| n).to_string()
 }
 
 /// Splits an editor command without evaluating shell syntax.
@@ -667,13 +676,40 @@ pub fn editor_command(path: &Path) -> Result<Command> {
         None => split_editor(&editor)?,
     };
     let exe = proc::look_path(&args[0]).ok_or_else(|| anyhow!("editor {:?} not found", args[0]))?;
+    let is_script = exe.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    if cfg!(windows) && is_script {
+        // Editors such as VS Code install a .cmd shim rather than an .exe.
+        // PowerShell's literal quoting keeps cmd.exe from expanding paths.
+        let quote = |s: &str| format!("'{}'", s.replace('\'', "''"));
+        let mut line = format!("& {}", quote(&exe.to_string_lossy()));
+        for arg in args[1..].iter().map(String::as_str).chain([path.to_string_lossy().as_ref()]) {
+            line.push(' ');
+            line.push_str(&quote(arg));
+        }
+        let mut cmd = Command::new(powershell());
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &line]);
+        return Ok(cmd);
+    }
     let mut cmd = Command::new(exe);
     cmd.args(&args[1..]).arg(path);
     Ok(cmd)
 }
 
+/// PowerShell 7 when installed, else Windows PowerShell.
+fn powershell() -> &'static str {
+    if proc::look_path("pwsh.exe").is_some() { "pwsh.exe" } else { "powershell.exe" }
+}
+
 /// The text on the clipboard.
 pub fn read_clipboard() -> Result<String> {
+    if cfg!(windows) {
+        let script = "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Get-Clipboard -Raw";
+        let out = Command::new(powershell()).args(["-NoProfile", "-NonInteractive", "-Command", script]).output()?;
+        if !out.status.success() {
+            bail!("read clipboard: {}", String::from_utf8_lossy(&out.stderr).trim());
+        }
+        return Ok(String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"));
+    }
     for (tool, args) in [("pbpaste", &[][..]), ("wl-paste", &["--no-newline"][..]), ("xclip", &["-selection", "clipboard", "-o"][..]), ("xsel", &["--clipboard", "--output"][..])] {
         if let Some(path) = proc::look_path(tool) {
             let out = Command::new(path).args(args).output()?;

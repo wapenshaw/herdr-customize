@@ -9,9 +9,10 @@ match the `version` field in `herdr-plugin.toml`.
 - Rewritten in Rust (ratatui, crossterm, toml_edit) with the same four pages,
   keys and file formats. See [docs/go-vs-rust.md](docs/go-vs-rust.md).
 - Keys in inline tables and dotted keys can now be edited in place.
-- Removed: Windows support, importing user themes from herdr-theme-picker,
-  and the `add`, `edit`, `delete`, `import-themes` and `terminal-sync`
-  commands (themes are managed on the Themes page).
+- Linux, macOS and Windows, as before; Windows APIs through `windows-sys`.
+- Removed: importing user themes from herdr-theme-picker, and the `add`,
+  `edit`, `delete` and `import-themes` commands (themes are managed on the
+  Themes page).
 
 ## [0.1.0] - Unreleased
 

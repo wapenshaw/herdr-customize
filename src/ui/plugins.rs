@@ -785,8 +785,8 @@ fn width_of(s: &str) -> usize {
 
 /// YYYY-MM-DD HH:MM:SS in local time.
 fn date_time(t: SystemTime) -> String {
-    let tm = fsutil::local_time(t);
-    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec)
+    let t = fsutil::local_time(t);
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.year, t.month, t.day, t.hour, t.minute, t.second)
 }
 
 impl Page for PluginsPage {

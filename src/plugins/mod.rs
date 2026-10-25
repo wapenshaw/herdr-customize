@@ -186,7 +186,7 @@ pub fn logs(id: &str, limit: usize) -> Result<Vec<Log>> {
 /// Herdr's record of installed plugins, beside its socket or, failing that,
 /// beside config.toml.
 pub fn registry_path() -> PathBuf {
-    if let Some(socket) = config::env("HERDR_SOCKET_PATH") {
+    if let Some(socket) = config::env("HERDR_SOCKET_PATH").filter(|_| !cfg!(windows)) {
         let path = PathBuf::from(socket).with_file_name("plugins.json");
         if path.exists() {
             return path;

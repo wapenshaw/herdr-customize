@@ -3,6 +3,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -23,7 +24,7 @@ pub fn atomic_write(path: &Path, data: &[u8], mode: u32) -> Result<()> {
             if !meta.is_file() {
                 bail!("not a regular file: {}", path.display());
             }
-            mode = meta.permissions().mode() & 0o777;
+            mode = permissions(&meta).unwrap_or(mode);
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
@@ -31,10 +32,12 @@ pub fn atomic_write(path: &Path, data: &[u8], mode: u32) -> Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let tmp = temp_path(dir, ".herdr-customize-");
     let result = (|| -> Result<()> {
-        let mut f = OpenOptions::new().write(true).create_new(true).mode(mode).open(&tmp)?;
+        let mut f = with_mode(OpenOptions::new().write(true).create_new(true), mode).open(&tmp)?;
+        #[cfg(unix)]
         f.set_permissions(fs::Permissions::from_mode(mode))?;
         f.write_all(data)?;
         f.sync_all()?;
+        // Replaces an existing file on every platform (MoveFileEx on Windows).
         fs::rename(&tmp, &path)?;
         Ok(())
     })();
@@ -50,7 +53,7 @@ pub fn daily_backup(path: &Path, data: &[u8]) -> Result<()> {
     let mut bak = path.as_os_str().to_owned();
     bak.push(format!(".bak-{}", today()));
     let bak = PathBuf::from(bak);
-    match OpenOptions::new().write(true).create_new(true).mode(0o600).open(&bak) {
+    match with_mode(OpenOptions::new().write(true).create_new(true), 0o600).open(&bak) {
         Ok(mut f) => {
             if let Err(e) = f.write_all(data).and_then(|_| f.sync_all()) {
                 let _ = fs::remove_file(&bak);
@@ -71,9 +74,28 @@ pub fn daily_backup(path: &Path, data: &[u8]) -> Result<()> {
 /// Holds path's advisory lock until the returned file is dropped. The lock
 /// file stays on disk so every process locks the same file.
 pub fn lock(path: &Path) -> Result<File> {
-    let f = OpenOptions::new().create(true).truncate(false).read(true).write(true).mode(0o600).open(path)?;
+    let f = with_mode(OpenOptions::new().create(true).truncate(false).read(true).write(true), 0o600).open(path)?;
     f.lock()?;
     Ok(f)
+}
+
+/// Unix permission bits for new files; Windows files inherit their ACLs.
+fn with_mode(o: &mut OpenOptions, mode: u32) -> &mut OpenOptions {
+    #[cfg(unix)]
+    o.mode(mode);
+    #[cfg(windows)]
+    let _ = mode;
+    o
+}
+
+#[cfg(unix)]
+fn permissions(meta: &fs::Metadata) -> Option<u32> {
+    Some(meta.permissions().mode() & 0o777)
+}
+
+#[cfg(windows)]
+fn permissions(_: &fs::Metadata) -> Option<u32> {
+    None
 }
 
 /// A fresh path in dir that no other writer uses.
@@ -87,22 +109,56 @@ pub fn temp_path(dir: &Path, prefix: &str) -> PathBuf {
 
 /// Today's local date as YYYYMMDD.
 fn today() -> String {
-    let tm = local_time(std::time::SystemTime::now());
-    format!("{:04}{:02}{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday)
+    let t = local_time(std::time::SystemTime::now());
+    format!("{:04}{:02}{:02}", t.year, t.month, t.day)
+}
+
+/// A local calendar time.
+pub struct LocalTime {
+    pub year: i32,
+    pub month: u32,
+    pub day: u32,
+    pub hour: u32,
+    pub minute: u32,
+    pub second: u32,
+}
+
+fn unix_seconds(t: std::time::SystemTime) -> i64 {
+    t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 /// Breaks t into local calendar fields.
-pub fn local_time(t: std::time::SystemTime) -> libc::tm {
-    let secs = match t.duration_since(std::time::UNIX_EPOCH) {
-        Ok(d) => d.as_secs() as libc::time_t,
-        Err(_) => 0,
-    };
+#[cfg(unix)]
+pub fn local_time(t: std::time::SystemTime) -> LocalTime {
+    let secs = unix_seconds(t) as libc::time_t;
     // SAFETY: localtime_r only writes the tm we pass it.
-    unsafe {
+    let tm = unsafe {
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&secs, &mut tm);
         tm
-    }
+    };
+    LocalTime { year: tm.tm_year + 1900, month: tm.tm_mon as u32 + 1, day: tm.tm_mday as u32, hour: tm.tm_hour as u32, minute: tm.tm_min as u32, second: tm.tm_sec as u32 }
+}
+
+/// Breaks t into local calendar fields.
+#[cfg(windows)]
+pub fn local_time(t: std::time::SystemTime) -> LocalTime {
+    use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
+    use windows_sys::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};
+    // FILETIME counts 100 ns intervals from 1601-01-01.
+    let ticks = (unix_seconds(t) as u64 + 11_644_473_600) * 10_000_000;
+    let ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+    // SAFETY: both calls only write the SYSTEMTIME values we pass them.
+    let st = unsafe {
+        let mut utc: SYSTEMTIME = std::mem::zeroed();
+        let mut local: SYSTEMTIME = std::mem::zeroed();
+        FileTimeToSystemTime(&ft, &mut utc);
+        if SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) == 0 {
+            local = utc;
+        }
+        local
+    };
+    LocalTime { year: st.wYear as i32, month: st.wMonth as u32, day: st.wDay as u32, hour: st.wHour as u32, minute: st.wMinute as u32, second: st.wSecond as u32 }
 }
 
 #[cfg(test)]
@@ -116,8 +172,10 @@ mod tests {
         dir
     }
 
+    #[cfg(unix)]
     #[test]
     fn atomic_write_keeps_symlink_and_mode() {
+        use std::os::unix::fs::PermissionsExt;
         let dir = tempdir("link");
         let real = dir.join("real.toml");
         fs::write(&real, "a = 1\n").unwrap();

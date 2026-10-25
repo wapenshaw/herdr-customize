@@ -76,6 +76,9 @@ fn run(args: &[String]) -> Result<()> {
             plugins::run_invoke_after_close(pid, &args[2])?;
         }
         ("herdr-run", _) => std::process::exit(plugins::run_interactive(&args[1..])),
+        // Internal: writes colors into one client's console (see terminal::windows).
+        #[cfg(windows)]
+        ("terminal-sync", 2) => std::process::exit(terminal::run_helper(&args[1])),
         ("preview", 2) => print!("{}", theme::preview::render_swatch(&theme::load_look(&args[1])?.tokens, &args[1])),
         ("apply", 2) => theme::apply_theme(&args[1])?,
         ("sync" | "invoke-after-close" | "preview" | "apply", _) => bail!("wrong arguments (see herdr-customize help)"),

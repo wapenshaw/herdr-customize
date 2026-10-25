@@ -16,14 +16,14 @@ This branch is the Rust implementation; `main` holds the Go original and
 - `src/plugins/`: `herdr plugin` calls, update checks, marketplace search, and detached action runs.
 - `src/pluginconfig.rs`: typed reading and editing of any plugin's TOML/`.env` config files, with an optional `config-schema.json`.
 - `src/theme/`: palette loading, user themes, `[theme.custom]` writes, apply and sync, and the preview.
-- `src/terminal.rs`: client discovery and OSC color writes/readback.
+- `src/terminal/`: client discovery and OSC color writes/readback; `unix.rs` (ps, `/dev` TTYs, procargs) and `windows.rs` (Toolhelp, the `terminal-sync` console helper).
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: Herdr CLI wrapper, atomic writes and locks, and detached helpers.
 - `themes/`: bundled Ghostty-format palettes and `index.txt`; `preview.png` is the preview asset.
 - `herdr-plugin.toml`: plugin metadata, build command, panes, and actions. `docs/` records persistence edge cases and the language comparison.
 
 ## Build, Test, and Development Commands
 
-Use Rust 1.88 or newer (edition 2024). Interactive development requires Herdr; plugin update checks use `git`. Linux and macOS only.
+Use Rust 1.89 or newer (edition 2024); on Windows, the MSVC toolchain with the Visual Studio Build Tools. Interactive development requires Herdr; plugin update checks use `git`. Linux, macOS and Windows are all supported; Windows support is the reason this project exists, so never drop it.
 
 - `cargo build --release`: build `target/release/herdr-customize`, the binary the manifest runs.
 - `cargo test`: run all unit and UI tests.
@@ -33,11 +33,11 @@ Use Rust 1.88 or newer (edition 2024). Interactive development requires Herdr; p
 - `./target/release/herdr-customize ui keys`: open the popup on a page (`themes`, `plugins`, `keys`, `settings`).
 - `./target/release/herdr-customize preview dracula-default`: render a bundled palette preview.
 
-Check platform-sensitive changes on both Linux and macOS; native runtime checks are needed to validate terminal behavior.
+Check platform-sensitive changes for every target: `cargo clippy --target x86_64-pc-windows-msvc` and `--target x86_64-unknown-linux-gnu` type-check from macOS (`ring` needs the target's C headers, so check a copy with ureq's `tls` feature off if they are missing). Native runtime checks are needed to validate terminal behavior; Windows steps are in `docs/windows-test-plan.md`.
 
 ## Coding Style & Naming Conventions
 
-Follow `rustfmt` and clippy. `snake_case` for functions and modules, `PascalCase` for types. Errors use `anyhow` with context; a type the caller must recognize (such as `CheckError`) is a struct it can `downcast_ref`. UI state changes only in `Page::update`/`key`; side effects go through `Ctx` (`spawn`, `after`, `exec`, `save`) so pages stay testable.
+Follow `rustfmt` and clippy. Platform code uses `#[cfg(unix)]`/`#[cfg(windows)]` on items, or separate `unix.rs`/`windows.rs` modules when a whole implementation differs; Windows APIs come from `windows-sys`, Unix ones from `libc`. `snake_case` for functions and modules, `PascalCase` for types. Errors use `anyhow` with context; a type the caller must recognize (such as `CheckError`) is a struct it can `downcast_ref`. UI state changes only in `Page::update`/`key`; side effects go through `Ctx` (`spawn`, `after`, `exec`, `save`) so pages stay testable.
 
 Theme filenames use lowercase hyphenated slugs, such as `catppuccin-mocha`, without extensions. Register bundled additions in `themes/index.txt`; include foreground, background, and all 16 ANSI palette entries.
 

@@ -9,7 +9,7 @@ for the next project.
 
 ## What the port kept and what it dropped
 
-Kept: the four pages, fzf ranking with a text fallback, the key sheet,
+Kept: Linux, macOS and Windows; the four pages, fzf ranking with a text fallback, the key sheet,
 remote-only detection, `config check` gating, daily backups, atomic writes,
 locks, schema fetch per Herdr version, marketplace search, update checks,
 plugin settings with `config-schema.json`, the token editor, the Ghostty
@@ -19,13 +19,14 @@ Dropped, because they were not worth carrying:
 
 | Dropped | Why |
 | --- | --- |
-| Windows (`*_windows.go`, the console helper, AppData paths) | Herdr's Windows story is not there yet; it was ~10% of the Go code and most of its edge cases. |
 | Import from herdr-theme-picker (`legacy.go`, `import-themes`) | One-time migration; nobody needs it twice. |
 | CLI `add`, `edit`, `delete`, `terminal-sync`, picker aliases | The Themes page does all of it. |
 | Hand-written TOML splicer (690 lines) | `toml_edit` preserves formatting and can edit inline tables, which the Go version could not. |
 
-So the Rust branch does slightly *less* in one sense (no Windows) and
-slightly *more* in another (inline tables are editable).
+Windows was briefly dropped in the first cut of the port and then restored:
+supporting Windows is the reason this project exists, since plugins like
+Plugin Manager do not. Apart from the removed commands, the Rust branch does
+the same work, plus editing inline tables.
 
 ## Numbers
 
@@ -42,7 +43,8 @@ median of 15 alternating runs through a pty harness.
 | Clean release build | 6.0 s | 32.1 s | Rust: LTO + `codegen-units = 1`. |
 | Rebuild after a one-line edit | 0.7 s | ~20 s (release) | Rust dev builds are faster but still not Go-fast. |
 | Test suite (wall) | 12.6 s | 3.6 s | Both dominated by spawning the fake `herdr` script; Go's suite simply has more subprocess tests. |
-| Dependencies | 6 direct, 25 modules | 11 direct, 134 crates | Rust leans on small crates; Go's stdlib covers more. |
+| Dependencies | 6 direct, 25 modules | 12 direct, 134 crates | Rust leans on small crates; Go's stdlib covers more. |
+| Cross-compile for Windows from a Mac | `GOOS=windows go build`, nothing else | Type-check only; a build needs the Windows C headers for `ring` | See "Building for Windows" below. |
 
 The slowness that started this experiment was not the language. The Go
 popup scanned every process (`ps`) before drawing its first frame; moving
@@ -52,28 +54,32 @@ margin a person feels in a popup.
 
 ## Code size
 
+Non-blank, non-comment lines outside tests, with the legacy importer
+excluded from Go. Both sides include Windows.
+
 | Module | Go lines | Rust lines |
 | --- | --- | --- |
-| ui | 4,101 | 3,956 |
-| theme | 1,770 | 804 |
-| config | 758 | 389 |
-| pluginconfig | 545 | 393 |
+| ui | 4,101 | 3,950 |
+| theme | 1,713 | 890 |
+| config | 758 | 396 |
+| pluginconfig | 542 | 390 |
 | plugins | 522 | 397 |
-| terminal | 436 | 226 |
+| terminal | 436 | 461 |
 | keys | 232 | 252 |
 | schema | 173 | 117 |
-| **Total (non-test)** | **9,000** (~8,700 without Windows/legacy) | **6,814** |
-| Tests | 3,382 | 759 |
+| main, herdr, fsutil, proc, locks | 463 | 379 |
+| **Total** | **8,940** | **7,232** |
+| Tests | 3,744 | 817 |
 
 Line counts flatter Rust: `rustfmt.toml` allows 200-column lines and Go's
 `gofmt` style is taller. Counting non-whitespace characters instead, Go has
-189,712 and Rust 187,800, a ratio of 0.99. **The two programs are the same
-size.** Rust saved the TOML splicer and most of the Windows code, then spent
-the savings on types, ownership plumbing and explicit conversions.
+195,543 and Rust 200,420, a ratio of 1.02. **The two programs are the same
+size.** Rust saved the TOML splicer and spent the savings on types,
+ownership plumbing, explicit conversions and `unsafe` FFI blocks.
 
 The Rust test suite is smaller because the Go one tests through public
 packages under `tests/` with many fixtures, while the Rust port kept the
-behaviours that matter (57 tests) without the per-package scaffolding.
+behaviours that matter (58 tests) without the per-package scaffolding.
 That is a choice made during the port, not something Rust forced.
 
 ## How the code differs
@@ -153,11 +159,51 @@ Go's stdlib did more elsewhere: HTTP with TLS, JSON, process control and
 `regex`, which is why it has twice the direct dependencies and five times
 the transitive ones.
 
-### Platform code
+### Platform code and Windows
 
-Go uses filename build tags (`lock_unix.go`, `lock_windows.go`). Rust uses
-`#[cfg(...)]` on items or modules. Both work; Go's is easier to scan, Rust's
-keeps both sides of a function next to each other.
+Go splits platforms by filename (`lock_unix.go`, `lock_windows.go`). Rust
+uses `#[cfg(unix)]` / `#[cfg(windows)]` on items, or whole modules
+(`terminal/unix.rs`, `terminal/windows.rs`). Both work; Go's is easier to
+scan, Rust's keeps both sides of a small function next to each other.
+
+Rust's standard library covered more of the Windows work than Go's did:
+
+| Need | Go | Rust |
+| --- | --- | --- |
+| Lock a file | `LockFileEx` in `lock_windows.go`, `flock` in `lock_unix.go` | `File::lock()`, the same on every OS |
+| Replace a file atomically | `MoveFileEx` in `replace_windows.go` | `fs::rename` already does this on Windows |
+| Detached helper | `SysProcAttr.CreationFlags` | `CommandExt::creation_flags` |
+| Process list, command lines, console attach | `golang.org/x/sys/windows` | `windows-sys` |
+
+The low-level calls look alike in both. The difference is that Go's
+`x/sys/windows` wraps them in functions that return `error`, while
+`windows-sys` exposes raw C signatures: every call is `unsafe`, returns `0`
+or a null handle on failure, and needs `io::Error::last_os_error()` and a
+`Drop` guard for handles. The Rust Windows module is a little longer than
+Go's (199 lines vs 169), mostly because each `unsafe` block carries a
+comment saying why it is sound.
+
+One piece came out better in Rust: Go calls `CommandLineToArgvW` (through
+`DecomposeCommandLine`) to split a process's command line, which only runs on
+Windows. The Rust port splits it in plain Rust, so the test runs on a Mac.
+
+### Building for Windows
+
+This is the biggest practical difference for a Herdr plugin, because Herdr
+builds plugins from source on the user's machine.
+
+- **Go:** a Windows user needs only Go. From a Mac,
+  `GOOS=windows go build` produces a working `.exe` with no other setup.
+- **Rust:** a Windows user needs Rust *and* the Visual Studio Build Tools
+  (several GB) for the MSVC linker and for `ring`, the C/assembly crypto
+  library behind TLS. From a Mac, `cargo clippy --target
+  x86_64-pc-windows-msvc` type-checks everything except `ring`, but a real
+  build needs a Windows C toolchain (or `cargo-xwin`), so the Windows
+  binary was never built here. Only CI on `windows-latest` and a real
+  machine can confirm it.
+
+If Windows users matter most, this is a point for Go, or for shipping
+prebuilt Rust binaries instead of building on install.
 
 ### Tests
 
@@ -178,14 +224,16 @@ switching branches rarely rebuilds everything; Cargo keys on mtimes.
 
 ## What to take into the next project
 
-**Choose Go when** iteration speed matters more than the last few
+**Choose Go when** users build your code themselves on Windows (Go needs
+nothing else installed), iteration speed matters more than the last few
 milliseconds or megabytes, the program is mostly calling other programs and
 the network, you want the stdlib to cover HTTP/JSON/processes, or other
 people need to read and change the code without learning ownership. For this
 plugin, Go was fast enough once the startup bug was fixed.
 
-**Choose Rust when** memory or startup is a real constraint (many instances,
-small machines, something that runs on every keystroke), a library like
+**Choose Rust when** you ship prebuilt binaries or users already have a C
+toolchain, memory or startup is a real constraint (many instances, small
+machines, something that runs on every keystroke), a library like
 `toml_edit` gives you a capability the Go ecosystem lacks, or the data model
 is a closed set of states that an `enum` captures better than interfaces.
 Expect longer builds and expect the borrow checker to redesign anything that

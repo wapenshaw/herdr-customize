@@ -33,8 +33,10 @@ Herdr.
 herdr plugin install wapenshaw/herdr-customize
 ```
 
-Herdr builds the plugin with `cargo build --release` (Rust 1.88 or newer).
-Supported on Linux and macOS. The Plugins page uses `git` for update checks.
+Herdr builds the plugin with `cargo build --release` (Rust 1.89 or newer).
+Supported on Linux, macOS and Windows; on Windows, Rust needs the Visual
+Studio Build Tools (C++ workload). The Plugins page uses `git` for update
+checks.
 
 Herdr does not bind keys from plugin manifests. Add one binding to
 `config.toml` and reload; after that the Keys page can add the rest:
@@ -128,7 +130,7 @@ status colors and the full palette.
 
 The applied theme is marked `●`; user themes are marked `★`. `VISUAL` and
 `EDITOR` are respected, including arguments such as `code --wait`. Fallback
-editors are `nvim`, `nano`, then `vi`.
+editors are `nvim`, `nano`, then `vi` on Unix or Notepad on Windows.
 
 Palettes need `background`, `foreground`, and `palette` entries 0–15 as six-digit
 hex colors. New names become lowercase hyphenated slugs. User themes override
@@ -160,12 +162,13 @@ its pane colors.
   emulator's own colors. Run `herdr-customize sync` or the **Customize:
   sync terminal colors** action to re-send them.
 - **Ghostty:** to keep the colors in new windows, create
-  `~/.config/ghostty/herdr-theme` and add `config-file = herdr-theme` to your
+  `~/.config/ghostty/herdr-theme` (on Windows,
+  `%APPDATA%\ghostty\herdr-theme`) and add `config-file = herdr-theme` to your
   Ghostty config. The picker refreshes that file on every apply. It never
   creates the file.
 
-Support varies by emulator. Ghostty, iTerm2, WezTerm, kitty and Alacritty
-implement OSC color setters; nested multiplexers can swallow
+Support varies by emulator. Ghostty, iTerm2, WezTerm, kitty, Alacritty, and
+Windows Terminal implement OSC color setters; nested multiplexers can swallow
 them.
 
 ### Using `herdr --remote` from another machine
@@ -177,6 +180,8 @@ there:
 cargo install --git https://github.com/wapenshaw/herdr-customize --branch rust-prototype
 herdr-customize ui themes
 ```
+
+On Windows, run `herdr-customize.exe ui themes` from PowerShell or Windows Terminal.
 
 Run it in a terminal **outside** Herdr. A Herdr pane runs on the server, so a
 picker started there changes the server's config. The bundled palettes live in
@@ -318,7 +323,8 @@ without network the bundled 0.9.5 reference is used.
 ## Configuration and state
 
 Config lookup matches Herdr: `HERDR_CONFIG_PATH`, then
-`$XDG_CONFIG_HOME/herdr/config.toml`, then `~/.config/herdr/config.toml`. A missing config is created.
+`$XDG_CONFIG_HOME/herdr/config.toml`, then `%APPDATA%\herdr\config.toml` on
+Windows or `~/.config/herdr/config.toml` elsewhere. A missing config is created.
 
 Edits change only the lines they touch, so comments, ordering and formatting
 survive. Before writing, the new file is checked with `herdr config check`; a
@@ -336,7 +342,7 @@ save.
 
 `HERDR_PLUGIN_STATE_DIR` sets the state directory. Otherwise state lives in
 `$XDG_STATE_HOME/herdr/plugins/herdr-customize` (`~/.local/state/...` by
-default), so
+default, `%LOCALAPPDATA%\herdr\plugins\herdr-customize` on Windows), so
 standalone runs and the installed plugin share user themes and the `applied`
 marker.
 
@@ -369,14 +375,16 @@ cargo build --release
 - `src/pluginconfig.rs`: typed reading and editing of plugin TOML/`.env` files.
 - `src/theme/`: palettes, user themes, `[theme.custom]` writes, apply, sync and
   the preview.
-- `src/terminal.rs`: client discovery and OSC color writes.
+- `src/terminal/`: client discovery and OSC color writes; `unix.rs` writes
+  the client's TTY, `windows.rs` runs a helper that attaches to its console.
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: the Herdr CLI, atomic writes,
   locks, and detached helpers.
 
 Tests must not recolor live terminals, reload real Herdr sessions, or touch the
 real clipboard: the UI tests point every path into a temporary sandbox and use
-a scripted `herdr`. Emulator and SSH behavior needs native checks on Linux and
-macOS.
+a scripted `herdr` (a shell script, or a batch file on Windows). Emulator and
+SSH behavior needs native checks on each OS; Windows steps are in
+[the Windows test plan](docs/windows-test-plan.md).
 
 ## Credits
 

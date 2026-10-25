@@ -111,12 +111,13 @@ fn sync_terminal_colors(pal: &Palette, palette_path: &Path, client_pid: &str) ->
     let mut errors: Vec<String> = Vec::new();
     // Ghostty only loads this fragment if the user includes it, so an
     // existing file is the opt-in. Never create it.
-    if let Some(home) = env("HOME") {
-        let fragment = Path::new(&home).join(".config/ghostty/herdr-theme");
-        if fragment.exists()
-            && let Err(e) = fs::read(palette_path).map_err(anyhow::Error::from).and_then(|data| fsutil::atomic_write(&fragment, &data, 0o644))
-        {
-            errors.push(format!("Ghostty theme: {e:#}"));
+    if let Some(home) = config::home() {
+        for fragment in [home.join(".config").join("ghostty").join("herdr-theme"), home.join("AppData").join("Roaming").join("ghostty").join("herdr-theme")] {
+            if fragment.exists()
+                && let Err(e) = fs::read(palette_path).map_err(anyhow::Error::from).and_then(|data| fsutil::atomic_write(&fragment, &data, 0o644))
+            {
+                errors.push(format!("Ghostty theme: {e:#}"));
+            }
         }
     }
     let clients = terminal::active_clients(client_pid)?;

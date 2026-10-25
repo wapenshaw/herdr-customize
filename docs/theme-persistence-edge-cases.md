@@ -45,8 +45,8 @@ No background process exists. Nothing runs at server startup or on reconnect.
 | Remote bridge | `herdr remote-client-bridge --idle-timeout-v1` (under `sshd`, no TTY) | bridge: never recolored; counts as a remote attachment |
 | Server / CLI | `herdr server`, `herdr status`, `herdr plugin action invoke …` | ignored |
 
-Arguments come from `kern.procargs2` on macOS and `/proc/<pid>/cmdline` on
-Linux. Unknown arguments are rejected rather
+Arguments come from `kern.procargs2` on macOS, `/proc/<pid>/cmdline` on Linux,
+and the process command line on Windows. Unknown arguments are rejected rather
 than guessed.
 
 ## Terminal writes
@@ -54,6 +54,7 @@ than guessed.
 | Platform | Write path |
 | --- | --- |
 | macOS / Linux | Revalidate PID and TTY, then write the `/dev/<tty>` character device. Permission errors (another user's terminal) are skipped. |
+| Windows | A short-lived helper (`terminal-sync <pid>`) attaches to the exact client console and writes `CONOUT$` with VT processing enabled, then restores the console mode. |
 
 The picker never prints color setters to its own pane. Writes can interleave
 with a client's frame output; a native check per emulator is still needed.
@@ -72,9 +73,11 @@ with a client's frame output; a native check per emulator is still needed.
 - New block, token replacement with layers kept and repeated writes stable,
   layers without a base block, inline theme tables, and the OSC payload
   (`src/theme/apply.rs`).
-- Interactive command classification, the remote-only popup decision, and
-  macOS argument parsing (`src/terminal.rs`).
+- Interactive command classification (including `herdr.exe` paths), the
+  remote-only popup decision, and Windows command-line splitting
+  (`src/terminal/mod.rs`); macOS argument parsing (`src/terminal/unix.rs`).
 - Additions placed after trailing comments (`src/config.rs`).
 
 Native checks still needed per OS: OSC setters and readback in each emulator,
 and a real `--remote` round trip.
+Windows steps are listed in [the Windows test plan](windows-test-plan.md).

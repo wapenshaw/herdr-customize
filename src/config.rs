@@ -19,18 +19,31 @@ pub type Value = toml::Value;
 pub type Field = (String, Value);
 
 /// The location of Herdr's config.toml, with Herdr's precedence:
-/// HERDR_CONFIG_PATH, XDG_CONFIG_HOME, then ~/.config.
+/// HERDR_CONFIG_PATH, XDG_CONFIG_HOME, %APPDATA% on Windows, then ~/.config.
 pub fn path() -> PathBuf {
     if let Some(custom) = env("HERDR_CONFIG_PATH") {
         return custom.into();
     }
     if let Some(xdg) = env("XDG_CONFIG_HOME") {
-        return Path::new(&xdg).join("herdr/config.toml");
+        return Path::new(&xdg).join("herdr").join("config.toml");
     }
-    match env("HOME") {
-        Some(home) => Path::new(&home).join(".config/herdr/config.toml"),
+    if cfg!(windows) {
+        if let Some(app_data) = env("APPDATA") {
+            return Path::new(&app_data).join("herdr").join("config.toml");
+        }
+        if let Some(profile) = env("USERPROFILE") {
+            return Path::new(&profile).join("AppData").join("Roaming").join("herdr").join("config.toml");
+        }
+    }
+    match home() {
+        Some(home) => home.join(".config").join("herdr").join("config.toml"),
         None => "config.toml".into(),
     }
+}
+
+/// The user's home directory: HOME, or USERPROFILE on Windows.
+pub fn home() -> Option<PathBuf> {
+    env("HOME").or_else(|| if cfg!(windows) { env("USERPROFILE") } else { None }).map(PathBuf::from)
 }
 
 pub fn env(name: &str) -> Option<String> {

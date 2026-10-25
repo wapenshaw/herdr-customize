@@ -12,7 +12,10 @@ use crate::config::Value;
 /// UI tests share the process environment, so they run one at a time.
 static LOCK: Mutex<()> = Mutex::new(());
 
-const FAKE_HERDR: &str = r#"#!/bin/sh
+#[cfg(unix)]
+const FAKE_HERDR: (&str, &str) = (
+    "herdr",
+    r#"#!/bin/sh
 dir=$(dirname "$0")
 echo "$*" >> "$dir/herdr.log"
 case "$1 $2" in
@@ -24,7 +27,24 @@ case "$1 $2" in
   "plugin log") echo '{"result":{"logs":[]}}' ;;
   *) echo '{"result":{}}' ;;
 esac
-"#;
+"#,
+);
+
+#[cfg(windows)]
+const FAKE_HERDR: (&str, &str) = (
+    "herdr.cmd",
+    r#"@echo off
+set "dir=%~dp0"
+>>"%dir%herdr.log" echo %*
+if "%~1"=="--version" (echo herdr 0.9.5& exit /b 0)
+if "%~1 %~2"=="config check" exit /b 0
+if "%~1 %~2"=="server reload-config" exit /b 0
+if "%~1 %~2"=="plugin list" (type "%dir%plugins.json"& exit /b 0)
+if "%~1 %~2"=="plugin config-dir" (echo %dir%pc\%~3& exit /b 0)
+if "%~1 %~2"=="plugin log" (echo {"result":{"logs":[]}}& exit /b 0)
+echo {"result":{}}
+"#,
+);
 
 const PLUGINS: &str = r#"{"result":{"plugins":[{"plugin_id":"demo","name":"Demo","version":"1.0.0","description":"A demo plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"local"},"actions":[{"id":"hello","title":"Say hello"}]}]}}"#;
 
@@ -34,8 +54,9 @@ fn sandbox() -> &'static Path {
         let dir = std::env::temp_dir().join(format!("herdr-customize-ui-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("state")).unwrap();
-        let herdr = dir.join("herdr");
-        fs::write(&herdr, FAKE_HERDR).unwrap();
+        let herdr = dir.join(FAKE_HERDR.0);
+        fs::write(&herdr, FAKE_HERDR.1).unwrap();
+        #[cfg(unix)]
         fs::set_permissions(&herdr, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
         let set = |k: &str, v: &Path| unsafe { std::env::set_var(k, v) };
         set("HERDR_BIN_PATH", &herdr);
