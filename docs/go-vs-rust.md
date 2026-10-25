@@ -1,7 +1,7 @@
 # Go vs Rust: the same plugin written twice
 
-herdr-customize was written in Go first (branch `main`) and then ported to
-Rust (branch `rust-prototype`). The port kept the four pages, every key, the
+herdr-customize was written in Go first (now on the `go` branch) and then
+ported to Rust (`main`). The port kept the four pages, every key, the
 file formats and the tests' intent, so the two branches are a controlled
 comparison: same program, same author, same month. This page records what
 was measured and what the two languages felt like, to help choose a language
@@ -48,7 +48,7 @@ median of 15 alternating runs through a pty harness.
 
 The slowness that started this experiment was not the language. The Go
 popup scanned every process (`ps`) before drawing its first frame; moving
-that scan beside the first frame (commit `a3b5884` on `main`) fixed most of
+that scan beside the first frame (commit `a3b5884`, the last on the `go` branch) fixed most of
 it. After that fix Rust is still faster, but by ~8 ms and 11 MB, not by a
 margin a person feels in a popup.
 

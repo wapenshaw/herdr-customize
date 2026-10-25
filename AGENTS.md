@@ -2,8 +2,8 @@
 
 ## Project Structure & Module Organization
 
-This branch is the Rust implementation; `main` holds the Go original and
-`docs/go-vs-rust.md` compares them.
+The plugin is written in Rust. The first, Go implementation is kept on the
+`go` branch, and `docs/go-vs-rust.md` compares the two.
 
 - `src/main.rs`: CLI entrypoint and command routing.
 - `src/ui/`: the ratatui popup. `mod.rs` holds the event loop, `Msg`, `Ctx`
@@ -18,14 +18,16 @@ This branch is the Rust implementation; `main` holds the Go original and
 - `src/theme/`: palette loading, user themes, `[theme.custom]` writes, apply and sync, and the preview.
 - `src/terminal/`: client discovery and OSC color writes/readback; `unix.rs` (ps, `/dev` TTYs, procargs) and `windows.rs` (Toolhelp, the `terminal-sync` console helper).
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: Herdr CLI wrapper, atomic writes and locks, and detached helpers.
-- `themes/`: bundled Ghostty-format palettes and `index.txt`; `preview.png` is the preview asset.
+- `themes/`: bundled Ghostty-format palettes and `index.txt`.
+- `scripts/fetch-or-build.{sh,ps1}`: the manifest's build step; downloads the release binary for this version or falls back to `cargo build`.
+- `docs/screenshots/`: README images, rendered from a sandboxed run of the popup.
 - `herdr-plugin.toml`: plugin metadata, build command, panes, and actions. `docs/` records persistence edge cases and the language comparison.
 
 ## Build, Test, and Development Commands
 
 Use Rust 1.89 or newer (edition 2024); on Windows, the MSVC toolchain with the Visual Studio Build Tools. Interactive development requires Herdr; plugin update checks use `git`. Linux, macOS and Windows are all supported; Windows support is the reason this project exists, so never drop it.
 
-- `cargo build --release`: build `target/release/herdr-customize`, the binary the manifest runs.
+- `cargo build --release`: build `target/release/herdr-customize`, the binary the manifest runs. `herdr plugin link` skips the build step, so build before linking.
 - `cargo test`: run all unit and UI tests.
 - `cargo clippy --all-targets`: static checks; keep it warning-free.
 - `cargo fmt`: format (see `rustfmt.toml`).
@@ -46,6 +48,10 @@ Theme filenames use lowercase hyphenated slugs, such as `catppuccin-mocha`, with
 Unit tests sit in `#[cfg(test)] mod tests` at the bottom of each module. UI tests live in `src/ui/tests.rs` and drive pages through its `Driver` (keys in, jobs run, screen out as text). No numerical coverage threshold is configured.
 
 Use temporary directories and isolate state and config paths. The UI driver points `HERDR_BIN_PATH` at a scripted fake `herdr` that logs its calls, sets `HERDR_CONFIG_PATH`/`HERDR_PLUGIN_STATE_DIR` into a sandbox, points `HERDR_CUSTOMIZE_GIT_BASE`, `_RAW_BASE` and `_API_BASE` at dead local endpoints, and sets `VISUAL`/`EDITOR` to `false`. Tests that change the environment hold the driver's lock. Tests must avoid recoloring live terminals, reloading real Herdr sessions, installing or changing real plugins, reaching GitHub, or modifying the clipboard. Add regression coverage for changed behavior.
+
+## Releases
+
+Release binaries come from `.github/workflows/release.yml` on a `vX.Y.Z` tag that matches `version` in `Cargo.toml` (keep `herdr-plugin.toml` in step). `scripts/fetch-or-build.*` download the asset for the checkout's version and verify it against `SHA256SUMS`; asset names are `herdr-customize-<target>[.exe]`, so keep the scripts and the workflow matrix in sync. Test the scripts with `HERDR_CUSTOMIZE_RELEASE_BASE` pointing at a local server and a fake `cargo` on `PATH`.
 
 ## Commit & Pull Request Guidelines
 

@@ -12,13 +12,29 @@ Terminal, with the Mac as the Herdr server.
 ```powershell
 git clone https://github.com/wapenshaw/herdr-customize.git
 cd herdr-customize
-cargo --version     # Rust 1.89 or newer, MSVC toolchain
 git --version       # for plugin update checks
-cargo build --release --locked
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1
 ```
 
-Rust on Windows needs the Visual Studio Build Tools (the "Desktop development
-with C++" workload) for the linker and for `ring`, the TLS library.
+The script downloads the release binary for the version in `Cargo.toml` to
+`target\release\herdr-customize.exe`. Without a release it builds with cargo,
+which needs Rust 1.89 or newer and the Visual Studio Build Tools (the
+"Desktop development with C++" workload). Step 1 needs that toolchain too.
+
+### 0a. Install through Herdr
+
+With a local Herdr server on Windows (see step 6):
+
+```powershell
+herdr plugin install wapenshaw/herdr-customize
+```
+
+| Check | Expected |
+| --- | --- |
+| Install output | `installed the v… release binary (herdr-customize-x86_64-pc-windows-msvc.exe)`, no cargo build. |
+| Without network | The script says it is building from source and runs cargo (or explains how to install Rust). |
+| Binary | Runs on a machine without the Visual C++ redistributable (the CRT is linked statically). |
+| `herdr plugin update herdr-customize` from the popup's own Plugins page | Succeeds while the popup is open; the old binary is left as `herdr-customize.exe.old` and removed on the next update. |
 
 Run every command below from the checkout so the binary finds `themes\`.
 Note your config path before starting: `HERDR_CONFIG_PATH` if set, else
