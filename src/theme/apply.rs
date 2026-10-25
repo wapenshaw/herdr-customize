@@ -8,7 +8,7 @@ use std::path::Path;
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{Item, Table};
 
-use super::{Palette, TOKEN_ORDER, Tokens, applied_file, parse_palette_file, resolve_palette, state_dir};
+use super::{Palette, TOKENS, Tokens, applied_file, parse_palette_file, resolve_palette, state_dir};
 use crate::config::{self, Doc, env};
 use crate::{fsutil, herdr, terminal};
 
@@ -77,7 +77,7 @@ fn replace_custom_tokens(doc: &mut Doc, tokens: &Tokens) -> Result<()> {
     for key in stale {
         custom.remove(&key);
     }
-    for token in TOKEN_ORDER {
+    for (token, ..) in TOKENS {
         let mut value = toml_edit::Value::from(tokens[token].as_str());
         value.decor_mut().clear();
         custom.insert(token, Item::Value(value));
