@@ -1,13 +1,15 @@
 //! Edits Herdr's config.toml in place. toml_edit keeps comments, ordering,
 //! spacing and line endings of everything an edit does not touch.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 use anyhow::{Context, Result, anyhow, bail};
+use regex::Regex;
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, TableLike};
 
 use crate::fsutil;
@@ -467,28 +469,38 @@ impl Store {
         if after.issues.is_empty() {
             return Ok((Vec::new(), after));
         }
-        let known: Vec<String> = if missing { Vec::new() } else { herdr::check_config(&self.path).issues.iter().map(|i| normalize_issue(i)).collect() };
-        let fresh = after.issues.iter().filter(|i| !known.contains(&normalize_issue(i))).map(|i| i.trim().to_string()).collect();
-        Ok((fresh, after))
+        let before = if missing { Vec::new() } else { herdr::check_config(&self.path).issues };
+        Ok((fresh_issues(&before, &after.issues), after))
     }
 }
 
-/// Ignores line and column numbers, which an edit can shift.
-fn normalize_issue(issue: &str) -> String {
-    let mut out = String::new();
-    let mut digits = false;
-    for c in issue.trim().chars() {
-        if c.is_ascii_digit() {
-            if !digits {
-                out.push('#');
-            }
-            digits = true;
-        } else {
-            digits = false;
-            out.push(c);
+/// The issues in after that before lacks, counted, so a second copy of an
+/// old issue is new.
+fn fresh_issues(before: &[String], after: &[String]) -> Vec<String> {
+    let mut known: HashMap<String, usize> = HashMap::new();
+    for issue in before {
+        *known.entry(normalize_issue(issue)).or_default() += 1;
+    }
+    let mut fresh = Vec::new();
+    for issue in after {
+        match known.get_mut(&normalize_issue(issue)) {
+            Some(n) if *n > 0 => *n -= 1,
+            _ => fresh.push(issue.trim().to_string()),
         }
     }
-    out
+    fresh
+}
+
+static LINE_COL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(line|column|col)\s+\d+").unwrap());
+static GUTTER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+\s*\|").unwrap());
+static SPACES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
+
+/// Ignores where an issue is, which an edit can shift: "line 2, column 17",
+/// the source line's number in the gutter, and the caret's indent.
+fn normalize_issue(issue: &str) -> String {
+    let issue = LINE_COL.replace_all(issue.trim(), "$1 #");
+    let issue = GUTTER.replace(&issue, "# |");
+    SPACES.replace_all(&issue, " ").into_owned()
 }
 
 #[cfg(test)]
@@ -596,6 +608,19 @@ mod tests {
     #[test]
     fn normalize_ignores_positions() {
         assert_eq!(normalize_issue(" line 12, col 4: bad "), normalize_issue("line 3, col 40: bad"));
+        assert_eq!(normalize_issue("config parse error: TOML parse error at line 2, column 17"), normalize_issue("config parse error: TOML parse error at line 9, column 3"));
+        assert_eq!(normalize_issue("2 | sidebar_width = \"x\""), normalize_issue("14 | sidebar_width = \"x\""));
+        assert_eq!(normalize_issue("|                 ^^^"), normalize_issue("|   ^^^"));
+    }
+
+    // A changed value inside an issue, or one more copy of an old issue, is
+    // new and must still block the save.
+    #[test]
+    fn fresh_issues_keep_values_and_counts() {
+        let before = ["keys.zoom: prefix+1 is taken".to_string()];
+        assert!(fresh_issues(&before, &["keys.zoom: prefix+1 is taken".into()]).is_empty());
+        assert_eq!(fresh_issues(&before, &["keys.zoom: prefix+2 is taken".into()]), ["keys.zoom: prefix+2 is taken"]);
+        assert_eq!(fresh_issues(&before, &[before[0].clone(), before[0].clone()]), [before[0].clone()]);
     }
 
     #[test]
