@@ -205,19 +205,15 @@ static OVERRIDE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#\s*hpi
 const MAX_PALETTE_BYTES: usize = 1 << 20;
 
 pub fn parse_palette_file(path: &Path) -> Result<Palette> {
-    let data = fs::read(path)?;
-    if data.len() > MAX_PALETTE_BYTES {
+    if fs::metadata(path)?.len() > MAX_PALETTE_BYTES as u64 {
         bail!("palette exceeds {MAX_PALETTE_BYTES} bytes");
     }
-    parse_palette(&String::from_utf8_lossy(&data))
+    parse_palette(&String::from_utf8_lossy(&fs::read(path)?))
 }
 
 /// Parses a Ghostty palette. Background, foreground and all 16 palette
 /// entries are required.
 pub fn parse_palette(content: &str) -> Result<Palette> {
-    if content.len() > MAX_PALETTE_BYTES {
-        bail!("palette exceeds {MAX_PALETTE_BYTES} bytes");
-    }
     let mut pal = Palette::default();
     let mut colors: [Option<String>; 16] = Default::default();
     for (n, line) in content.trim_start_matches('\u{feff}').lines().enumerate() {
@@ -460,8 +456,12 @@ pub fn themes() -> Result<(Vec<Item>, Vec<String>)> {
     Ok((items, warnings))
 }
 
-/// Checks a Ghostty palette before it is named and saved.
+/// Checks a Ghostty palette before it is saved, so a stored theme always
+/// passes parse_palette_file's size limit.
 pub fn validate_theme_body(body: &str) -> Result<()> {
+    if body.len() > MAX_PALETTE_BYTES {
+        bail!("palette exceeds {MAX_PALETTE_BYTES} bytes");
+    }
     parse_palette(body).map(|_| ()).context("invalid palette")
 }
 
@@ -517,7 +517,7 @@ pub fn user_theme_body(slug: &str) -> Result<String> {
 /// Replaces a user theme's palette with an edited body.
 pub fn commit_user_theme(slug: &str, body: &str) -> Result<()> {
     let dest = user_theme_path(slug)?;
-    parse_palette(body)?;
+    validate_theme_body(body)?;
     fsutil::atomic_write(&dest, body.as_bytes(), 0o644)
 }
 
@@ -603,6 +603,16 @@ pub(crate) mod tests {
     pub const BODY: &str = "background = #1e1e2e\nforeground = #CDD6F4\nselection-background = #585b70 # sel\n\
 palette = 0=#45475a\npalette = 1=#f38ba8\npalette = 2=#a6e3a1\npalette = 3=#f9e2af\npalette = 4=#89b4fa\npalette = 5=#f5c2e7\npalette = 6=#94e2d5\npalette = 7=#bac2de\n\
 palette = 8=#585b70\npalette = 9=#f38ba8\npalette = 10=#a6e3a1\npalette = 11=#f9e2af\npalette = 12=#89b4fa\npalette = 13=#f5c2e7\npalette = 14=#94e2d5\npalette = 15=#a6adc8\n";
+
+    #[test]
+    fn oversized_palettes_are_refused() {
+        let big = format!("{BODY}{}", "#".repeat(MAX_PALETTE_BYTES));
+        assert!(validate_theme_body(&big).is_err());
+        let path = std::env::temp_dir().join(format!("hc-big-palette-{}", std::process::id()));
+        fs::write(&path, &big).unwrap();
+        assert!(parse_palette_file(&path).unwrap_err().to_string().contains("exceeds"));
+        let _ = fs::remove_file(path);
+    }
 
     #[test]
     fn palette_maps_to_tokens() {
