@@ -741,7 +741,7 @@ impl PluginsPage {
             let l = &self.logs[i];
             let status = pad(&l.status, 9);
             let status = if l.status == "succeeded" { ok(status) } else { error(status) };
-            row(Line::from(vec![dim(date_time(l.started_at())), raw(" "), status, raw(format!(" {}", l.trigger()))]), selected)
+            row(Line::from(vec![dim(fsutil::format_local(l.started_at(), "%Y-%m-%d %H:%M:%S")), raw(" "), status, raw(format!(" {}", l.trigger()))]), selected)
         });
         lines.extend(fit(body, width, list_height));
         lines.push(Line::default());
@@ -771,12 +771,6 @@ impl PluginsPage {
         tail("stderr", &l.stderr, error);
         lines
     }
-}
-
-/// YYYY-MM-DD HH:MM:SS in local time.
-fn date_time(t: SystemTime) -> String {
-    let t = fsutil::local_time(t);
-    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.year, t.month, t.day, t.hour, t.minute, t.second)
 }
 
 impl Page for PluginsPage {
