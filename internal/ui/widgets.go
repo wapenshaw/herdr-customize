@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 
@@ -115,14 +116,17 @@ func (l *list) setRows(labels []string) {
 func (l *list) refilter() {
 	terms := strings.Fields(strings.ToLower(l.filter.Value()))
 	l.matches = l.matches[:0]
+	ranks := make(map[int]int)
 	for i, label := range l.labels {
 		if len(terms) > 0 && l.isHeader(i) {
 			continue
 		}
-		if matchesAll(strings.ToLower(label), terms) {
+		if rank := matchRank(strings.ToLower(label), terms); rank >= 0 {
 			l.matches = append(l.matches, i)
+			ranks[i] = rank
 		}
 	}
+	slices.SortStableFunc(l.matches, func(a, b int) int { return ranks[a] - ranks[b] })
 	l.cursor = min(l.cursor, max(len(l.matches)-1, 0))
 	l.skipHeaders(1)
 }
@@ -143,17 +147,33 @@ func (l *list) skipHeaders(dir int) {
 	}
 }
 
-// matchesAll reports whether every term appears in s as a subsequence.
-func matchesAll(s string, terms []string) bool {
+// matchRank reports how well s matches every term: 0 when each term is in
+// s's first word (the row's name), 1 when each is somewhere in s, 2 when
+// some term only matches the name loosely, as a subsequence. -1 is no match.
+func matchRank(s string, terms []string) int {
+	name, _, _ := strings.Cut(s, " ")
+	rank := 0
 	for _, term := range terms {
-		rest := s
-		for _, r := range term {
-			i := strings.IndexRune(rest, r)
-			if i < 0 {
-				return false
-			}
-			rest = rest[i+len(string(r)):]
+		switch {
+		case strings.Contains(name, term):
+		case strings.Contains(s, term):
+			rank = max(rank, 1)
+		case subsequence(name, term):
+			rank = 2
+		default:
+			return -1
 		}
+	}
+	return rank
+}
+
+func subsequence(s, term string) bool {
+	for _, r := range term {
+		i := strings.IndexRune(s, r)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(string(r)):]
 	}
 	return true
 }
