@@ -128,12 +128,8 @@ impl KeysPage {
         for k in sh.reference.section("keys").map(|s| s.keys.as_slice()).unwrap_or_default() {
             let current = config::lookup(&table, &k.path()).cloned();
             let changed = current.is_some();
-            let mut values = keys::values(current.or_else(|| k.default_value()).as_ref());
             let action = k.key.trim_start_matches("keys.").to_string();
-            if action.starts_with("indexed.") {
-                // Indexed jumps take a modifier combo for 1..9.
-                values = values.into_iter().map(|v| format!("{v}+1..9")).collect();
-            }
+            let values = indexed(&action, keys::values(current.or_else(|| k.default_value()).as_ref()));
             let mut r = KeyRow::new(Kind::Builtin { key: k.clone(), action: action.clone(), changed }, format!("{action} {}", values.join(" ")));
             (r.values, r.owner) = (values, k.key.clone());
             rows.push(r);
@@ -238,22 +234,24 @@ impl KeysPage {
         }
     }
 
+    /// The other owners bound to any of me's keys, ignoring except's own
+    /// current binding.
+    fn clashes(&self, except: Option<&str>, me: Binding) -> Vec<String> {
+        let mut all: Vec<Binding> = self.bindings().into_iter().filter(|b| Some(b.owner.as_str()) != except).collect();
+        all.push(me.clone());
+        keys::clashes(&keys::conflicts(&all), &me)
+    }
+
     /// Problems and clashes for the value being typed.
     fn edit_hints(&self) -> Vec<String> {
         let Some(r) = &self.editing else { return Vec::new() };
         let Kind::Builtin { key, action, .. } = &r.kind else { return Vec::new() };
-        let mut values = split_values(&self.input.value());
-        if action.starts_with("indexed.") {
-            values = values.into_iter().map(|v| format!("{v}+1..9")).collect();
-        }
+        let values = indexed(action, split_values(&self.input.value()));
         let mut hints = Vec::new();
         if key.kind == schema::KEYBINDING {
             hints.extend(values.iter().flat_map(|v| keys::problems(action, v)));
         }
-        let mut all: Vec<Binding> = self.bindings().into_iter().filter(|b| b.owner != r.owner).collect();
-        let me = Binding { owner: r.owner.clone(), keys: values.clone(), navigate: keys::navigate(action) };
-        all.push(me.clone());
-        let clashes = keys::clashes(&keys::conflicts(&all), &me);
+        let clashes = self.clashes(Some(&r.owner), Binding { owner: r.owner.clone(), keys: values.clone(), navigate: keys::navigate(action) });
         if !clashes.is_empty() {
             hints.push(format!("also used by {}", clashes.join(", ")));
         }
@@ -393,10 +391,7 @@ impl KeysPage {
         if !key.is_empty() {
             lines.extend(keys::problems("command", &key).into_iter().map(|p| line(warn(p))));
             let mine = f.index.map(|i| self.command_owner(i));
-            let mut all: Vec<Binding> = self.bindings().into_iter().filter(|b| Some(&b.owner) != mine.as_ref()).collect();
-            let me = Binding { owner: "editing".into(), keys: vec![key], navigate: false };
-            all.push(me.clone());
-            let clashes = keys::clashes(&keys::conflicts(&all), &me);
+            let clashes = self.clashes(mine.as_deref(), Binding { owner: "editing".into(), keys: vec![key], navigate: false });
             if !clashes.is_empty() {
                 lines.push(line(warn(format!("also used by {}", clashes.join(", ")))));
             }
@@ -409,6 +404,11 @@ impl KeysPage {
 /// Herdr resolves too.
 fn installed_suffix(installed: &HashSet<String>, command: &str) -> bool {
     !command.contains('.') && installed.iter().filter(|q| q.ends_with(&format!(".{command}"))).count() == 1
+}
+
+/// Indexed jumps take a modifier combo for 1..9, shown on each value.
+fn indexed(action: &str, values: Vec<String>) -> Vec<String> {
+    if action.starts_with("indexed.") { values.into_iter().map(|v| format!("{v}+1..9")).collect() } else { values }
 }
 
 fn split_values(text: &str) -> Vec<String> {
