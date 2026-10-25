@@ -22,81 +22,50 @@ use crate::{fsutil, proc};
 /// The Herdr plugin id from herdr-plugin.toml.
 pub const PLUGIN_ID: &str = "herdr-customize";
 
-/// The ordering of Herdr theme tokens written to config.toml.
-pub const TOKEN_ORDER: [&str; 19] = [
-    "panel_bg",
-    "sidebar_bg",
-    "active_row_bg",
-    "selection_bg",
-    "text",
-    "surface0",
-    "surface1",
-    "overlay0",
-    "overlay1",
-    "subtext0",
-    "accent",
-    "blue",
-    "mauve",
-    "green",
-    "yellow",
-    "red",
-    "teal",
-    "peach",
-    "surface_dim",
+/// Herdr's theme tokens in the order written to config.toml, each with where
+/// it comes from in a Ghostty palette and where Herdr shows it.
+pub const TOKENS: [(&str, &str, &str); 19] = [
+    ("panel_bg", "background", "pane background"),
+    ("sidebar_bg", "background −15%", "sidebar background"),
+    ("active_row_bg", "palette 0", "selected sidebar row"),
+    ("selection_bg", "selection-bg", "text selection bg"),
+    ("text", "foreground", "primary text"),
+    ("surface0", "palette 0", "sidebar row bg"),
+    ("surface1", "palette 8", "inactive pane bg"),
+    ("overlay0", "palette 8", "dim text"),
+    ("overlay1", "palette 7", "bright text"),
+    ("subtext0", "palette 7", "secondary text"),
+    ("accent", "palette 4", "active pane border/selector"),
+    ("blue", "palette 4", "links/info"),
+    ("mauve", "palette 5", "accent"),
+    ("green", "palette 2", "success ✓"),
+    ("yellow", "palette 3", "warning"),
+    ("red", "palette 1", "error ✗"),
+    ("teal", "palette 6", "now-playing"),
+    ("peach", "palette 9", "accent"),
+    ("surface_dim", "background −8%", "dividers"),
 ];
 
 /// Herdr theme tokens by name.
 pub type Tokens = HashMap<&'static str, String>;
 
+/// The TOKENS row for key.
+fn token(key: &str) -> Option<&'static (&'static str, &'static str, &'static str)> {
+    TOKENS.iter().find(|t| t.0 == key)
+}
+
 fn token_name(key: &str) -> Option<&'static str> {
-    TOKEN_ORDER.iter().copied().find(|t| *t == key)
+    token(key).map(|t| t.0)
 }
 
 /// Where a token comes from in a Ghostty palette.
-pub fn token_origin(token: &str) -> &'static str {
-    match token {
-        "panel_bg" => "background",
-        "sidebar_bg" => "background −15%",
-        "active_row_bg" | "surface0" => "palette 0",
-        "selection_bg" => "selection-bg",
-        "text" => "foreground",
-        "surface1" | "overlay0" => "palette 8",
-        "overlay1" | "subtext0" => "palette 7",
-        "accent" | "blue" => "palette 4",
-        "mauve" => "palette 5",
-        "green" => "palette 2",
-        "yellow" => "palette 3",
-        "red" => "palette 1",
-        "teal" => "palette 6",
-        "peach" => "palette 9",
-        "surface_dim" => "background −8%",
-        _ => "?",
-    }
+pub fn token_origin(key: &str) -> &'static str {
+    token(key).map_or("?", |t| t.1)
 }
 
 /// Where the token appears in Herdr's UI.
-pub fn token_role(token: &str) -> &'static str {
-    match token {
-        "panel_bg" => "pane background",
-        "sidebar_bg" => "sidebar background",
-        "active_row_bg" => "selected sidebar row",
-        "selection_bg" => "text selection bg",
-        "text" => "primary text",
-        "surface0" => "sidebar row bg",
-        "surface1" => "inactive pane bg",
-        "overlay0" => "dim text",
-        "overlay1" => "bright text",
-        "subtext0" => "secondary text",
-        "accent" => "active pane border/selector",
-        "blue" => "links/info",
-        "mauve" | "peach" => "accent",
-        "green" => "success ✓",
-        "yellow" => "warning",
-        "red" => "error ✗",
-        "teal" => "now-playing",
-        "surface_dim" => "dividers",
-        _ => "",
-    }
+pub fn token_role(key: &str) -> &'static str {
+    token(key).map_or("", |t| t.2)
 }
 
 /* ---------------------------------------------------------------- paths */
@@ -576,9 +545,9 @@ pub struct TokenRow {
 pub fn token_rows(body: &str) -> Result<(Vec<TokenRow>, Tokens)> {
     let pal = parse_palette(body)?;
     let tokens = pal.tokens();
-    let rows = TOKEN_ORDER
+    let rows = TOKENS
         .iter()
-        .map(|&token| {
+        .map(|&(token, ..)| {
             let overridden = pal.overrides.contains_key(token);
             TokenRow { token, color: tokens[token].clone(), origin: if overridden { "custom override" } else { token_origin(token) }, role: token_role(token), overridden }
         })
