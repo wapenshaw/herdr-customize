@@ -1,8 +1,9 @@
 # Windows test plan
 
-Native checks for Windows (Rust branch). The code type-checks and passes
-clippy for `x86_64-pc-windows-msvc` from macOS, but nothing below has run on
-Windows yet.
+Native checks for Windows (Rust branch). On Windows 11 with a local Herdr
+0.9.5 server, the install (0a), the automated tests (1), `sync` (3) and
+`apply` from the command line have run; the popup rows still need checking by
+hand.
 
 Reference setup: a Windows laptop running `herdr --remote <mac>` in Windows
 Terminal, with the Mac as the Herdr server.
@@ -16,7 +17,8 @@ git --version       # for plugin update checks
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1
 ```
 
-The script downloads the release binary for the version in `Cargo.toml` to
+The script runs in Windows PowerShell 5.1 or pwsh 7. It downloads the
+release binary for the version in `Cargo.toml` to
 `target\release\herdr-customize.exe`. Without a release it builds with cargo,
 which needs Rust 1.99 or newer and the Visual Studio Build Tools (the
 "Desktop development with C++" workload). Step 1 needs that toolchain too.
@@ -31,7 +33,8 @@ herdr plugin install wapenshaw/herdr-customize
 
 | Check | Expected |
 | --- | --- |
-| Install output | `installed the v… release binary (herdr-customize-x86_64-pc-windows-msvc.exe)`, no cargo build. |
+| Install output | `Installed herdr-customize from wapenshaw/herdr-customize.` Herdr shows the build step's own output only when it fails. |
+| Herdr started from pwsh 7, then install | Same result: the build step runs in Windows PowerShell 5.1 with pwsh 7's `PSModulePath` and still verifies the checksum. |
 | Without network | The script says it is building from source and runs cargo (or explains how to install Rust). |
 | Binary | Runs on a machine without the Visual C++ redistributable (the CRT is linked statically). |
 | `herdr plugin update herdr-customize` from the popup's own Plugins page | Succeeds while the popup is open; the old binary is left as `herdr-customize.exe.old` and removed on the next update. |
