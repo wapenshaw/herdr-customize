@@ -238,11 +238,9 @@ impl ThemesPage {
             }
             "up" | "k" => self.edit_cursor = self.edit_cursor.saturating_sub(1),
             "down" | "j" => self.edit_cursor = (self.edit_cursor + 1).min(self.edit_rows.len().saturating_sub(1)),
-            "enter" => {
-                if let Some(r) = self.edit_rows.get(self.edit_cursor) {
-                    self.input = TextInput::new(format!("{}: ", r.token), &r.color);
-                    self.mode = Mode::EditingColor;
-                }
+            "enter" if let Some(r) = self.edit_rows.get(self.edit_cursor) => {
+                self.input = TextInput::new(format!("{}: ", r.token), &r.color);
+                self.mode = Mode::EditingColor;
             }
             "s" => {
                 if let Err(e) = theme::commit_user_theme(&self.edit_slug, &self.edit_body) {
