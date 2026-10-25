@@ -112,8 +112,12 @@ impl Driver {
             self.app.settle();
             assert!(self.app.execs.is_empty(), "a test ran a program on the terminal");
             let jobs = std::mem::take(&mut self.app.jobs);
-            if jobs.is_empty() && self.app.queue.is_empty() {
+            let writes = std::mem::take(&mut self.app.writes);
+            if jobs.is_empty() && writes.is_empty() && self.app.queue.is_empty() {
                 return;
+            }
+            for write in writes {
+                self.app.written(write());
             }
             // In parallel like the app, delivered in order so runs repeat.
             let running: Vec<_> = jobs.into_iter().map(std::thread::spawn).collect();
@@ -360,6 +364,83 @@ fn plugin_settings_are_typed() {
     assert!(d.screen().contains("saved FAST"));
 }
 
+#[test]
+fn closing_saves_a_waiting_pick() {
+    let mut d = Driver::new("settings", "");
+    let k = enum_key(&d.app.sh);
+    d.typ("/");
+    d.typ(&k.key);
+    d.press(&["enter", "right", "q"]);
+    assert!(d.app.quit);
+    d.app.shutdown();
+    d.drain();
+    let doc = Doc::parse(&d.config()).unwrap();
+    assert!(config::lookup(&doc.decoded(), &k.path()).is_some(), "{}", d.config());
+}
+
+// A save that fails on the way out must keep the popup open with its error,
+// or the pick is lost without a word.
+#[test]
+fn closing_keeps_a_failed_save_on_screen() {
+    let mut d = Driver::new("settings", "");
+    let k = enum_key(&d.app.sh);
+    d.typ("/");
+    d.typ(&k.key);
+    d.press(&["enter", "right", "q"]);
+    let cfg = sandbox().join("config.toml");
+    fs::remove_file(&cfg).unwrap();
+    fs::create_dir(&cfg).unwrap();
+    d.app.shutdown();
+    d.drain();
+    fs::remove_dir(&cfg).unwrap();
+    assert!(!d.app.ready_to_close(0));
+    assert!(!d.app.quit && d.app.status_err, "{}", d.app.status);
+}
+
+// A pick started while the last writes finish would wait on a delay the close
+// never waits for.
+#[test]
+fn closing_ignores_new_input() {
+    let mut d = Driver::new("settings", "");
+    let k = enum_key(&d.app.sh);
+    d.typ("/");
+    d.typ(&k.key);
+    d.press(&["enter", "right", "q"]);
+    d.app.shutdown();
+    d.press(&["right"]);
+    assert!(!d.app.timers.iter().any(|(_, m)| matches!(m, Msg::PendingSave { .. })));
+}
+
+// A save stuck in Herdr must not leave the popup open with no way out.
+#[test]
+fn ctrl_c_closes_without_waiting() {
+    let mut d = Driver::new("settings", "");
+    let k = enum_key(&d.app.sh);
+    d.typ("/");
+    d.typ(&k.key);
+    d.press(&["enter", "right", "q"]);
+    d.app.after = Some(Box::new(|| Ok(())));
+    d.app.shutdown();
+    assert!(!d.app.writes.is_empty());
+    assert!(d.screen().contains("ctrl+c closes without waiting"), "{}", d.screen());
+    d.app.key(&Key::named("x"));
+    assert!(!d.app.abandon && d.app.after.is_some());
+    d.app.key(&Key::named("ctrl+c"));
+    assert!(d.app.abandon && d.app.after.is_none());
+}
+
+// A save that succeeds after one that failed must not hide the failure.
+#[test]
+fn closing_keeps_the_first_failure() {
+    let mut d = Driver::new("settings", "");
+    d.app.shutdown();
+    d.app.written(Msg::Saved(Saved { what: "first".into(), err: Some(anyhow::anyhow!("disk full")), ..Default::default() }));
+    let changed = config::SaveResult { changed: true, ..Default::default() };
+    d.app.written(Msg::Saved(Saved { what: "second".into(), result: changed, ..Default::default() }));
+    assert!(!d.app.ready_to_close(0));
+    assert!(d.app.status_err && d.app.status.contains("disk full"), "{}", d.app.status);
+}
+
 // The pick's delayed save would otherwise put back the value just reset, or
 // set one the reset meant to leave unset.
 #[test]
@@ -389,6 +470,23 @@ fn plugin_settings_reset_drops_a_waiting_pick() {
         d.fire();
         assert_eq!(fs::read_to_string(pc.join("a.env")).unwrap(), "#FAST=false\n");
     }
+}
+
+// A slow write must not let the one queued after it land first.
+#[test]
+fn writes_finish_in_order() {
+    let (tx, rx) = mpsc::channel();
+    let (writer, done) = start_writer(tx);
+    let slow: Job = Box::new(|| {
+        std::thread::sleep(Duration::from_millis(100));
+        Msg::PendingSave { seq: 1 }
+    });
+    writer.send(slow).unwrap();
+    writer.send(Box::new(|| Msg::PendingSave { seq: 2 })).unwrap();
+    drop(writer);
+    done.join().unwrap();
+    let seqs: Vec<u64> = rx.try_iter().filter_map(|(m, _)| if let Msg::PendingSave { seq } = m { Some(seq) } else { None }).collect();
+    assert_eq!(seqs, [1, 2]);
 }
 
 // A pick waiting in one file must not be lost when a pick starts in another.
