@@ -8,7 +8,7 @@ use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 
 use super::widgets::*;
-use super::{Ctx, Hint, Key, Msg, Page, Shared};
+use super::{self as ui, Ctx, Hint, Key, Page, Shared};
 use crate::theme::preview::{paint, render_mock, render_token_table, rgb};
 use crate::theme::{self, Item, Look, Saved, TokenRow, Tokens};
 
@@ -82,13 +82,32 @@ pub struct ThemesPage {
     edit_cursor: usize,
 }
 
-fn load_themes() -> Msg {
+/// What this page's background work reports.
+pub enum Msg {
+    RemoteOnly(bool),
+    Loaded {
+        items: Vec<Item>,
+        looks: HashMap<String, Look>,
+        warnings: Vec<String>,
+        err: Option<anyhow::Error>,
+    },
+    /// The text of a new palette, from the editor.
+    EditorDone(anyhow::Result<String>),
+}
+
+impl From<Msg> for ui::Msg {
+    fn from(msg: Msg) -> ui::Msg {
+        ui::Msg::Themes(msg)
+    }
+}
+
+fn load_themes() -> ui::Msg {
     match theme::themes() {
         Ok((items, warnings)) => {
             let looks = items.iter().filter_map(|i| Some((i.slug.clone(), theme::load_look(&i.slug).ok()?))).collect();
-            Msg::ThemesLoaded { items, looks, warnings, err: None }
+            Msg::Loaded { items, looks, warnings, err: None }.into()
         }
-        Err(e) => Msg::ThemesLoaded { items: Vec::new(), looks: HashMap::new(), warnings: Vec::new(), err: Some(e) },
+        Err(e) => Msg::Loaded { items: Vec::new(), looks: HashMap::new(), warnings: Vec::new(), err: Some(e) }.into(),
     }
 }
 
@@ -192,7 +211,7 @@ impl ThemesPage {
         };
         ctx.edit_file(path.clone(), move |body| {
             let _ = fs::remove_file(&path);
-            Msg::ThemeEditorDone(body)
+            Msg::EditorDone(body).into()
         });
     }
 
@@ -474,10 +493,11 @@ impl Page for ThemesPage {
         // The client check scans every process, so it runs beside the first
         // frame instead of in front of it.
         ctx.spawn(load_themes);
-        ctx.spawn(|| Msg::RemoteOnly(theme::only_remote_clients()));
+        ctx.spawn(|| Msg::RemoteOnly(theme::only_remote_clients()).into());
     }
 
-    fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
+    fn update(&mut self, msg: &mut ui::Msg, ctx: &mut Ctx) {
+        let ui::Msg::Themes(msg) = msg else { return };
         match msg {
             Msg::RemoteOnly(only) => {
                 self.remote_only = *only;
@@ -486,7 +506,7 @@ impl Page for ThemesPage {
                     self.ask = None;
                 }
             }
-            Msg::ThemesLoaded { items, looks, warnings, err } => {
+            Msg::Loaded { items, looks, warnings, err } => {
                 if let Some(e) = err {
                     return ctx.error(e);
                 }
@@ -497,11 +517,10 @@ impl Page for ThemesPage {
                     ctx.status(warnings.join("; "));
                 }
             }
-            Msg::ThemeEditorDone(body) => match body {
+            Msg::EditorDone(body) => match body {
                 Ok(body) => self.ask_name(std::mem::take(body), ctx),
                 Err(e) => ctx.error(e),
             },
-            _ => {}
         }
     }
 

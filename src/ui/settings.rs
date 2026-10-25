@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 
 use super::values::{self, *};
 use super::widgets::*;
-use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc, save};
+use super::{self as ui, Ctx, Key, Page, Saved, Shared, load_doc, save};
 use crate::config::{self, Doc, Value};
 use crate::herdr;
 use crate::schema::{self, Reference};
@@ -70,9 +70,22 @@ pub struct SettingsPage {
     assumed: HashMap<String, Assumed>,
 }
 
-fn check(sh: &Shared) -> impl FnOnce() -> Msg + Send + 'static {
+/// What this page's background work reports.
+pub enum Msg {
+    Issues(herdr::CheckResult),
+    /// config.toml as edited in the editor.
+    RawEdited(anyhow::Result<String>),
+}
+
+impl From<Msg> for ui::Msg {
+    fn from(msg: Msg) -> ui::Msg {
+        ui::Msg::Settings(msg)
+    }
+}
+
+fn check(sh: &Shared) -> impl FnOnce() -> ui::Msg + Send + 'static {
     let path = sh.store.path.clone();
-    move || Msg::Issues(herdr::check_config(&path))
+    move || Msg::Issues(herdr::check_config(&path)).into()
 }
 
 impl SettingsPage {
@@ -240,7 +253,7 @@ impl SettingsPage {
         }
         ctx.edit_file(path.clone(), move |text| {
             let _ = fs::remove_file(&path);
-            Msg::RawEdited(text)
+            Msg::RawEdited(text).into()
         });
     }
 
@@ -262,7 +275,7 @@ impl SettingsPage {
                 Ok(())
             });
             saved.err = saved.err.map(|e| e.context("press E to keep editing"));
-            Msg::Saved(saved)
+            ui::Msg::Saved(saved)
         });
     }
 
@@ -343,10 +356,10 @@ impl Page for SettingsPage {
         ctx.spawn(check(ctx.sh));
     }
 
-    fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
+    fn update(&mut self, msg: &mut ui::Msg, ctx: &mut Ctx) {
         match msg {
-            Msg::Reference(_) => self.rebuild(ctx.sh),
-            Msg::Saved(Saved { key, result, err, .. }) => {
+            ui::Msg::Reference(_) => self.rebuild(ctx.sh),
+            ui::Msg::Saved(Saved { key, result, err, .. }) => {
                 match key {
                     Some(key) => match self.assumed.get_mut(key) {
                         Some(a) if a.inflight > 1 => a.inflight -= 1,
@@ -362,13 +375,13 @@ impl Page for SettingsPage {
                     self.issues = result.issues.clone();
                 }
             }
-            Msg::Issues(result) => self.issues = std::mem::take(&mut result.issues),
-            Msg::PendingSave { seq } => {
+            ui::Msg::Settings(Msg::Issues(result)) => self.issues = std::mem::take(&mut result.issues),
+            ui::Msg::PendingSave { seq } => {
                 if self.pending.as_ref().is_some_and(|p| p.seq == *seq) {
                     self.flush(ctx);
                 }
             }
-            Msg::RawEdited(text) => self.raw_edited(text, ctx),
+            ui::Msg::Settings(Msg::RawEdited(text)) => self.raw_edited(text, ctx),
             _ => {}
         }
     }
