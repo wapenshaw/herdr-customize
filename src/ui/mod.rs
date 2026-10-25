@@ -27,11 +27,11 @@ use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 
 use crate::config::{CheckError, Doc, SaveResult, Store};
-use crate::herdr::{self, CheckResult};
+use crate::herdr::CheckResult;
 use crate::pluginconfig::Config;
 use crate::plugins::{Log, Plugin, Results, Status};
 use crate::schema::{self, Reference};
-use crate::theme::{self, Item, Look};
+use crate::theme::{Item, Look};
 use widgets::*;
 
 pub const PAGES: [&str; 4] = ["themes", "plugins", "keys", "settings"];
@@ -375,7 +375,7 @@ impl App {
             timers: Vec::new(),
             execs: Vec::new(),
         };
-        app.apply(vec![Effect::Spawn(Box::new(load_reference)), Effect::Spawn(Box::new(load_plugins))]);
+        app.apply(vec![Effect::Spawn(Box::new(|| Msg::Reference(schema::for_installed()))), Effect::Spawn(Box::new(load_plugins))]);
         app.each_page(|page, ctx| page.init(ctx));
         app
     }
@@ -557,24 +557,6 @@ fn render_sheet(title: &str, hints: &[Hint]) -> Vec<Line<'static>> {
     lines.push(hint("tab", "next page (shift+tab back, 1–4 jump)"));
     lines.push(hint("esc", "close (q too, except while typing a search)"));
     lines
-}
-
-fn schema_cache_dir() -> PathBuf {
-    theme::state_dir().join("schema")
-}
-
-/// Prefers the reference for the installed Herdr; the bundled one stays
-/// when that cannot be found.
-fn load_reference() -> Msg {
-    let bundled = || Msg::Reference(schema::bundled());
-    let Ok(version) = herdr::version() else { return bundled() };
-    if version == schema::BUNDLED_VERSION {
-        return bundled();
-    }
-    if let Some(r) = schema::cached(&schema_cache_dir(), &version) {
-        return Msg::Reference(r);
-    }
-    schema::fetch(&schema_cache_dir(), &version).map_or_else(|_| bundled(), Msg::Reference)
 }
 
 fn load_plugins() -> Msg {

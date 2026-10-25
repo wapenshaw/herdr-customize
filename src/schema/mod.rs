@@ -1,6 +1,6 @@
 //! Herdr's config keys, from the config reference Herdr publishes with each
 //! release. A copy for the version this plugin was built against is
-//! embedded; load prefers a cached copy that matches the installed Herdr.
+//! embedded; for_installed prefers a copy that matches the installed Herdr.
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -11,11 +11,16 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::config::{self, Value};
+use crate::herdr;
 
 /// The Herdr release the embedded reference comes from.
-pub const BUNDLED_VERSION: &str = "0.9.5";
+const BUNDLED_VERSION: &str = "0.9.5";
 
-const BUNDLED: &str = include_str!("reference.json");
+static BUNDLED: LazyLock<Reference> = LazyLock::new(|| {
+    let mut r = parse(include_str!("reference.json")).expect("embedded config reference");
+    r.version = BUNDLED_VERSION.into();
+    r
+});
 
 // Key types used by the reference.
 pub const BOOLEAN: &str = "boolean";
@@ -133,9 +138,22 @@ pub fn parse(data: &str) -> Result<Reference> {
 }
 
 pub fn bundled() -> Reference {
-    let mut r = parse(BUNDLED).expect("embedded config reference");
-    r.version = BUNDLED_VERSION.into();
-    r
+    BUNDLED.clone()
+}
+
+/// The reference for the installed Herdr: the bundled one when versions
+/// match, else a cached or freshly downloaded copy, else the bundled one.
+pub fn for_installed() -> Reference {
+    let Ok(version) = herdr::version() else { return bundled() };
+    if version == BUNDLED_VERSION {
+        return bundled();
+    }
+    let dir = cache_dir();
+    cached(&dir, &version).or_else(|| fetch(&dir, &version).ok()).unwrap_or_else(bundled)
+}
+
+fn cache_dir() -> PathBuf {
+    crate::theme::state_dir().join("schema")
 }
 
 fn cache_path(dir: &Path, version: &str) -> PathBuf {
@@ -143,19 +161,19 @@ fn cache_path(dir: &Path, version: &str) -> PathBuf {
 }
 
 /// The cached reference for version, if there is one.
-pub fn cached(dir: &Path, version: &str) -> Option<Reference> {
+fn cached(dir: &Path, version: &str) -> Option<Reference> {
     let mut r = parse(&std::fs::read_to_string(cache_path(dir, version)).ok()?).ok()?;
     r.version = version.into();
     Some(r)
 }
 
 /// Where Herdr publishes the reference for a release.
-pub fn url(version: &str) -> String {
+fn url(version: &str) -> String {
     format!("https://raw.githubusercontent.com/herdrdev/herdr/v{version}/docs/next/website/src/data/config-reference.json")
 }
 
 /// Downloads the reference for version into dir and returns it.
-pub fn fetch(dir: &Path, version: &str) -> Result<Reference> {
+fn fetch(dir: &Path, version: &str) -> Result<Reference> {
     let body = ureq::get(&url(version)).config().timeout_global(Some(Duration::from_secs(5))).build().call()?.body_mut().read_to_string()?;
     let mut r = parse(&body)?;
     r.version = version.into();
