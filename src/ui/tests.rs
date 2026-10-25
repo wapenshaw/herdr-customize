@@ -347,6 +347,20 @@ fn plugin_settings_picks_in_two_files_write_both() {
     assert_eq!(fs::read_to_string(pc.join("b.env")).unwrap(), "# Poll rarely\n#FAST=false\nFAST=true\n");
 }
 
+// A save reloads the list; the cursor must stay on the same file's row even
+// when another file has a row with the same label.
+#[test]
+fn plugin_settings_cursor_stays_on_the_saved_file() {
+    let mut d = Driver::new("plugins", "");
+    let pc = sandbox().join("pc/demo");
+    fs::create_dir_all(&pc).unwrap();
+    fs::write(pc.join("a.env"), "# Poll often\n#FAST=false\n").unwrap();
+    fs::write(pc.join("b.env"), "# Poll often\n#FAST=false\n").unwrap();
+    d.press(&["s", "down", "enter", "enter"]);
+    assert_eq!(fs::read_to_string(pc.join("a.env")).unwrap(), "# Poll often\n#FAST=false\n");
+    assert_ne!(fs::read_to_string(pc.join("b.env")).unwrap(), "# Poll often\n#FAST=false\n");
+}
+
 #[test]
 fn key_sheet_opens_and_closes() {
     let mut d = Driver::new("plugins", "");
