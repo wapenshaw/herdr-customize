@@ -13,8 +13,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Same-repository pull requests from anyone but the maintainer (Renovate,
+  # collaborators) wait here for a review. Forks and github-actions[bot]
+  # already need a run approval from the repository settings.
+  approval:
+    name: Approval
+    if: github.event.pull_request.user.login != 'wapenshaw' && github.event.pull_request.user.login != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: ci-approval
+    steps:
+      - run: echo "approved by a reviewer of the ci-approval environment"
+
   check:
     name: ${{ matrix.name }}
+    needs: approval
+    if: ${{ !cancelled() && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +51,8 @@ jobs:
 
   msrv:
     name: Rust 1.89
+    needs: approval
+    if: ${{ !cancelled() && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

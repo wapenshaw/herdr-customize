@@ -74,8 +74,10 @@ herdr server reload-config
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and
   `cargo test` pass locally. CI then runs the same on Linux, macOS and
   Windows, plus a build on Rust 1.89.
-- CI does not run on a pull request from a fork until a maintainer approves
-  the run.
+- CI runs on its own only for the maintainer's pull requests. Anyone else's
+  waits for approval: a fork's run is approved from the pull request, and a
+  branch in this repository (Renovate's, a collaborator's) waits at the
+  `Approval` job for a review of the `ci-approval` environment.
 - A pull request needs the approval of a code owner, listed in
   [.github/CODEOWNERS](.github/CODEOWNERS), to merge.
 - **Pull requests are merged by rebase.** Merge commits and squashing are
