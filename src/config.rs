@@ -10,7 +10,8 @@ use std::sync::Mutex;
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, TableLike};
 
-use crate::{fsutil, herdr};
+use crate::fsutil;
+use crate::herdr::{self, CheckResult};
 
 /// A decoded TOML value: what Go's `any` held.
 pub type Value = toml::Value;
@@ -366,6 +367,8 @@ pub struct SaveResult {
     pub changed: bool,
     /// Set when 'herdr config check' could not run.
     pub check_skipped: String,
+    /// Every issue the check found in the saved file, old ones included.
+    pub issues: Vec<String>,
     /// Set when the config was saved but Herdr did not reload.
     pub reload_err: Option<String>,
 }
@@ -435,11 +438,12 @@ impl Store {
         Doc::parse(&data)?;
         let dir = self.path.parent().unwrap_or(Path::new("."));
         fs::create_dir_all(dir)?;
-        let (issues, skipped) = self.new_issues(dir, &data, original.is_none())?;
+        let (issues, check) = self.new_issues(dir, &data, original.is_none())?;
         if !issues.is_empty() {
             return Err(CheckError { issues }.into());
         }
-        result.check_skipped = skipped;
+        result.check_skipped = check.skipped;
+        result.issues = check.issues;
         fsutil::write_backed_up(&self.path, data.as_bytes(), 0o600)?;
         result.changed = true;
         if !self.no_reload {
@@ -449,21 +453,19 @@ impl Store {
     }
 
     /// Checks data in a temporary file beside the config, so relative paths
-    /// resolve the same way, and returns issues the current file lacks.
-    fn new_issues(&self, dir: &Path, data: &str, missing: bool) -> Result<(Vec<String>, String)> {
+    /// resolve the same way. Returns the issues the current file lacks, and
+    /// the whole check.
+    fn new_issues(&self, dir: &Path, data: &str, missing: bool) -> Result<(Vec<String>, CheckResult)> {
         let tmp = fsutil::temp_path(dir, ".herdr-customize-check-").with_extension("toml");
         fs::write(&tmp, data)?;
         let after = herdr::check_config(&tmp);
         let _ = fs::remove_file(&tmp);
-        if !after.ran {
-            return Ok((Vec::new(), after.skipped));
-        }
         if after.issues.is_empty() {
-            return Ok((Vec::new(), String::new()));
+            return Ok((Vec::new(), after));
         }
         let known: Vec<String> = if missing { Vec::new() } else { herdr::check_config(&self.path).issues.iter().map(|i| normalize_issue(i)).collect() };
         let fresh = after.issues.iter().filter(|i| !known.contains(&normalize_issue(i))).map(|i| i.trim().to_string()).collect();
-        Ok((fresh, String::new()))
+        Ok((fresh, after))
     }
 }
 

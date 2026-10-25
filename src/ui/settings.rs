@@ -347,7 +347,7 @@ impl Page for SettingsPage {
                 }
                 self.rebuild(ctx.sh);
                 if err.is_none() && result.changed {
-                    ctx.spawn(check(ctx.sh));
+                    self.issues = result.issues.clone();
                 }
             }
             Msg::Issues(result) => self.issues = std::mem::take(&mut result.issues),
