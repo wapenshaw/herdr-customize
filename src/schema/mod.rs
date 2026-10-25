@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::config::{self, Value};
-use crate::herdr;
+use crate::{fsutil, herdr};
 
 /// The Herdr release the embedded reference comes from.
 const BUNDLED_VERSION: &str = "0.9.5";
@@ -178,7 +178,7 @@ fn fetch(dir: &Path, version: &str) -> Result<Reference> {
     let mut r = parse(&body)?;
     r.version = version.into();
     if std::fs::create_dir_all(dir).is_ok() {
-        let _ = std::fs::write(cache_path(dir, version), body);
+        let _ = fsutil::atomic_write(&cache_path(dir, version), body.as_bytes(), 0o644);
     }
     Ok(r)
 }
