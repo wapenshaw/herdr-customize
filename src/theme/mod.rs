@@ -682,7 +682,7 @@ pub fn read_clipboard() -> Result<String> {
     for (tool, args) in [("pbpaste", &[][..]), ("wl-paste", &["--no-newline"][..]), ("xclip", &["-selection", "clipboard", "-o"][..]), ("xsel", &["--clipboard", "--output"][..])] {
         if let Some(path) = proc::look_path(tool) {
             let out = Command::new(path).args(args).output()?;
-            return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+            return Ok(String::from_utf8_lossy_owned(out.stdout));
         }
     }
     bail!("no clipboard utility found (pbpaste, wl-paste, xclip, xsel)")

@@ -28,7 +28,7 @@ where
 /// herdr prints JSON errors for socket commands and text otherwise.
 pub fn run(args: &[&str]) -> Result<String> {
     let out = command(args).output()?;
-    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stdout = String::from_utf8_lossy_owned(out.stdout);
     if !out.status.success() {
         let msg = error_message(&format!("{}{}", String::from_utf8_lossy(&out.stderr), stdout));
         if msg.is_empty() {

@@ -643,11 +643,9 @@ fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Msg>, rx: &Receiver<Ms
         }
         if event::poll(wait)? {
             match event::read()? {
-                Event::Key(k) => {
-                    if let Some(key) = Key::from_event(k) {
-                        app.key(key);
-                        dirty = true;
-                    }
+                Event::Key(k) if let Some(key) = Key::from_event(k) => {
+                    app.key(key);
+                    dirty = true;
                 }
                 Event::Paste(text) => {
                     app.key(Key { paste: Some(text), ..Default::default() });
