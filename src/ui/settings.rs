@@ -259,7 +259,7 @@ impl SettingsPage {
         }
     }
 
-    fn raw_edited(&mut self, path: &std::path::Path, ok: &Result<(), String>, ctx: &mut Ctx) {
+    fn raw_edited(&mut self, path: &std::path::Path, ok: &anyhow::Result<()>, ctx: &mut Ctx) {
         let data = fs::read_to_string(path);
         let _ = fs::remove_file(path);
         let data = match (ok, data) {
