@@ -261,6 +261,21 @@ fn keys_adds_a_custom_command() {
 }
 
 #[test]
+fn bind_adds_the_first_binding_once() {
+    let d = Driver::new("keys", "# my config\n");
+    let store = config::Store::default_store();
+    let checks = d.herdr_calls("config check");
+    assert_eq!(crate::bind::bind(&store, None).unwrap(), "Bound prefix+t to the customize popup.");
+    let config = d.config();
+    assert!(config.starts_with("# my config") && config.contains("key = \"prefix+t\"") && config.contains("command = \"herdr-customize.open\""), "{config}");
+    assert_eq!((d.herdr_calls("config check") - checks, d.herdr_calls("server reload-config")), (1, 1));
+    // Running it again must not touch the file or reload Herdr.
+    assert_eq!(crate::bind::bind(&store, None).unwrap(), "The customize popup already opens with prefix+t.");
+    assert_eq!(d.config(), config);
+    assert_eq!(d.herdr_calls("server reload-config"), 1);
+}
+
+#[test]
 fn keys_marks_conflicts() {
     let mut d = Driver::new("keys", "[[keys.command]]\nkey = \"prefix+g\"\ntype = \"shell\"\ncommand = \"a\"\n\n[[keys.command]]\nkey = \"prefix+g\"\ntype = \"shell\"\ncommand = \"b\"\n");
     let screen = d.screen();

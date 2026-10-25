@@ -175,7 +175,7 @@ impl KeysPage {
             let current = config::lookup(&table, &k.path()).cloned();
             let changed = current.is_some();
             let action = k.key.trim_start_matches("keys.").to_string();
-            let values = indexed(&action, keys::values(current.or_else(|| k.default_value()).as_ref()));
+            let values = keys::indexed(&action, keys::values(current.or_else(|| k.default_value()).as_ref()));
             let mut r = KeyRow::new(Kind::Builtin { key: k.clone(), action: action.clone(), changed }, format!("{action} {}", values.join(" ")));
             (r.values, r.owner) = (values, k.key.clone());
             rows.push(r);
@@ -292,7 +292,7 @@ impl KeysPage {
     fn edit_hints(&self) -> Vec<String> {
         let Some(r) = &self.editing else { return Vec::new() };
         let Kind::Builtin { key, action, .. } = &r.kind else { return Vec::new() };
-        let values = indexed(action, split_values(&self.input.value()));
+        let values = keys::indexed(action, split_values(&self.input.value()));
         let mut hints = Vec::new();
         if key.kind == schema::KEYBINDING {
             hints.extend(values.iter().flat_map(|v| keys::problems(action, v)));
@@ -451,11 +451,6 @@ impl KeysPage {
 /// Herdr resolves too.
 fn installed_suffix(installed: &HashSet<String>, command: &str) -> bool {
     !command.contains('.') && installed.iter().filter(|q| q.ends_with(&format!(".{command}"))).count() == 1
-}
-
-/// Indexed jumps take a modifier combo for 1..9, shown on each value.
-fn indexed(action: &str, values: Vec<String>) -> Vec<String> {
-    if action.starts_with("indexed.") { values.into_iter().map(|v| format!("{v}+1..9")).collect() } else { values }
 }
 
 fn split_values(text: &str) -> Vec<String> {
