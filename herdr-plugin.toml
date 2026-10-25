@@ -51,6 +51,12 @@ command = ["./target/release/herdr-customize", "ui", "settings"]
 
 [[actions]]
 id = "open"
+title = "Customize"
+contexts = ["workspace"]
+command = ["./target/release/herdr-customize", "open", "settings"]
+
+[[actions]]
+id = "themes"
 title = "Customize: themes"
 contexts = ["workspace"]
 command = ["./target/release/herdr-customize", "open", "themes"]
