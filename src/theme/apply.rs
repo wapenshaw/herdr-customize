@@ -2,12 +2,12 @@
 //! the host terminals' colors, and a reload.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{Item, Table};
 
-use super::{Palette, TOKENS, Tokens, applied_file, parse_palette_file, resolve_palette, state_dir};
+use super::{Palette, TOKENS, Tokens, applied_file, resolve_palette, state_dir};
 use crate::config::{self, Doc, SaveResult, Store, env};
 use crate::{fsutil, herdr, terminal};
 
@@ -16,7 +16,7 @@ use crate::{fsutil, herdr, terminal};
 /// effort: the config is the truth, and a manual reload repairs either.
 pub fn apply_theme(slug: &str) -> Result<()> {
     let cfg = config::path();
-    let (pal, palette_path) = load_palette(slug)?;
+    let (pal, palette_path) = resolve_palette(slug).with_context(|| format!("cannot load theme {slug:?}"))?;
     fs::create_dir_all(state_dir()).context("create state directory")?;
     let _lock = fsutil::lock(&applied_file().with_extension("lock")).context("lock theme selection")?;
     let saved = write_custom_block(&cfg, &pal.tokens()).context("failed to write the custom theme block")?;
@@ -37,13 +37,6 @@ pub fn apply_theme(slug: &str) -> Result<()> {
     }
     println!("Applied theme {slug:?}.");
     Ok(())
-}
-
-/// The palette for slug, bundled or user-added, with the file it came from.
-fn load_palette(slug: &str) -> Result<(Palette, PathBuf)> {
-    let path = resolve_palette(slug).with_context(|| format!("cannot resolve theme {slug:?}"))?;
-    let pal = parse_palette_file(&path).with_context(|| format!("invalid palette for {slug:?}"))?;
-    Ok((pal, path))
 }
 
 /// Replaces the base tokens of [theme.custom], keeping the auto_switch
@@ -141,7 +134,7 @@ pub fn sync_applied_theme(client_pid: &str) -> Result<()> {
     if slug.is_empty() {
         return Ok(());
     }
-    let (pal, palette_path) = load_palette(&slug)?;
+    let (pal, palette_path) = resolve_palette(&slug).with_context(|| format!("cannot load theme {slug:?}"))?;
     // A config edited independently, or a failed marker write, must never
     // resurrect stale terminal colors from the previous selection.
     let cfg = config::path();
