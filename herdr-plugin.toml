@@ -5,8 +5,16 @@ min_herdr_version = "0.8.0"
 description = "Customize Herdr from one popup: themes, plugins, keybindings and settings."
 platforms = ["linux", "macos", "windows"]
 
+# Installs the release binary for this version, or builds from source with
+# cargo when there is none. `herdr plugin link` skips this step; run
+# `cargo build --release` yourself in a linked checkout.
 [[build]]
-command = ["cargo", "build", "--release", "--locked"]
+platforms = ["linux", "macos"]
+command = ["/bin/sh", "scripts/fetch-or-build.sh"]
+
+[[build]]
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/fetch-or-build.ps1"]
 
 # One entrypoint per page; tab moves between pages once the popup is open.
 [[panes]]

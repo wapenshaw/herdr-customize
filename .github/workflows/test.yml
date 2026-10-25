@@ -2,7 +2,7 @@ name: test
 
 on:
   push:
-    branches: [main, rust-prototype]
+    branches: [main]
   pull_request:
 
 permissions:

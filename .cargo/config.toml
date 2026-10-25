@@ -1,0 +1,4 @@
+# Link the C runtime statically so release binaries run on Windows machines
+# without the Visual C++ redistributable.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
