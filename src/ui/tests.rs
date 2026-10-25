@@ -125,7 +125,7 @@ impl Driver {
 
     fn press(&mut self, keys: &[&str]) {
         for k in keys {
-            self.app.key(Key::named(k));
+            self.app.key(&Key::named(k));
             self.drain();
         }
     }

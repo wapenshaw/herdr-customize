@@ -282,10 +282,10 @@ impl KeysPage {
 
     /// The other owners bound to any of me's keys, ignoring except's own
     /// current binding.
-    fn clashes(&self, except: Option<&str>, me: Binding) -> Vec<String> {
+    fn clashes(&self, except: Option<&str>, me: &Binding) -> Vec<String> {
         let mut all: Vec<Binding> = self.bindings().into_iter().filter(|b| Some(b.owner.as_str()) != except).collect();
         all.push(me.clone());
-        keys::clashes(&keys::conflicts(&all), &me)
+        keys::clashes(&keys::conflicts(&all), me)
     }
 
     /// Problems and clashes for the value being typed.
@@ -297,7 +297,7 @@ impl KeysPage {
         if key.kind == schema::KEYBINDING {
             hints.extend(values.iter().flat_map(|v| keys::problems(action, v)));
         }
-        let clashes = self.clashes(Some(&r.owner), Binding { owner: r.owner.clone(), keys: values.clone(), navigate: keys::navigate(action) });
+        let clashes = self.clashes(Some(&r.owner), &Binding { owner: r.owner.clone(), keys: values.clone(), navigate: keys::navigate(action) });
         if !clashes.is_empty() {
             hints.push(format!("also used by {}", clashes.join(", ")));
         }
@@ -438,7 +438,7 @@ impl KeysPage {
         if !key.is_empty() {
             lines.extend(keys::problems("command", &key).into_iter().map(|p| line(warn(p))));
             let mine = f.index.map(|i| self.command_owner(i));
-            let clashes = self.clashes(mine.as_deref(), Binding { owner: "editing".into(), keys: vec![key], navigate: false });
+            let clashes = self.clashes(mine.as_deref(), &Binding { owner: "editing".into(), keys: vec![key], navigate: false });
             if !clashes.is_empty() {
                 lines.push(line(warn(format!("also used by {}", clashes.join(", ")))));
             }
@@ -662,7 +662,7 @@ impl Page for KeysPage {
     }
 
     fn help(&self) -> String {
-        if let Some(help) = Confirm::help(&self.ask) {
+        if let Some(help) = Confirm::help(self.ask.as_ref()) {
             return help;
         }
         match self.mode {

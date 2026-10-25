@@ -173,16 +173,16 @@ impl SettingsPage {
 
     /// Booleans toggle, enums move to the next value and everything else
     /// gets a text field.
-    fn edit(&mut self, r: SettingRow, ctx: &mut Ctx) {
+    fn edit(&mut self, r: &SettingRow, ctx: &mut Ctx) {
         let k = &r.key;
         if k.kind == schema::BOOLEAN {
             let current = matches!(effective(k, r.value.as_ref()), Value::Boolean(true));
             return self.write(k.key.clone(), k.path(), Some(Value::Boolean(!current)), ctx);
         }
         if !options(k).is_empty() && !k.open() {
-            return self.cycle(&r, "right", ctx);
+            return self.cycle(r, "right", ctx);
         }
-        self.edit_text(&r);
+        self.edit_text(r);
     }
 
     fn edit_text(&mut self, r: &SettingRow) {
@@ -406,7 +406,7 @@ impl Page for SettingsPage {
             // Space steps through the listed values of a setting that also
             // takes others; Enter types one.
             " " if r.unknown.is_none() && r.key.open() => self.cycle(&r, "right", ctx),
-            "enter" | " " if r.unknown.is_none() => self.edit(r, ctx),
+            "enter" | " " if r.unknown.is_none() => self.edit(&r, ctx),
             "x" => {
                 if r.value.is_none() {
                     return ctx.status(format!("{} already uses the default", r.name()));
@@ -455,7 +455,7 @@ impl Page for SettingsPage {
     }
 
     fn help(&self) -> String {
-        if let Some(help) = Confirm::help(&self.ask) {
+        if let Some(help) = Confirm::help(self.ask.as_ref()) {
             return help;
         }
         if self.mode == Mode::Editing {

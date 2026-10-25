@@ -565,8 +565,8 @@ impl<P> Confirm<P> {
     }
 
     /// The help line while a question waits.
-    pub fn help(ask: &Option<Self>) -> Option<String> {
-        ask.as_ref().map(|a| format!("{} [y/N]", a.question))
+    pub fn help(ask: Option<&Self>) -> Option<String> {
+        ask.map(|a| format!("{} [y/N]", a.question))
     }
 }
 
