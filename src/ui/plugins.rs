@@ -810,7 +810,7 @@ impl Page for PluginsPage {
                 self.load_detail(ctx);
             }
             Msg::PluginDetail { id, settings, last } => {
-                self.details.insert(id.clone(), Detail { settings: settings.clone(), last: last.clone() });
+                self.details.insert(id.clone(), Detail { settings: std::mem::take(settings), last: std::mem::take(last) });
             }
             Msg::Checks(statuses) => {
                 self.checking = false;
