@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use super::*;
-use crate::config::Value;
+use crate::config::{self, Value};
 
 /// UI tests share the process environment, so they run one at a time.
 static LOCK: Mutex<()> = Mutex::new(());
@@ -217,7 +217,7 @@ fn settings_cycling_writes_once() {
     d.fire();
     assert_eq!(d.herdr_calls("server reload-config"), 1);
     let doc = Doc::parse(&d.config()).unwrap();
-    let saved = doc.get(&k.path()).unwrap();
+    let saved = config::lookup(&doc.decoded(), &k.path()).cloned().unwrap();
     let choices = k.choices();
     let current = choices.iter().position(|c| Some(Value::String(c.clone())) == k.default_value()).map_or(-1, |i| i as isize);
     let expected = &choices[((current + 2).rem_euclid(choices.len() as isize)) as usize];

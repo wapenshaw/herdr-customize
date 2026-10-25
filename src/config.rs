@@ -159,10 +159,6 @@ impl Doc {
         toml::from_str(&self.text()).unwrap_or_default()
     }
 
-    pub fn get(&self, path: &[String]) -> Option<Value> {
-        lookup(&self.decoded(), path).cloned()
-    }
-
     /// The length of the prefix of path that already exists.
     fn existing(&self, path: &[String]) -> usize {
         let mut item = self.doc.as_item();
@@ -496,6 +492,9 @@ fn normalize_issue(issue: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn get(doc: &Doc, path: &[String]) -> Option<Value> {
+        lookup(&doc.decoded(), path).cloned()
+    }
 
     #[test]
     fn additions_follow_trailing_comments() {
@@ -529,7 +528,7 @@ mod tests {
         let text = doc.text();
         assert!(text.starts_with("[ui]\na = 1\nb = true\n"), "{text}");
         assert!(text.contains("[server]\nheadless_cols = 100\n"), "{text}");
-        assert_eq!(doc.get(&p("ui.b")), Some(Value::Boolean(true)));
+        assert_eq!(get(&doc, &p("ui.b")), Some(Value::Boolean(true)));
     }
 
     #[test]
@@ -537,8 +536,8 @@ mod tests {
         let mut doc = Doc::parse("ui = { a = 1 }\nterminal.shell = \"zsh\"\n").unwrap();
         doc.set(&p("ui.b"), &Value::Integer(2)).unwrap();
         doc.set(&p("terminal.login"), &Value::Boolean(false)).unwrap();
-        assert_eq!(doc.get(&p("ui.b")), Some(Value::Integer(2)));
-        assert_eq!(doc.get(&p("terminal.login")), Some(Value::Boolean(false)));
+        assert_eq!(get(&doc, &p("ui.b")), Some(Value::Integer(2)));
+        assert_eq!(get(&doc, &p("terminal.login")), Some(Value::Boolean(false)));
         assert!(doc.text().contains("terminal.login = false"), "{}", doc.text());
     }
 
