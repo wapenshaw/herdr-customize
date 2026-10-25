@@ -6,7 +6,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::LazyLock;
 
 use anyhow::{Context, Result, anyhow, bail};
 use regex::Regex;
@@ -393,10 +393,6 @@ impl fmt::Display for CheckError {
 
 impl std::error::Error for CheckError {}
 
-/// Keeps saves in order, so one cannot load the file before another has
-/// written it and undo it.
-pub static SAVING: Mutex<()> = Mutex::new(());
-
 /// Loads and saves one config file.
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -421,7 +417,7 @@ impl Store {
 
     /// Loads the config, applies edit, and saves the result.
     pub fn update(&self, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Result<SaveResult> {
-        let _guard = SAVING.lock().unwrap_or_else(PoisonError::into_inner);
+        let _lock = fsutil::write_lock(&self.path)?;
         let mut doc = self.load()?;
         edit(&mut doc)?;
         self.save(&doc)

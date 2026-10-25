@@ -79,6 +79,14 @@ fn sandbox() -> &'static Path {
     })
 }
 
+/// Holds the driver's lock with the sandbox in place, for tests elsewhere
+/// that write files and so take write locks in the state folder.
+pub(crate) fn isolated() -> MutexGuard<'static, ()> {
+    let guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    sandbox();
+    guard
+}
+
 struct Driver {
     app: App,
     _guard: MutexGuard<'static, ()>,

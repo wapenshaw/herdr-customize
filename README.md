@@ -375,7 +375,8 @@ TOML, comments, permissions, symlinks, and the `[theme.custom.light]` /
 `auto_switch = true`, those layers still take priority over the picked
 tokens. The first change each day backs up the original file to
 `config.toml.bak-YYYYMMDD`. Writes are atomic, and Herdr reloads after each
-save.
+save. Writers take turns through a lock file in the state folder below, so two
+popups never undo each other's edits.
 
 State is stored in `HERDR_PLUGIN_STATE_DIR` when it is set, and otherwise in
 `$XDG_STATE_HOME/herdr/plugins/herdr-customize` (by default
