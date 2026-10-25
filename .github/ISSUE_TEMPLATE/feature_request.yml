@@ -1,0 +1,36 @@
+name: Feature request
+description: Something herdr-customize should let you change, or change differently
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Scope gets settled on the issue before anyone spends an evening on it,
+        so describe what you want to do in Herdr rather than which function
+        should change.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you do today, by hand or in another tool, and why that is not enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What it should do instead
+      description: Which page it belongs on, and what you would press.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Where you need it
+      multiple: true
+      options:
+        - Windows
+        - macOS
+        - Linux

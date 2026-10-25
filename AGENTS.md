@@ -57,4 +57,11 @@ GitHub Actions minutes are limited. Never start a workflow (a manual run, a push
 
 ## Commit & Pull Request Guidelines
 
-History commonly uses `feat:`, `fix:`, and optional scopes such as `fix(sync):`. Use concise, imperative subjects. PRs should explain the problem and resulting behavior, link relevant issues, list validation commands and platforms, and include screenshots for UI changes. Update README or persistence notes when behavior changes.
+Follow [CONTRIBUTING.md](CONTRIBUTING.md); these rules are mandatory.
+
+- Never commit to `main`. Branch as `<type>/<kebab-summary>`.
+- Conventional Commits: `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period, 72 characters at most. Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `chore`; scope is a module or area, or `deps`. The body says why. One logical change per commit, never a co-author trailer, and no "Generated with" line in commits or pull request bodies.
+- Pull requests are rebased, never squashed or merged, so each commit subject becomes a changelog line; `feat`, `fix`, `perf` and `refactor` are the visible ones.
+- One thing per pull request. The body follows `.github/pull_request_template.md`: Summary (the smallest view that shows the change), Evidence (before and after), Merge Danger (one-way or two-way door, blast radius), and the checklist with only true items ticked. Include screenshots for UI changes.
+- Update README or persistence notes when behavior changes; leave `CHANGELOG.md` and versions to release-please.
+
