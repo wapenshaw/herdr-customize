@@ -45,7 +45,7 @@ Release binaries exist for:
 
 If the download fails, or there is no release for the version you are
 installing, the install builds from source with `cargo` instead. That needs
-Rust 1.89 or newer, plus the Visual Studio Build Tools (C++ workload) on
+Rust 1.99 or newer, plus the Visual Studio Build Tools (C++ workload) on
 Windows. Set `HERDR_CUSTOMIZE_BUILD_FROM_SOURCE=1` to always build from
 source.
 

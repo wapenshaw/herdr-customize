@@ -2,7 +2,7 @@
 name = "herdr-customize"
 version = "0.1.2"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.99"
 description = "Customize Herdr from one popup: themes, plugins, keybindings and settings."
 license = "MIT"
 publish = false

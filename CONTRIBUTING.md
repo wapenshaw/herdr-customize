@@ -14,7 +14,7 @@ This is how to work on it.
 
 ## Getting set up
 
-You need Rust 1.89 or newer and Herdr. On Windows, use the MSVC toolchain with
+You need Rust 1.99 or newer and Herdr. On Windows, use the MSVC toolchain with
 the Visual Studio Build Tools.
 
 ```sh
@@ -73,7 +73,7 @@ herdr server reload-config
 
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and
   `cargo test` pass locally. CI then runs the same on Linux, macOS and
-  Windows, plus a build on Rust 1.89.
+  Windows, plus a build on Rust 1.99.
 - CI runs on its own only for the maintainer's pull requests. Anyone else's
   waits for approval: a fork's run is approved from the pull request, and a
   branch in this repository (Renovate's, a collaborator's) waits at the
