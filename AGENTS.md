@@ -34,7 +34,7 @@ Use Rust 1.99 or newer (edition 2024); on Windows, the MSVC toolchain with the V
 - `cargo fmt`: format (see `rustfmt.toml`).
 - `herdr plugin link "$PWD"` followed by `herdr server reload-config`: link the checkout for local development.
 - `herdr plugin action invoke <id> --plugin herdr-customize`: run an action. It returns as soon as the action starts, and the action's output reaches only `herdr plugin log list`, so an action that must tell the user something uses `herdr notification show`. Herdr likewise shows a build step's output only when it fails.
-- `./target/release/herdr-customize ui keys`: open the popup on a page (`themes`, `plugins`, `keys`, `settings`).
+- `./target/release/herdr-customize ui keys`: open the popup on a page (`settings`, `keys`, `themes`, `plugins`).
 - `./target/release/herdr-customize preview dracula-default`: render a bundled palette preview.
 
 Check platform-sensitive changes for every target: `cargo clippy --target x86_64-pc-windows-msvc` and `--target x86_64-unknown-linux-gnu` type-check from macOS (`ring` needs the target's C headers, so check a copy with ureq's `rustls` feature off if they are missing). Native runtime checks are needed to validate terminal behavior; Windows steps are in `docs/windows-test-plan.md`.

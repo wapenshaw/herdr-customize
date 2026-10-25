@@ -169,11 +169,15 @@ fn only_tab_switches_pages() {
     let mut d = Driver::new("themes", "");
     assert!(d.screen().contains("⌕ type to search"));
     d.press(&["tab"]);
-    assert_eq!(d.app.active, 1);
+    assert_eq!(PAGES[d.app.active], "plugins");
     d.press(&["right", "left"]);
-    assert_eq!(d.app.active, 1);
-    d.press(&["shift+tab", "4"]);
-    assert_eq!(d.app.active, 3);
+    assert_eq!(PAGES[d.app.active], "plugins");
+    d.press(&["tab"]);
+    assert_eq!(PAGES[d.app.active], "settings");
+    d.press(&["shift+tab", "2"]);
+    assert_eq!(PAGES[d.app.active], "keys");
+    // The page's own keys must not push tab off a narrow popup.
+    assert!(d.screen().lines().last().unwrap().starts_with("tab next page · "));
     d.press(&["esc"]);
     assert!(d.app.quit);
 }
@@ -329,7 +333,7 @@ fn plugins_panel_binds_an_action() {
     let screen = d.screen();
     assert!(screen.contains("Demo") && screen.contains("Say hello"), "{screen}");
     d.press(&["enter", "b"]);
-    assert_eq!(d.app.active, 2);
+    assert_eq!(PAGES[d.app.active], "keys");
     let screen = d.screen();
     assert!(screen.contains("New custom command") && screen.contains("demo.hello"), "{screen}");
 }
@@ -406,7 +410,8 @@ fn plugin_checks_wait_for_the_page() {
     let mut d = Driver::new("themes", "");
     assert_eq!(d.git_checks(), 0);
     assert_eq!(d.herdr_calls("plugin config-dir"), 0);
-    d.press(&["2"]);
+    d.press(&["tab"]);
+    assert_eq!(PAGES[d.app.active], "plugins");
     assert_eq!(d.git_checks(), usize::from(crate::plugins::have_git()));
     assert_eq!(d.herdr_calls("plugin config-dir"), 1);
 }
