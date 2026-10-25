@@ -68,6 +68,9 @@ type themesPage struct {
 }
 
 type (
+	// remoteOnlyMsg reports whether every attached client is on another
+	// machine, where colors cannot be synced.
+	remoteOnlyMsg   bool
 	themesLoadedMsg struct {
 		items    []theme.Item
 		looks    map[string]theme.Look
@@ -94,17 +97,18 @@ func newThemesPage(edit string) *themesPage {
 func (p *themesPage) title() string { return "Themes" }
 
 func (p *themesPage) init() tea.Cmd {
-	p.remoteOnly = theme.OnlyRemoteClients()
-	if p.remoteOnly {
-		return nil
-	}
+	// The client check scans every process, so it runs beside the first
+	// frame instead of in front of it.
+	cmds := []tea.Cmd{loadThemes, checkRemoteOnly}
 	if p.startEdit != "" {
 		if err := p.beginEdit(p.startEdit); err != nil {
-			return tea.Batch(loadThemes, setError(err))
+			cmds = append(cmds, setError(err))
 		}
 	}
-	return loadThemes
+	return tea.Batch(cmds...)
 }
+
+func checkRemoteOnly() tea.Msg { return remoteOnlyMsg(theme.OnlyRemoteClients()) }
 
 func loadThemes() tea.Msg {
 	items, warnings, err := theme.Themes()
@@ -276,6 +280,12 @@ func (p *themesPage) count(f int) int {
 
 func (p *themesPage) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case remoteOnlyMsg:
+		p.remoteOnly = bool(msg)
+		if p.remoteOnly {
+			p.mode = themesBrowse
+		}
+		return nil
 	case themesLoadedMsg:
 		if msg.err != nil {
 			return setError(msg.err)
