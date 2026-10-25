@@ -11,12 +11,16 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/wapenshaw/herdr-customize/internal/plugins"
 	"github.com/wapenshaw/herdr-customize/internal/theme"
 	"github.com/wapenshaw/herdr-customize/tests/testutil"
 )
 
 func TestMain(m *testing.M) {
 	cursorMode = cursor.CursorStatic
+	// Keep update checks and marketplace searches off the network.
+	plugins.GitBase = filepath.Join(os.TempDir(), "herdr-customize-no-remote")
+	plugins.RawBase, plugins.APIBase = "http://127.0.0.1:1", "http://127.0.0.1:1"
 	testutil.Main(m)
 }
 

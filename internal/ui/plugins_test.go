@@ -1,0 +1,118 @@
+package ui
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/wapenshaw/herdr-customize/internal/plugins"
+	"github.com/wapenshaw/herdr-customize/tests/testutil"
+)
+
+const managedPluginsJSON = `{"result":{"plugins":[
+{"plugin_id":"demo","name":"Demo","version":"1.0.0","enabled":true,"source":{"kind":"github","owner":"me","repo":"demo","resolved_commit":"aaaaaaaaaa"},
+ "actions":[{"id":"run","title":"Run demo"}]},
+{"plugin_id":"pinned","name":"Pinned","version":"0.1.0","enabled":true,"source":{"kind":"github","owner":"me","repo":"pinned","requested_ref":"bbbbbbb","resolved_commit":"bbbbbbbbbb"}},
+{"plugin_id":"local","name":"Local","enabled":false,"source":{"kind":"local"}}]}}`
+
+func pluginsDriver(t *testing.T) (*driver, *pluginsPage, string) {
+	t.Helper()
+	t.Setenv("HERDR_CONFIG_PATH", filepath.Join(t.TempDir(), "config.toml"))
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	log := testutil.FakeHerdr(t, testutil.HerdrResponse{Args: "plugin list --json", Stdout: managedPluginsJSON})
+	d := newDriver(t, Options{Tab: "plugins"})
+	page := d.app.pages[1].(*pluginsPage)
+	if len(page.plugins) != 3 {
+		t.Fatalf("plugins = %d", len(page.plugins))
+	}
+	return d, page, log
+}
+
+func TestPluginsExpandRunAndBind(t *testing.T) {
+	d, page, _ := pluginsDriver(t)
+	if !strings.Contains(d.view(), "Demo") || !strings.Contains(d.view(), "(disabled)") {
+		t.Fatalf("view:\n%s", d.view())
+	}
+	d.keys("enter")
+	if len(page.rows) != 4 {
+		t.Fatalf("actions not expanded: %d rows", len(page.rows))
+	}
+	d.keys("j", "enter")
+	if d.app.after == nil {
+		t.Fatal("running an action did not close the popup first")
+	}
+	d.app.after = nil
+	d.keys("b")
+	keys := d.app.pages[2].(*keysPage)
+	if d.app.active != 2 || keys.mode != keysForm || keys.form.value("command") != "demo.run" {
+		t.Fatalf("bind did not open the Keys form (page %d)", d.app.active)
+	}
+}
+
+func TestPluginsToggleAndRemove(t *testing.T) {
+	d, page, log := pluginsDriver(t)
+	d.keys("e")
+	page.list.selectRow(slices.IndexFunc(page.rows, func(r pluginRow) bool { return page.plugins[r.plugin].ID == "local" }))
+	d.keys("e", "x")
+	if page.mode != pluginsConfirm || !strings.HasPrefix(page.ask.question, "unlink Local") {
+		t.Fatalf("remove did not confirm an unlink: %+v", page.ask)
+	}
+	d.keys("y")
+	calls := strings.Join(testutil.HerdrCalls(t, log), "\n")
+	for _, want := range []string{"plugin disable demo", "plugin enable local", "plugin unlink local"} {
+		if !strings.Contains(calls, want) {
+			t.Errorf("missing %q in:\n%s", want, calls)
+		}
+	}
+}
+
+func TestPluginsUpdateAllSkipsPins(t *testing.T) {
+	d, page, _ := pluginsDriver(t)
+	d.send(checksMsg{statuses: map[string]plugins.Status{
+		"demo":   {State: plugins.Behind, Version: "1.1.0"},
+		"pinned": {State: plugins.Behind},
+	}})
+	if !strings.Contains(d.view(), "1.0.0 → 1.1.0") || !strings.Contains(d.view(), "2 update(s)") {
+		t.Fatalf("view:\n%s", d.view())
+	}
+	d.keys("U")
+	if page.mode != pluginsConfirm || page.ask.question != "Update 1 plugin(s): Demo → 1.1.0?" {
+		t.Fatalf("question = %+v", page.ask)
+	}
+	d.keys("n")
+	d.send(checksMsg{statuses: map[string]plugins.Status{"demo": {State: plugins.Current}}})
+	d.keys("u")
+	if !strings.Contains(d.app.status, "up to date") {
+		t.Fatalf("status %q", d.app.status)
+	}
+}
+
+func TestInstallArgs(t *testing.T) {
+	for in, want := range map[string]string{
+		"a/b":                     "plugin install a/b",
+		"https://github.com/a/b":  "plugin install a/b",
+		"a/b/plugins/x@v1.2":      "plugin install a/b/plugins/x --ref v1.2",
+		" a/b@0123456789abcdef  ": "plugin install a/b --ref 0123456789abcdef",
+		"a":                       "",
+		"a/b; rm -rf /":           "",
+		"--ref=x/y":               "",
+	} {
+		args, err := installArgs(in)
+		if got := strings.Join(args, " "); got != want || (want == "") != (err != nil) {
+			t.Errorf("installArgs(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+}
+
+func TestPluginsRegistryMissing(t *testing.T) {
+	d, _, _ := pluginsDriver(t)
+	if filepath.Dir(plugins.RegistryPath()) != filepath.Dir(os.Getenv("HERDR_CONFIG_PATH")) {
+		t.Fatalf("registry %s is outside the test config dir", plugins.RegistryPath())
+	}
+	d.keys("c")
+	if !d.app.statusErr || !strings.Contains(d.app.status, "plugins.json") {
+		t.Fatalf("status %q", d.app.status)
+	}
+}

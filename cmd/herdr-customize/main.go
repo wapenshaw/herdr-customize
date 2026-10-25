@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 
 	"github.com/wapenshaw/herdr-customize/internal/herdr"
+	"github.com/wapenshaw/herdr-customize/internal/plugins"
 	"github.com/wapenshaw/herdr-customize/internal/terminal"
 	"github.com/wapenshaw/herdr-customize/internal/theme"
 	"github.com/wapenshaw/herdr-customize/internal/ui"
@@ -94,6 +96,19 @@ func run(args []string) error {
 			return err
 		}
 		return nil
+
+	case "invoke-after-close":
+		if len(args) != 3 {
+			return errors.New("usage: herdr-customize invoke-after-close <pid> <plugin.action>")
+		}
+		pid, err := strconv.Atoi(args[1])
+		if err != nil {
+			return fmt.Errorf("invalid pid %q", args[1])
+		}
+		return plugins.RunInvokeAfterClose(pid, args[2])
+
+	case "herdr-run":
+		os.Exit(plugins.RunInteractive(os.Stdin, os.Stdout, args[1:]))
 
 	case "terminal-sync":
 		if len(args) != 2 {
