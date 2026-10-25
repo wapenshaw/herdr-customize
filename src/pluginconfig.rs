@@ -148,20 +148,21 @@ fn read(f: &mut File, documented: Vec<Key>) -> Result<()> {
 }
 
 /// Documented keys first, filled with the values found, then any other keys
-/// found in the file.
-fn merge(documented: Vec<Key>, found: Vec<Entry>, format: Format) -> Vec<Entry> {
-    let mut by_name: HashMap<String, Entry> = found.iter().map(|e| (e.key.key.clone(), e.clone())).collect();
+/// found in the file. A key found twice keeps its last value.
+fn merge(documented: Vec<Key>, mut found: Vec<Entry>, format: Format) -> Vec<Entry> {
     let mut out = Vec::new();
     for k in documented {
         let mut e = Entry { documented: true, ..Default::default() };
-        if let Some(f) = by_name.remove(&k.key) {
+        if let Some(i) = found.iter().rposition(|f| f.key.key == k.key) {
+            let f = found.remove(i);
+            found.retain(|f| f.key.key != k.key);
             e.value = f.value.map(|v| if format == Format::Env { typed(&k.kind, &env_string(&v)) } else { v });
             e.read_only = f.read_only;
         }
         e.key = k;
         out.push(e);
     }
-    out.extend(found.into_iter().filter(|e| by_name.contains_key(&e.key.key)));
+    out.extend(found);
     out
 }
 
@@ -412,13 +413,18 @@ fn env_string(value: &Value) -> String {
     }
 }
 
+/// The quote character wrapping s, if any.
+fn quote_of(s: &str) -> Option<char> {
+    let b = s.as_bytes();
+    (b.len() >= 2 && (b[0] == b'"' || b[0] == b'\'') && b[b.len() - 1] == b[0]).then(|| b[0] as char)
+}
+
 fn unquote(s: &str) -> String {
     let s = s.trim();
-    let b = s.as_bytes();
-    if b.len() >= 2 && (b[0] == b'"' || b[0] == b'\'') && b[b.len() - 1] == b[0] {
-        return s[1..s.len() - 1].into();
+    match quote_of(s) {
+        Some(_) => s[1..s.len() - 1].into(),
+        None => s.into(),
     }
-    s.into()
 }
 
 fn newline(data: &str) -> &'static str {
@@ -437,9 +443,10 @@ fn set_env(data: &str, key: &str, value: &str) -> Result<String> {
     let mut commented = None;
     for (i, line) in lines.iter_mut().enumerate() {
         if let Some(m) = ENV_SET.captures(line).filter(|m| &m[2] == key) {
-            let raw = m[3].trim();
-            let b = raw.as_bytes();
-            let quoted = if b.len() >= 2 && (b[0] == b'"' || b[0] == b'\'') && b[b.len() - 1] == b[0] { format!("{0}{value}{0}", b[0] as char) } else { value.to_string() };
+            let quoted = match quote_of(m[3].trim()) {
+                Some(q) => format!("{q}{value}{q}"),
+                None => value.to_string(),
+            };
             *line = format!("{}{quoted}", &line[..=line.find('=').unwrap()]);
             return Ok(lines.join(nl));
         }
