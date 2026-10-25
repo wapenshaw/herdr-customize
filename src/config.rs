@@ -126,6 +126,13 @@ pub fn decode_value(text: &str) -> Result<Value> {
 }
 
 /// The editable form of a value, with the default inline formatting.
+/// Puts new in place of old, keeping old's comment and spacing.
+fn replace_value(old: &mut toml_edit::Value, new: toml_edit::Value) {
+    let decor = old.decor().clone();
+    *old = new;
+    *old.decor_mut() = decor;
+}
+
 fn edit_value(value: &Value) -> Result<toml_edit::Value> {
     let encoded = encode(value)?;
     let mut v: toml_edit::Value = encoded.parse().map_err(|e| anyhow!("invalid value {encoded}: {e}"))?;
@@ -233,11 +240,7 @@ impl Doc {
         let created = self.existing(parents) < parents.len();
         let table = self.table_at(parents, true)?;
         match table.get_mut(last) {
-            Some(Item::Value(old)) => {
-                let decor = old.decor().clone();
-                *old = new;
-                *old.decor_mut() = decor;
-            }
+            Some(Item::Value(old)) => replace_value(old, new),
             Some(Item::None) | None => {
                 table.insert(last, Item::Value(new));
             }
@@ -310,11 +313,7 @@ impl Doc {
         for (key, value) in fields {
             let new = edit_value(value)?;
             match entry.get_mut(key) {
-                Some(Item::Value(old)) => {
-                    let decor = old.decor().clone();
-                    *old = new;
-                    *old.decor_mut() = decor;
-                }
+                Some(Item::Value(old)) => replace_value(old, new),
                 _ => {
                     entry.insert(key, Item::Value(new));
                 }
@@ -422,7 +421,7 @@ impl Store {
     /// Validates doc with 'herdr config check' before replacing the file, so
     /// a rejected edit never reaches disk. Problems the config already had do
     /// not block a save. The first change each day backs up the original.
-    pub fn save(&self, doc: &Doc) -> Result<SaveResult> {
+    fn save(&self, doc: &Doc) -> Result<SaveResult> {
         let mut result = SaveResult::default();
         let data = doc.text();
         let original = match fs::read(&self.path) {
@@ -492,6 +491,7 @@ fn normalize_issue(issue: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn get(doc: &Doc, path: &[String]) -> Option<Value> {
         lookup(&doc.decoded(), path).cloned()
     }
