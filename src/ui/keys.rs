@@ -594,9 +594,9 @@ impl Page for KeysPage {
             (Kind::Command { index, .. }, "d") => {
                 let index = *index;
                 self.mode = Mode::Confirm;
-                self.ask = Confirm::new(format!("Delete {}?", r.owner), move |_: &mut KeysPage, ctx| {
+                self.ask = Some(Confirm::new(format!("Delete {}?", r.owner), move |_: &mut KeysPage, ctx| {
                     ctx.save("command removal", move |doc| doc.delete_array_table(&command_path(), index));
-                });
+                }));
             }
             (Kind::PluginAction { qualified, title }, "enter") => self.bind_action(qualified, title),
             _ => {}

@@ -198,10 +198,10 @@ impl ThemesPage {
         match theme::save_user_theme(&self.input.value(), &self.pending_body, overwrite) {
             Ok(Saved::Exists(slug)) => {
                 self.mode = Mode::Confirm;
-                self.ask = Confirm::new(format!("{slug:?} already exists. Overwrite?"), |p: &mut ThemesPage, ctx| {
+                self.ask = Some(Confirm::new(format!("{slug:?} already exists. Overwrite?"), |p: &mut ThemesPage, ctx| {
                     p.mode = Mode::Naming;
                     p.save_new(true, ctx);
-                });
+                }));
             }
             Ok(Saved::Saved(slug)) => {
                 self.mode = Mode::Browse;
@@ -310,13 +310,13 @@ impl ThemesPage {
             "ctrl+d" => match item {
                 Some(item) if item.user => {
                     self.mode = Mode::Confirm;
-                    self.ask = Confirm::new(format!("Delete {:?}?", item.slug), move |_: &mut ThemesPage, ctx| match theme::remove_user_theme(&item.slug) {
+                    self.ask = Some(Confirm::new(format!("Delete {:?}?", item.slug), move |_: &mut ThemesPage, ctx| match theme::remove_user_theme(&item.slug) {
                         Ok(()) => {
                             ctx.spawn(load_themes);
                             ctx.status(format!("deleted {:?}", item.slug));
                         }
                         Err(e) => ctx.error(e),
-                    });
+                    }));
                 }
                 _ => ctx.error("only ★ user-added themes can be deleted"),
             },

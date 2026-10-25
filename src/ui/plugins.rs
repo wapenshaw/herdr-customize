@@ -288,10 +288,10 @@ impl PluginsPage {
             Action::Remove => {
                 let verb = if p.github() { "uninstall" } else { "unlink" };
                 self.mode = Mode::Confirm;
-                self.ask = Confirm::new(format!("{verb} {} ({})?", p.name, p.id), move |page: &mut PluginsPage, ctx| {
+                self.ask = Some(Confirm::new(format!("{verb} {} ({})?", p.name, p.id), move |page: &mut PluginsPage, ctx| {
                     page.panel = false;
                     ctx.spawn(move || Msg::PluginOp { text: format!("{verb}ed {}", p.name), err: plugins::remove(&p).err().map(|e| format!("{e:#}")) });
-                });
+                }));
             }
             Action::Open if !p.github() => ctx.status(format!("{} is linked from a local checkout", p.name)),
             Action::Open => match proc::open_url(&p.repo_url()) {
@@ -324,7 +324,7 @@ impl PluginsPage {
         }
         self.mode = Mode::Confirm;
         let question = format!("{} is pinned to {}; move the pin to {} (default branch)?", p.name, short(&p.source.commit), short(&sha));
-        self.ask = Confirm::new(question, move |_: &mut PluginsPage, ctx| interactive(ctx, format!("update {}", p.name), args(&["plugin", "install", &p.spec(), "--ref", &sha])));
+        self.ask = Some(Confirm::new(question, move |_: &mut PluginsPage, ctx| interactive(ctx, format!("update {}", p.name), args(&["plugin", "install", &p.spec(), "--ref", &sha]))));
     }
 
     /// Updates every plugin that is behind. Exact-commit pins are left alone:
@@ -349,12 +349,12 @@ impl PluginsPage {
             return ctx.status("nothing to update");
         }
         self.mode = Mode::Confirm;
-        self.ask = Confirm::new(format!("Update {} plugin(s): {}?", ids.len(), names.join(", ")), move |_: &mut PluginsPage, ctx| {
+        self.ask = Some(Confirm::new(format!("Update {} plugin(s): {}?", ids.len(), names.join(", ")), move |_: &mut PluginsPage, ctx| {
             let n = ids.len();
             let mut a = args(&["plugin", "update"]);
             a.extend(ids);
             interactive(ctx, format!("update of {n} plugin(s)"), a);
-        });
+        }));
     }
 
     fn input_key(&mut self, key: &Key, ctx: &mut Ctx) {
@@ -440,9 +440,9 @@ impl PluginsPage {
                     return ctx.status(format!("{} is already installed; update it from the list", repo.full_name));
                 }
                 self.mode = Mode::Confirm;
-                self.ask = Confirm::new(format!("Install {} (★ {})?", repo.full_name, repo.stars), move |_: &mut PluginsPage, ctx| {
+                self.ask = Some(Confirm::new(format!("Install {} (★ {})?", repo.full_name, repo.stars), move |_: &mut PluginsPage, ctx| {
                     interactive(ctx, format!("install {}", repo.full_name), args(&["plugin", "install", &repo.full_name]));
-                });
+                }));
             }
             "o" => {
                 let url = plugins::github_url(&repo.full_name);
