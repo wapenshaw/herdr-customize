@@ -507,8 +507,7 @@ impl Page for SettingsPage {
                 }
             }
             Msg::RawEdited { path, ok } => {
-                let (path, ok) = (path.clone(), ok.clone());
-                self.raw_edited(&path, &ok, ctx);
+                self.raw_edited(path, ok, ctx);
             }
             _ => {}
         }

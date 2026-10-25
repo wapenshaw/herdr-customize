@@ -410,7 +410,7 @@ impl App {
     /// Delivers msg to the app and then to every page.
     pub fn dispatch(&mut self, mut msg: Msg) {
         match &mut msg {
-            Msg::Reference(r) => self.sh.reference = r.clone(),
+            Msg::Reference(r) => self.sh.reference = std::mem::take(r),
             Msg::Saved(saved) => (self.status, self.status_err) = saved.describe(),
             _ => {}
         }
