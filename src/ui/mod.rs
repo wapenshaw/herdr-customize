@@ -102,6 +102,8 @@ impl Key {
 #[derive(Debug, Default)]
 pub struct Saved {
     pub what: String,
+    /// The dotted key the save changed; None when it replaced the whole file.
+    pub key: Option<String>,
     pub result: SaveResult,
     pub err: Option<anyhow::Error>,
 }
@@ -190,10 +192,6 @@ pub enum Msg {
         seq: u64,
     },
     // Settings
-    SettingSaved {
-        name: String,
-        saved: Saved,
-    },
     Issues(CheckResult),
     /// config.toml as edited in the editor.
     RawEdited(Result<String>),
@@ -283,10 +281,10 @@ impl Ctx<'_> {
         }
     }
 
-    /// Applies edit to the config in the background.
-    pub fn save(&mut self, what: impl Into<String>, edit: impl FnOnce(&mut Doc) -> Result<()> + Send + 'static) {
+    /// Applies edit, which changes key, to the config in the background.
+    pub fn save(&mut self, what: impl Into<String>, key: String, edit: impl FnOnce(&mut Doc) -> Result<()> + Send + 'static) {
         let (store, what) = (self.sh.store.clone(), what.into());
-        self.spawn(move || Msg::Saved(save(&store, what, edit)));
+        self.spawn(move || Msg::Saved(save(&store, what, Some(key), edit)));
     }
 }
 
@@ -306,10 +304,10 @@ pub fn load_doc(store: &Store, err: &mut Option<String>) -> Doc {
 }
 
 /// Saves through store; Store keeps saves in order.
-fn save(store: &Store, what: String, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Saved {
+fn save(store: &Store, what: String, key: Option<String>, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Saved {
     match store.update(edit) {
-        Ok(result) => Saved { what, result, err: None },
-        Err(e) => Saved { what, err: Some(e), ..Default::default() },
+        Ok(result) => Saved { what, key, result, err: None },
+        Err(e) => Saved { what, key, err: Some(e), ..Default::default() },
     }
 }
 
