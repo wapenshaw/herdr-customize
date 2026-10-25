@@ -120,18 +120,30 @@ pub fn temp_path(dir: &Path, prefix: &str) -> PathBuf {
 
 /// Today's local date as YYYYMMDD.
 fn today() -> String {
-    let t = local_time(std::time::SystemTime::now());
-    format!("{:04}{:02}{:02}", t.year, t.month, t.day)
+    format_local(std::time::SystemTime::now(), "%Y%m%d")
 }
 
-/// A local calendar time.
-pub struct LocalTime {
-    pub year: i32,
-    pub month: u32,
-    pub day: u32,
-    pub hour: u32,
-    pub minute: u32,
-    pub second: u32,
+/// Formats t in local time, replacing %Y, %m, %d, %H, %M and %S in fmt.
+pub fn format_local(t: std::time::SystemTime, fmt: &str) -> String {
+    let t = local_time(t);
+    let fields = [
+        ("%Y", format!("{:04}", t.year)),
+        ("%m", format!("{:02}", t.month)),
+        ("%d", format!("{:02}", t.day)),
+        ("%H", format!("{:02}", t.hour)),
+        ("%M", format!("{:02}", t.minute)),
+        ("%S", format!("{:02}", t.second)),
+    ];
+    fields.iter().fold(fmt.to_string(), |out, (code, value)| out.replace(code, value))
+}
+
+struct LocalTime {
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
 }
 
 fn unix_seconds(t: std::time::SystemTime) -> i64 {
@@ -140,7 +152,7 @@ fn unix_seconds(t: std::time::SystemTime) -> i64 {
 
 /// Breaks t into local calendar fields.
 #[cfg(unix)]
-pub fn local_time(t: std::time::SystemTime) -> LocalTime {
+fn local_time(t: std::time::SystemTime) -> LocalTime {
     // Naming libc::time_t warns on musl, where it is due to become 64-bit on
     // 32-bit targets; let localtime_r's signature pick the type.
     #[allow(clippy::useless_conversion, reason = "time_t is 32-bit on some targets")]
@@ -156,7 +168,7 @@ pub fn local_time(t: std::time::SystemTime) -> LocalTime {
 
 /// Breaks t into local calendar fields.
 #[cfg(windows)]
-pub fn local_time(t: std::time::SystemTime) -> LocalTime {
+fn local_time(t: std::time::SystemTime) -> LocalTime {
     use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
     use windows_sys::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};
     // FILETIME counts 100 ns intervals from 1601-01-01.
@@ -200,6 +212,12 @@ mod tests {
         assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
         assert_eq!(fs::read_to_string(&real).unwrap(), "a = 2\n");
         assert_eq!(fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o640);
+    }
+
+    #[test]
+    fn format_local_fills_every_field() {
+        let text = format_local(std::time::SystemTime::now(), "on %Y-%m-%d at %H:%M:%S");
+        assert!(regex::Regex::new(r"^on \d{4}-\d{2}-\d{2} at \d{2}:\d{2}:\d{2}$").unwrap().is_match(&text), "{text}");
     }
 
     #[test]
