@@ -333,7 +333,9 @@ impl Doc {
         let missing = || anyhow!("{} entry {} does not exist", render_key(path), i + 1);
         let parent = self.table_at(parents, false)?;
         match parent.get_mut(last) {
-            Some(Item::ArrayOfTables(aot)) if i < aot.len() => aot.remove(i),
+            Some(Item::ArrayOfTables(aot)) if i < aot.len() => {
+                aot.remove(i);
+            }
             Some(Item::Value(toml_edit::Value::Array(array))) if i < array.len() => {
                 array.remove(i);
             }

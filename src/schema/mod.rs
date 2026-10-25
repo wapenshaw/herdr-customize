@@ -156,7 +156,7 @@ pub fn url(version: &str) -> String {
 
 /// Downloads the reference for version into dir and returns it.
 pub fn fetch(dir: &Path, version: &str) -> Result<Reference> {
-    let body = ureq::get(&url(version)).timeout(Duration::from_secs(5)).call()?.into_string()?;
+    let body = ureq::get(&url(version)).config().timeout_global(Some(Duration::from_secs(5))).build().call()?.body_mut().read_to_string()?;
     let mut r = parse(&body)?;
     r.version = version.into();
     if std::fs::create_dir_all(dir).is_ok() {

@@ -43,7 +43,7 @@ median of 15 alternating runs through a pty harness.
 | Clean release build | 6.0 s | 32.1 s | Rust: LTO + `codegen-units = 1`. |
 | Rebuild after a one-line edit | 0.7 s | ~20 s (release) | Rust dev builds are faster but still not Go-fast. |
 | Test suite (wall) | 12.6 s | 3.6 s | Both dominated by spawning the fake `herdr` script; Go's suite simply has more subprocess tests. |
-| Dependencies | 6 direct, 25 modules | 12 direct, 134 crates | Rust leans on small crates; Go's stdlib covers more. |
+| Dependencies | 6 direct, 25 modules | 12 direct, 151 crates across all targets | Rust leans on small crates; Go's stdlib covers more. |
 | Cross-compile for Windows from a Mac | `GOOS=windows go build`, nothing else | Type-check only; a build needs the Windows C headers for `ring` | See "Building for Windows" below. |
 
 The slowness that started this experiment was not the language. The Go

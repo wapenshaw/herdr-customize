@@ -91,7 +91,7 @@ fn remote_version(p: &Plugin, commit: &str) -> Result<String> {
     if !p.source.subdir.is_empty() {
         url += &format!("/{}", p.source.subdir);
     }
-    let body = ureq::get(&format!("{url}/herdr-plugin.toml")).timeout(Duration::from_secs(5)).call()?.into_string()?;
+    let body = ureq::get(&format!("{url}/herdr-plugin.toml")).config().timeout_global(Some(Duration::from_secs(5))).build().call()?.body_mut().read_to_string()?;
     #[derive(Deserialize)]
     struct Manifest {
         #[serde(default)]
