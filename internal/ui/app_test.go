@@ -114,10 +114,11 @@ func (d *driver) view() string { return d.app.View() }
 
 func TestRunesThatArriveTogetherAreSplit(t *testing.T) {
 	d := newDriver(t, Options{})
-	d.keys("jj")
 	page := d.app.pages[0].(*themesPage)
-	if page.list.cursor != 2 {
-		t.Fatalf("cursor = %d, want 2", page.list.cursor)
+	start := page.list.cursor
+	d.keys("jj")
+	if page.list.cursor != start+2 {
+		t.Fatalf("cursor = %d, want %d", page.list.cursor, start+2)
 	}
 	d.keys("/nord")
 	if !strings.Contains(d.view(), "/nord") || page.list.filter.Value() != "nord" {
@@ -251,4 +252,50 @@ func quiet(t *testing.T) {
 	stdout := os.Stdout
 	os.Stdout = null
 	t.Cleanup(func() { os.Stdout = stdout; null.Close() })
+}
+
+func TestThemeFiltersAndGroups(t *testing.T) {
+	d := newDriver(t, Options{})
+	page := d.app.pages[0].(*themesPage)
+	if page.rows[0].header == "" || !strings.Contains(d.view(), "DARK") || !strings.Contains(d.view(), "Light") {
+		t.Fatalf("groups not shown:\n%s", d.view())
+	}
+	if _, ok := page.selectedItem(); !ok {
+		t.Fatal("cursor starts on a heading")
+	}
+	for _, want := range []string{"Dark", "Light"} {
+		d.keys("right")
+		if themeFilters[page.filter] != want {
+			t.Fatalf("filter %s, want %s", themeFilters[page.filter], want)
+		}
+		if d.app.active != 0 {
+			t.Fatal("right left the page")
+		}
+		for _, r := range page.rows {
+			if r.header != "" {
+				t.Fatal("a filtered view has headings")
+			}
+			if dark := page.looks[page.items[r.item].Slug].Dark; dark != (want == "Dark") {
+				t.Fatalf("%s in %s", page.items[r.item].Slug, want)
+			}
+		}
+	}
+	d.keys("left", "left", "left")
+	if themeFilters[page.filter] != "Yours" {
+		t.Fatalf("left did not wrap: %s", themeFilters[page.filter])
+	}
+}
+
+func TestKeySheet(t *testing.T) {
+	d := newDriver(t, Options{})
+	page := d.app.pages[0].(*themesPage)
+	start := page.list.cursor
+	d.keys("?")
+	if !strings.Contains(d.view(), "Keys · Themes") || !strings.Contains(d.view(), "token table") {
+		t.Fatalf("sheet not shown:\n%s", d.view())
+	}
+	d.keys("j")
+	if d.app.sheet || page.list.cursor != start {
+		t.Fatal("the key that closed the sheet also moved the list")
+	}
 }

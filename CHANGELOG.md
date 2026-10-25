@@ -19,6 +19,12 @@ match the `version` field in `herdr-plugin.toml`.
   update checks, single and bulk updates through Herdr's trust prompt,
   install, enable/disable, uninstall/unlink, marketplace, command logs, and
   running actions after the popup closes.
+- Themes page: themes grouped into in use, yours, dark and light with a color
+  strip each; ←/→ filter; a framed preview in the theme's accent with status
+  colors and the full palette; the token table behind **t**.
+- Plugins page: a list with a panel for the selected plugin whose menu runs
+  actions, settings, logs, update, enable/disable and removal; install and
+  the marketplace are rows of the list. **?** shows every key of a page.
 - Plugin settings: **s** on a plugin edits the TOML and `.env` files in its
   config directory with types inferred from values and commented-out
   defaults, or taken from a `config-schema.json` the plugin ships.

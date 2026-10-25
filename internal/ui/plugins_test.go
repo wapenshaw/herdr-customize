@@ -32,31 +32,67 @@ func pluginsDriver(t *testing.T) (*driver, *pluginsPage, string) {
 	return d, page, log
 }
 
-func TestPluginsExpandRunAndBind(t *testing.T) {
+func TestPluginsPanelRunAndBind(t *testing.T) {
 	d, page, _ := pluginsDriver(t)
-	if !strings.Contains(d.view(), "Demo") || !strings.Contains(d.view(), "(disabled)") {
-		t.Fatalf("view:\n%s", d.view())
+	view := d.view()
+	for _, want := range []string{"Demo", "off", "Install from GitHub", "Browse the marketplace", "Run demo", "Settings"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("missing %q in:\n%s", want, view)
+		}
 	}
-	d.keys("enter")
-	if len(page.rows) != 4 {
-		t.Fatalf("actions not expanded: %d rows", len(page.rows))
+	d.keys("right")
+	if !page.panel || page.menuItem().label != "Run demo" {
+		t.Fatal("right did not open the panel on the action")
 	}
-	d.keys("j", "enter")
-	if d.app.after == nil {
-		t.Fatal("running an action did not close the popup first")
-	}
-	d.app.after = nil
 	d.keys("b")
 	keys := d.app.pages[2].(*keysPage)
 	if d.app.active != 2 || keys.mode != keysForm || keys.form.value("command") != "demo.run" {
 		t.Fatalf("bind did not open the Keys form (page %d)", d.app.active)
+	}
+	d.keys("esc", "1", "2")
+	if d.app.active != 1 {
+		t.Fatalf("on page %d", d.app.active)
+	}
+	d.keys("enter", "enter")
+	if d.app.after == nil {
+		t.Fatal("running an action did not close the popup first")
+	}
+	d.app.after = nil
+	// Left and esc leave the panel before the popup.
+	d.keys("left")
+	if page.panel {
+		t.Fatal("left did not leave the panel")
+	}
+	d.keys("enter", "esc")
+	if page.panel || d.app.after != nil {
+		t.Fatal("esc did not leave the panel")
+	}
+}
+
+func TestPluginsListRowsStartInstallAndMarket(t *testing.T) {
+	d, page, _ := pluginsDriver(t)
+	d.keys("G")
+	if page.selectedKind() != rowMarket {
+		t.Fatal("last row is not the marketplace")
+	}
+	d.keys("k")
+	if page.selectedKind() != rowInstall {
+		t.Fatal("install row missing")
+	}
+	d.keys("k")
+	if page.selected() == nil || page.selected().ID != "local" {
+		t.Fatal("cursor did not skip the gap")
+	}
+	d.keys("j", "enter")
+	if page.mode != pluginsInstallInput {
+		t.Fatal("enter on install did not ask for a repo")
 	}
 }
 
 func TestPluginsToggleAndRemove(t *testing.T) {
 	d, page, log := pluginsDriver(t)
 	d.keys("e")
-	page.list.selectRow(slices.IndexFunc(page.rows, func(r pluginRow) bool { return page.plugins[r.plugin].ID == "local" }))
+	page.list.selectRow(slices.IndexFunc(page.rows, func(r pluginRow) bool { return r.kind == rowPlugin && page.plugins[r.plugin].ID == "local" }))
 	d.keys("e", "x")
 	if page.mode != pluginsConfirm || !strings.HasPrefix(page.ask.question, "unlink Local") {
 		t.Fatalf("remove did not confirm an unlink: %+v", page.ask)

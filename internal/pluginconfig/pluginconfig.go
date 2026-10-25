@@ -73,7 +73,11 @@ func Dir(pluginID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(out), nil
+	dir := strings.TrimSpace(out)
+	if dir == "" {
+		return "", fmt.Errorf("herdr gave no config directory for %s", pluginID)
+	}
+	return dir, nil
 }
 
 // Load reads every file in dir, using root's schema when present.

@@ -100,15 +100,16 @@ func newList() list {
 
 // setRows replaces the rows, keeping the selected label when it still exists.
 func (l *list) setRows(labels []string) {
-	keep := ""
+	keep, had := "", false
 	if i := l.selected(); i >= 0 {
-		keep = l.labels[i]
+		keep, had = l.labels[i], true
 	}
 	l.labels = labels
 	l.refilter()
 	for c, i := range l.matches {
-		if labels[i] == keep {
+		if had && labels[i] == keep {
 			l.cursor = c
+			break
 		}
 	}
 }
@@ -179,12 +180,15 @@ func subsequence(s, term string) bool {
 }
 
 // clearFilter drops an applied filter and reports whether there was one.
+// The selected row stays selected.
 func (l *list) clearFilter() bool {
 	if l.filter.Value() == "" {
 		return false
 	}
+	keep := l.selected()
 	l.filter.SetValue("")
 	l.refilter()
+	l.selectRow(keep)
 	return true
 }
 
@@ -217,13 +221,17 @@ func (l *list) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "esc":
 			l.filtering = false
 			l.filter.Blur()
-			l.filter.SetValue("")
-			l.refilter()
+			l.clearFilter()
 			return true, nil
 		case "up", "down", "ctrl+p", "ctrl+n":
 		default:
 			var cmd tea.Cmd
+			before := l.filter.Value()
 			l.filter, cmd = l.filter.Update(msg)
+			if l.filter.Value() != before {
+				// A new search starts at its best match.
+				l.cursor = 0
+			}
 			l.refilter()
 			return true, cmd
 		}

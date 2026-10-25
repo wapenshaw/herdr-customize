@@ -38,7 +38,15 @@ type app struct {
 	statusErr     bool
 	// after runs once the popup has closed, with the terminal restored.
 	after func() error
+	// sheet shows every key of the current page in place of its body.
+	sheet bool
 }
+
+// keyHint is one line of a page's key sheet.
+type keyHint struct{ key, what string }
+
+// keySheet is implemented by pages that list their keys under ?.
+type keySheet interface{ keys() []keyHint }
 
 // Messages shared by every page.
 type (
@@ -148,6 +156,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return a, tea.Quit
 		}
+		// Any key closes the key sheet.
+		if a.sheet {
+			a.sheet = false
+			return a, nil
+		}
 		current := a.pages[a.active]
 		// A page can take a key that would otherwise switch pages.
 		if c, ok := current.(interface{ claims(tea.KeyMsg) bool }); ok && c.claims(msg) {
@@ -162,6 +175,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, tea.Quit
 			case "q":
 				return a, tea.Quit
+			case "?":
+				if _, ok := current.(keySheet); ok {
+					a.sheet = true
+					return a, nil
+				}
 			// Arrows belong to the page; only Tab and the digits switch.
 			case "tab":
 				a.active = (a.active + 1) % len(a.pages)
@@ -214,7 +232,31 @@ func (a *app) View() string {
 		}
 	}
 	bodyHeight := max(a.height-4, 1)
-	body := current.view(a.width, bodyHeight)
+	var body string
+	if s, ok := current.(keySheet); ok && a.sheet {
+		body = renderSheet(current.title(), s.keys())
+		help = "any key closes"
+	} else {
+		body = current.view(a.width, bodyHeight)
+	}
 	body = fit(body, a.width, bodyHeight)
 	return header + "\n" + body + "\n" + clip(status, a.width) + "\n" + styleHelp.Render(clip(help, a.width))
+}
+
+func renderSheet(title string, hints []keyHint) string {
+	width := 0
+	for _, h := range hints {
+		width = max(width, lipgloss.Width(h.key))
+	}
+	lines := []string{styleHeading.Render("Keys · " + title), ""}
+	for _, h := range hints {
+		if h.key == "" {
+			lines = append(lines, "", styleDim.Render(h.what))
+			continue
+		}
+		lines = append(lines, "  "+styleAccent.Render(padRight(h.key, width))+"  "+h.what)
+	}
+	lines = append(lines, "", "  "+styleAccent.Render(padRight("tab", width))+"  next page (shift+tab back, 1–4 jump)",
+		"  "+styleAccent.Render(padRight("q", width))+"  close")
+	return strings.Join(lines, "\n")
 }

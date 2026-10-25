@@ -101,16 +101,24 @@ machines.
 
 ### Picker and custom themes
 
-- **/** searches. The preview maps the palette onto a mock Herdr workspace.
+Themes are grouped into the one in use, yours, dark and light, each with a
+strip of its 16 colors (normal over bright). The selected theme is previewed on
+the right in a frame of its own accent color: a mock Herdr workspace, a line of
+status colors and the full palette.
+
+- **↑**/**↓** move and the preview follows. **←**/**→** switch between all,
+  dark, light and your themes. **/** searches.
+- **t** shows the token table (which palette entry feeds which Herdr color)
+  in place of the mock.
 - **Enter** applies the theme and closes the popup. **Esc** clears a search,
-  then closes.
+  then closes. **?** lists every key.
 - **a** opens an editor for a Ghostty-format palette; **c** imports one from the
   clipboard. Either way you name it, and it is saved and applied.
 - **e** edits a user theme's token colors with a live preview. **s** saves and
   applies; **Esc** discards the edits.
 - **d** deletes a user theme after confirmation. Bundled themes are read-only.
 
-The applied theme is marked `✓`; user themes are marked `★`. `VISUAL` and
+The applied theme is marked `●`; user themes are marked `★`. `VISUAL` and
 `EDITOR` are respected, including arguments such as `code --wait`. Fallback
 editors are `nvim`, `nano`, then `vi` on Unix or Notepad on Windows.
 
@@ -194,13 +202,21 @@ copying any Ghostty palette from [terminalcolors.com](https://terminalcolors.com
 
 ## Plugins
 
-The list shows each plugin with its version, source and update state: `●` up
-to date, `↑` behind (with the new version when its manifest says), `?` could not
-be checked, `⌂` linked from a local checkout. Checks run `git ls-remote` against
-the installed ref and need no GitHub token.
+The list on the left shows each plugin with its version and update state: `●`
+up to date, `↑` behind, `?` could not be checked, `⌂` linked from a local
+checkout. Checks run `git ls-remote` against the installed ref and need no
+GitHub token. Below the plugins, **Install from GitHub…** and **Browse the
+marketplace…** start those flows.
 
-- **Enter** shows a plugin's actions. **Enter** on an action closes the popup
-  and runs it; **b** binds it to a key on the Keys page.
+The panel on the right describes the selected plugin and lists everything it
+can do: its actions, Settings (with a count of what it keeps), Recent runs
+(with the last one), Update (with the version it would move to), Disable,
+Uninstall and Open repository. **→** or **Enter** moves into the panel,
+**↑**/**↓** pick and **Enter** runs; **←** or **Esc** goes back. The letters
+below work from either side; **?** lists them.
+
+- **Enter** on an action closes the popup and runs it; **b** binds it to a key
+  on the Keys page.
 - **u** updates the selected plugin and **U** updates every plugin that is
   behind. Both run `herdr plugin update` in the terminal so Herdr's trust prompt
   is the final gate. A plugin installed at an exact commit is skipped by **U**;

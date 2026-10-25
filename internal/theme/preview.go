@@ -72,6 +72,54 @@ func RenderSwatchFile(palettePath, label string) string {
 
 // RenderSwatchFromTokens renders the preview UI from mapped tokens and a label.
 func RenderSwatchFromTokens(tokens map[string]string, label string) string {
+	panelBg := tokens["panel_bg"]
+	var out strings.Builder
+	out.WriteString(fmt.Sprintf("  %s\n\n", label))
+	out.WriteString(RenderMock(tokens))
+	out.WriteString("\n")
+
+	// ANSI palette strip
+	out.WriteString(" ")
+	for _, t := range []string{"red", "green", "yellow", "blue", "mauve", "teal", "peach", "accent"} {
+		out.WriteString(cell(tokens[t], panelBg, "  "))
+	}
+	out.WriteString("\n\n")
+	out.WriteString(RenderTokenTable(tokens))
+	return out.String()
+}
+
+// legendTokens are the tokens the table explains, most visible first.
+var legendTokens = []string{
+	"accent", "active_row_bg", "selection_bg", "overlay0", "surface_dim",
+	"red", "green", "yellow", "blue", "teal", "mauve", "peach", "text", "panel_bg", "sidebar_bg",
+}
+
+// RenderTokenTable lists the main tokens with their color, source and role.
+func RenderTokenTable(tokens map[string]string) string {
+	panelBg, overlay0, subtext0 := tokens["panel_bg"], tokens["overlay0"], tokens["subtext0"]
+	var out strings.Builder
+	out.WriteString(fg(subtext0, "    token         source          role"))
+	out.WriteString("\n")
+	for _, t := range legendTokens {
+		val := tokens[t]
+		if val == "" {
+			val = panelBg
+		}
+		out.WriteString(" ")
+		out.WriteString(cell(val, panelBg, "  "))
+		out.WriteString(fmt.Sprintf(" %s", padr(14, t)))
+		out.WriteString(fg(overlay0, padr(16, TokenOrigin(t))))
+		out.WriteString(fg(subtext0, TokenRole(t)))
+		out.WriteString("\n")
+	}
+	return out.String()
+}
+
+// MockWidth is how many columns RenderMock uses.
+const MockWidth = 60
+
+// RenderMock draws a small Herdr workspace in the theme's colors.
+func RenderMock(tokens map[string]string) string {
 	tget := func(k string) string {
 		return tokens[k]
 	}
@@ -84,19 +132,11 @@ func RenderSwatchFromTokens(tokens map[string]string, label string) string {
 	selectionBg := tget("selection_bg")
 	blue := tget("blue")
 	green := tget("green")
-	red := tget("red")
-	yellow := tget("yellow")
-	mauve := tget("mauve")
-	teal := tget("teal")
 	peach := tget("peach")
 	subtext0 := tget("subtext0")
-	surface0 := tget("surface0")
 	surface1 := tget("surface1")
 	surfaceDim := tget("surface_dim")
 	overlay0 := tget("overlay0")
-	overlay1 := tget("overlay1")
-	_ = surface0
-	_ = overlay1
 
 	const SB = 18
 	const PA = 26
@@ -133,7 +173,6 @@ func RenderSwatchFromTokens(tokens map[string]string, label string) string {
 	}
 
 	var out strings.Builder
-	out.WriteString(fmt.Sprintf("  %s\n\n", label))
 
 	// Tab bar
 	out.WriteString(sb(subtext0, " spaces"))
@@ -199,34 +238,10 @@ func RenderSwatchFromTokens(tokens map[string]string, label string) string {
 	out.WriteString(cell(panelBg, overlay0, " ○ "))
 	out.WriteString(cell(panelBg, subtext0, "pi "))
 	out.WriteString(cell(panelBg, overlay0, "idle"))
-	out.WriteString("\n\n")
-
-	// ANSI palette strip
-	out.WriteString(" ")
-	for _, col := range []string{red, green, yellow, blue, mauve, teal, peach, accent} {
-		out.WriteString(cell(col, panelBg, "  "))
-	}
-	out.WriteString("\n\n")
-
-	// Legend
-	out.WriteString(fg(subtext0, "    token         source          role"))
 	out.WriteString("\n")
-	legendTokens := []string{
-		"accent", "active_row_bg", "selection_bg", "overlay0", "surface_dim",
-		"red", "green", "yellow", "blue", "teal", "mauve", "peach", "text", "panel_bg", "sidebar_bg",
-	}
-	for _, t := range legendTokens {
-		val := tget(t)
-		if val == "" {
-			val = panelBg
-		}
-		out.WriteString(" ")
-		out.WriteString(cell(val, panelBg, "  "))
-		out.WriteString(fmt.Sprintf(" %s", padr(14, t)))
-		out.WriteString(fg(overlay0, padr(16, TokenOrigin(t))))
-		out.WriteString(fg(subtext0, TokenRole(t)))
-		out.WriteString("\n")
-	}
-
 	return out.String()
 }
+
+// Paint renders text in truecolor on bg; empty colors fall back to black
+// and white.
+func Paint(bgHex, fgHex, text string) string { return cell(bgHex, fgHex, text) }

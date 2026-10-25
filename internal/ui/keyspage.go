@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/wapenshaw/herdr-customize/internal/config"
 	"github.com/wapenshaw/herdr-customize/internal/keys"
@@ -536,11 +537,12 @@ func (p *keysPage) detail() []string {
 	return lines
 }
 
+// padRight pads s to n terminal columns.
 func padRight(s string, n int) string {
-	if len(s) >= n {
-		return s
+	if w := ansi.StringWidth(s); w < n {
+		return s + strings.Repeat(" ", n-w)
 	}
-	return s + strings.Repeat(" ", n-len(s))
+	return s
 }
 
 func firstNonEmpty(values ...string) string {

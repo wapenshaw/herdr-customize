@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/wapenshaw/herdr-customize/internal/theme"
 )
@@ -22,14 +23,26 @@ const (
 	themesEditingColor
 )
 
+// themeFilters are the views ←/→ move between.
+var themeFilters = []string{"All", "Dark", "Light", "Yours"}
+
+// themeRow is a group heading or one theme.
+type themeRow struct {
+	header string
+	item   int
+}
+
 type themesPage struct {
 	items      []theme.Item
+	looks      map[string]theme.Look
+	rows       []themeRow
+	filter     int
+	showTokens bool
 	list       list
 	mode       themesMode
 	input      textinput.Model
 	ask        *confirm
 	remoteOnly bool
-	previews   map[string]string
 	// pendingBody is a new palette waiting for a name.
 	pendingBody string
 	// token editor
@@ -47,6 +60,7 @@ type themesPage struct {
 type (
 	themesLoadedMsg struct {
 		items    []theme.Item
+		looks    map[string]theme.Look
 		warnings []string
 		legacy   []string
 		err      error
@@ -58,7 +72,9 @@ type (
 )
 
 func newThemesPage(edit string) *themesPage {
-	return &themesPage{list: newList(), previews: map[string]string{}, startEdit: edit}
+	p := &themesPage{list: newList(), looks: map[string]theme.Look{}, startEdit: edit}
+	p.list.header = func(i int) bool { return i < len(p.rows) && p.rows[i].header != "" }
+	return p
 }
 
 func (p *themesPage) title() string { return "Themes" }
@@ -78,7 +94,13 @@ func (p *themesPage) init() tea.Cmd {
 
 func loadThemes() tea.Msg {
 	items, warnings, err := theme.Themes()
-	return themesLoadedMsg{items: items, warnings: warnings, legacy: theme.LegacyThemes(), err: err}
+	looks := map[string]theme.Look{}
+	for _, item := range items {
+		if look, err := theme.LoadLook(item.Slug); err == nil {
+			looks[item.Slug] = look
+		}
+	}
+	return themesLoadedMsg{items: items, looks: looks, warnings: warnings, legacy: theme.LegacyThemes(), err: err}
 }
 
 func (p *themesPage) capturing() bool {
@@ -101,18 +123,119 @@ func (p *themesPage) help() string {
 	if p.remoteOnly {
 		return ""
 	}
-	help := "↵ apply · / search · a add · c add from clipboard · e edit ★ · d delete ★"
+	help := "↵ apply · ←/→ " + strings.ToLower(strings.Join(themeFilters, "/")) + " · / search · t tokens"
+	if item, ok := p.selectedItem(); ok && item.User {
+		help += " · e edit · d delete"
+	}
 	if p.legacy > 0 {
 		help += " · I import old themes"
 	}
-	return help
+	return help + " · ? keys"
+}
+
+func (p *themesPage) keys() []keyHint {
+	return []keyHint{
+		{"↑/↓ j/k", "move; the preview follows"},
+		{"←/→ h/l", "show all, dark, light or your themes"},
+		{"/", "search by name"},
+		{"↵", "apply the theme and close"},
+		{"t", "token table instead of the preview"},
+		{"", "Your themes"},
+		{"a", "write a new palette in your editor"},
+		{"c", "add a palette from the clipboard (terminalcolors.com)"},
+		{"e", "edit a theme's token colors"},
+		{"d", "delete a theme"},
+		{"I", "import themes from herdr-theme-picker"},
+		{"r", "reload the list"},
+	}
 }
 
 func (p *themesPage) selectedItem() (theme.Item, bool) {
-	if i := p.list.selected(); i >= 0 && i < len(p.items) {
-		return p.items[i], true
+	if i := p.list.selected(); i >= 0 && i < len(p.rows) && p.rows[i].header == "" {
+		return p.items[p.rows[i].item], true
 	}
 	return theme.Item{}, false
+}
+
+// rebuild lists the themes the filter shows, keeping the selection.
+func (p *themesPage) rebuild() {
+	keep, _ := p.selectedItem()
+	p.rows = p.rows[:0]
+	var groups [4][]int // in use, yours, dark, light
+	for i, item := range p.items {
+		dark := p.looks[item.Slug].Dark || p.looks[item.Slug].Tokens == nil
+		switch themeFilters[p.filter] {
+		case "Dark":
+			if dark {
+				groups[2] = append(groups[2], i)
+			}
+		case "Light":
+			if !dark {
+				groups[3] = append(groups[3], i)
+			}
+		case "Yours":
+			if item.User {
+				groups[1] = append(groups[1], i)
+			}
+		default:
+			switch {
+			case item.Applied:
+				groups[0] = append(groups[0], i)
+			case item.User:
+				groups[1] = append(groups[1], i)
+			case dark:
+				groups[2] = append(groups[2], i)
+			default:
+				groups[3] = append(groups[3], i)
+			}
+		}
+	}
+	var labels []string
+	for g, name := range []string{"In use", "Yours", "Dark", "Light"} {
+		if len(groups[g]) == 0 {
+			continue
+		}
+		if p.filter == 0 {
+			p.rows = append(p.rows, themeRow{header: name})
+			labels = append(labels, name)
+		}
+		for _, i := range groups[g] {
+			p.rows = append(p.rows, themeRow{item: i})
+			labels = append(labels, p.items[i].Slug)
+		}
+	}
+	p.list.setRows(labels)
+	for i, r := range p.rows {
+		if r.header == "" && p.items[r.item].Slug == keep.Slug {
+			p.list.selectRow(i)
+		}
+	}
+	p.list.skipHeaders(1)
+}
+
+// count reports how many themes filter f shows.
+func (p *themesPage) count(f int) int {
+	n := 0
+	for _, item := range p.items {
+		dark := p.looks[item.Slug].Dark || p.looks[item.Slug].Tokens == nil
+		switch themeFilters[f] {
+		case "Dark":
+			if dark {
+				n++
+			}
+		case "Light":
+			if !dark {
+				n++
+			}
+		case "Yours":
+			if item.User {
+				n++
+			}
+		default:
+			n++
+		}
+	}
+	return n
 }
 
 func (p *themesPage) update(msg tea.Msg) tea.Cmd {
@@ -121,13 +244,8 @@ func (p *themesPage) update(msg tea.Msg) tea.Cmd {
 		if msg.err != nil {
 			return setError(msg.err)
 		}
-		p.items = msg.items
-		labels := make([]string, len(msg.items))
-		for i, item := range msg.items {
-			labels[i] = item.Slug
-		}
-		p.list.setRows(labels)
-		p.previews = map[string]string{}
+		p.items, p.looks = msg.items, msg.looks
+		p.rebuild()
 		p.legacy = len(msg.legacy)
 		if len(msg.warnings) > 0 {
 			return setStatus(strings.Join(msg.warnings, "; "))
@@ -198,6 +316,14 @@ func (p *themesPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 	item, ok := p.selectedItem()
 	switch msg.String() {
+	case "left", "h":
+		p.filter = (p.filter + len(themeFilters) - 1) % len(themeFilters)
+		p.rebuild()
+	case "right", "l":
+		p.filter = (p.filter + 1) % len(themeFilters)
+		p.rebuild()
+	case "t":
+		p.showTokens = !p.showTokens
 	case "enter":
 		if !ok {
 			return nil
@@ -334,66 +460,163 @@ func (p *themesPage) handleEditorKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (p *themesPage) preview(slug string) string {
-	if cached, ok := p.previews[slug]; ok {
-		return cached
-	}
-	rendered := theme.RenderSwatch(slug)
-	p.previews[slug] = rendered
-	return rendered
-}
-
 func (p *themesPage) view(width, height int) string {
 	if p.remoteOnly {
 		return "\n" + theme.ClientSetup
 	}
-	leftWidth := min(36, width/3)
-	showPreview := width >= 80
-	if !showPreview {
+	if p.mode == themesEditing || p.mode == themesEditingColor {
+		return p.editorView(width, height)
+	}
+	leftWidth := min(38, width)
+	if width < 90 {
 		leftWidth = width
 	}
-	var left, right string
-	switch p.mode {
-	case themesEditing, themesEditingColor:
-		var lines []string
-		lines = append(lines, styleHeading.Render("Editing "+p.editSlug))
-		for i, r := range p.editRows {
-			text := fmt.Sprintf("%-14s %s", r.Token, r.Color)
-			if r.Overridden {
-				text += styleAccent.Render(" *")
-			}
-			lines = append(lines, row(text, i == p.editCur))
-		}
-		if p.mode == themesEditingColor {
-			lines = append(lines, "", p.input.View())
-		} else if len(p.editRows) > 0 {
-			r := p.editRows[p.editCur]
-			lines = append(lines, "", styleDim.Render(r.Origin+" · "+r.Role))
-		}
-		left = strings.Join(lines, "\n")
-		right = theme.RenderSwatchFromTokens(p.editTok, p.editSlug+" (editing)")
-	default:
-		left = p.list.view(height-1, func(i int, selected bool) string {
-			item := p.items[i]
-			marker := "  "
-			switch {
-			case item.Applied:
-				marker = styleOK.Render("✓ ")
-			case item.User:
-				marker = styleWarn.Render("★ ")
-			}
-			return row(marker+item.Slug, selected)
-		})
-		left += "\n" + styleDim.Render("  more at terminalcolors.com")
-		if item, ok := p.selectedItem(); ok {
-			right = p.preview(item.Slug)
-		}
-		if p.mode == themesNaming {
-			left += "\n\n" + p.input.View()
-		}
+	var lines []string
+	lines = append(lines, p.chips(), "")
+	listHeight := height - 4
+	if p.mode == themesNaming {
+		listHeight -= 2
 	}
-	if !showPreview {
+	nameWidth := leftWidth - 14
+	lines = append(lines, fit(p.list.view(listHeight, func(i int, selected bool) string {
+		r := p.rows[i]
+		if r.header != "" {
+			return "  " + styleDim.Render(strings.ToUpper(r.header))
+		}
+		item := p.items[r.item]
+		marker := "  "
+		switch {
+		case item.Applied:
+			marker = styleOK.Render("● ")
+		case item.User:
+			marker = styleWarn.Render("★ ")
+		}
+		name := clip(item.Slug, nameWidth)
+		if selected {
+			name = styleSelected.Render(name)
+		}
+		return row(marker+padRight(name, nameWidth)+" "+swatch(p.looks[item.Slug]), selected)
+	}), leftWidth, listHeight), "")
+	if p.mode == themesNaming {
+		lines = append(lines, p.input.View(), "")
+	}
+	lines = append(lines, styleDim.Render("  c pastes one from terminalcolors.com"))
+	left := strings.Join(lines, "\n")
+	if width < 90 {
 		return left
 	}
-	return columns(left, leftWidth, " "+strings.ReplaceAll(right, "\n", "\n "), height)
+	item, ok := p.selectedItem()
+	if !ok {
+		return left
+	}
+	return columns(left, leftWidth+1, p.card(item), height)
+}
+
+// chips shows the filters with the current one highlighted.
+func (p *themesPage) chips() string {
+	var parts []string
+	for i, name := range themeFilters {
+		label := fmt.Sprintf(" %s %d ", name, p.count(i))
+		if i == p.filter {
+			parts = append(parts, styleTabActive.Render(label))
+		} else {
+			parts = append(parts, styleDim.Render(label))
+		}
+	}
+	return " " + strings.Join(parts, "")
+}
+
+// swatch draws a palette's 16 colors in 8 cells: normal over bright.
+func swatch(look theme.Look) string {
+	if look.Tokens == nil {
+		return styleDim.Render("unreadable")
+	}
+	var b strings.Builder
+	for i := 0; i < 8; i++ {
+		b.WriteString(theme.Paint(look.ANSI[i+8], look.ANSI[i], "▀"))
+	}
+	return b.String()
+}
+
+// card frames the preview of item in its own accent color.
+func (p *themesPage) card(item theme.Item) string {
+	look, ok := p.looks[item.Slug]
+	if !ok {
+		return styleError.Render("  cannot read the palette for " + item.Slug)
+	}
+	title := styleHeading.Render(item.Slug)
+	kind := "light"
+	if look.Dark {
+		kind = "dark"
+	}
+	title += styleDim.Render(" · " + kind)
+	if item.Applied {
+		title += styleOK.Render(" · ● in use")
+	}
+	if item.User {
+		title += styleWarn.Render(" · ★ yours")
+	}
+	return framed(title, look, p.showTokens)
+}
+
+func framed(title string, look theme.Look, tokens bool) string {
+	body := theme.RenderMock(look.Tokens)
+	if tokens {
+		body = theme.RenderTokenTable(look.Tokens)
+	}
+	var palette [2]strings.Builder
+	for i := 0; i < 8; i++ {
+		palette[0].WriteString(theme.Paint(look.ANSI[i], look.ANSI[i], "    "))
+		palette[1].WriteString(theme.Paint(look.ANSI[i+8], look.ANSI[i+8], "    "))
+	}
+	t := look.Tokens
+	sample := theme.Paint(look.Background, look.Foreground, " $ git push ") +
+		theme.Paint(look.Background, t["green"], "✓ done ") +
+		theme.Paint(look.Background, t["red"], "✗ 2 errors ") +
+		theme.Paint(look.Background, t["yellow"], "⚠ 1 warning ") +
+		theme.Paint(look.Background, t["blue"], "→ main ") +
+		theme.Paint(t["selection_bg"], look.Foreground, " selected ")
+	content := strings.Join([]string{
+		title, "",
+		strings.TrimRight(body, "\n"), "",
+		sample, "",
+		palette[0].String(), palette[1].String(),
+	}, "\n")
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(t["accent"])).
+		Padding(0, 1).
+		Render(content)
+}
+
+// editorView lists a user theme's tokens beside a live preview.
+func (p *themesPage) editorView(width, height int) string {
+	var lines []string
+	lines = append(lines, styleHeading.Render("Editing "+p.editSlug), "")
+	for i, r := range p.editRows {
+		text := fmt.Sprintf("%s %-14s %s", theme.Paint(r.Color, r.Color, "  "), r.Token, r.Color)
+		if r.Overridden {
+			text += styleAccent.Render(" *")
+		}
+		lines = append(lines, row(text, i == p.editCur))
+	}
+	if p.mode == themesEditingColor {
+		lines = append(lines, "", p.input.View())
+	} else if len(p.editRows) > 0 {
+		r := p.editRows[p.editCur]
+		lines = append(lines, "", styleDim.Render(r.Origin+" · "+r.Role))
+	}
+	left := strings.Join(lines, "\n")
+	if width < 90 {
+		return left
+	}
+	look := theme.Look{Tokens: p.editTok, Background: p.editTok["panel_bg"], Foreground: p.editTok["text"], Dark: theme.IsDark(p.editTok["panel_bg"])}
+	for i, token := range []string{"surface0", "red", "green", "yellow", "blue", "mauve", "teal", "text"} {
+		look.ANSI[i], look.ANSI[i+8] = p.editTok[token], p.editTok[token]
+	}
+	title := styleHeading.Render(p.editSlug) + styleDim.Render(" · editing")
+	if p.editDirty {
+		title += styleWarn.Render(" · unsaved")
+	}
+	return columns(left, 38, framed(title, look, false), height)
 }

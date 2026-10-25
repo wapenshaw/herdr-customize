@@ -37,11 +37,6 @@ const (
 // marketPage is how many results each marketplace request fetches.
 const marketPage = 50
 
-type pluginRow struct {
-	plugin int
-	action int // -1 for the plugin itself
-}
-
 type pluginsPage struct {
 	sh       *shared
 	screen   pluginsView
@@ -51,7 +46,6 @@ type pluginsPage struct {
 	plugins  []plugins.Plugin
 	loadErr  error
 	loaded   bool
-	expanded map[string]bool
 	rows     []pluginRow
 	list     list
 	statuses map[string]plugins.Status
@@ -72,6 +66,10 @@ type pluginsPage struct {
 	haveGit  bool
 	// config is the settings screen of one plugin.
 	config *pluginConfig
+	// panel is true while keys go to the selected plugin's menu.
+	panel      bool
+	menuCursor int
+	details    map[string]pluginDetail
 }
 
 type (
@@ -100,8 +98,8 @@ type (
 )
 
 func newPluginsPage(sh *shared) page {
-	p := &pluginsPage{sh: sh, list: newList(), market: newList(), logsList: newList(), expanded: map[string]bool{}, marketSort: "stars", haveGit: plugins.HaveGit()}
-	p.list.header = func(i int) bool { return false }
+	p := &pluginsPage{sh: sh, list: newList(), market: newList(), logsList: newList(), details: map[string]pluginDetail{}, marketSort: "stars", haveGit: plugins.HaveGit()}
+	p.list.header = func(i int) bool { return i < len(p.rows) && p.rows[i].kind == rowGap }
 	return p
 }
 
@@ -128,81 +126,18 @@ func (p *pluginsPage) claims(msg tea.KeyMsg) bool {
 	return p.screen == viewConfig && p.mode == pluginsBrowse && p.config.claims(msg)
 }
 
-// back leaves the marketplace or logs before the popup closes.
+// back leaves the marketplace, logs or the panel before the popup closes.
 func (p *pluginsPage) back() bool {
 	switch p.screen {
 	case viewMarket, viewLogs:
 		p.screen = viewInstalled
 		return true
 	}
+	if p.panel {
+		p.panel = false
+		return true
+	}
 	return p.list.clearFilter()
-}
-
-func (p *pluginsPage) help() string {
-	switch p.mode {
-	case pluginsConfirm:
-		return p.ask.question + " [y/N]"
-	case pluginsInstallInput, pluginsMarketQuery:
-		return "↵ confirm · esc cancel"
-	}
-	switch p.screen {
-	case viewMarket:
-		return "↵ install · o open repo · / search · s sort · r refresh · esc back"
-	case viewLogs:
-		return "j/k move · r refresh · esc back"
-	case viewConfig:
-		return p.config.help()
-	}
-	if _, action := p.selected(); action != nil {
-		return "↵ run · b bind a key · esc back"
-	}
-	return "↵ actions · s settings · u/U update · e on/off · x remove · o repo · l logs · m market · i install · c plugins.json"
-}
-
-// selected returns the plugin under the cursor and, on an action row, the
-// action.
-func (p *pluginsPage) selected() (*plugins.Plugin, *plugins.Action) {
-	i := p.list.selected()
-	if i < 0 || i >= len(p.rows) {
-		return nil, nil
-	}
-	r := p.rows[i]
-	pl := &p.plugins[r.plugin]
-	if r.action >= 0 {
-		return pl, &pl.Actions[r.action]
-	}
-	return pl, nil
-}
-
-func (p *pluginsPage) rebuild() {
-	p.rows = p.rows[:0]
-	var labels []string
-	for i, pl := range p.plugins {
-		p.rows = append(p.rows, pluginRow{plugin: i, action: -1})
-		labels = append(labels, pl.ID+" "+pl.Name+" "+pl.Description)
-		if !p.expanded[pl.ID] {
-			continue
-		}
-		for j, a := range pl.Actions {
-			if !a.Available() {
-				continue
-			}
-			p.rows = append(p.rows, pluginRow{plugin: i, action: j})
-			labels = append(labels, a.QualifiedID(pl.ID)+" "+a.Title)
-		}
-	}
-	p.list.setRows(labels)
-}
-
-func (p *pluginsPage) checkUpdates() tea.Cmd {
-	if !p.haveGit {
-		return nil
-	}
-	p.checking = true
-	list := p.plugins
-	return func() tea.Msg {
-		return checksMsg{statuses: plugins.CheckAll(context.Background(), list)}
-	}
 }
 
 func (p *pluginsPage) update(msg tea.Msg) tea.Cmd {
@@ -212,8 +147,14 @@ func (p *pluginsPage) update(msg tea.Msg) tea.Cmd {
 		if msg.err == nil {
 			p.plugins = msg.list
 		}
+		p.details = map[string]pluginDetail{}
 		p.rebuild()
-		return p.checkUpdates()
+		if p.selected() == nil {
+			p.panel = false
+		}
+		return tea.Batch(p.checkUpdates(), p.loadDetail())
+	case pluginDetailMsg:
+		p.details[msg.id] = msg.detail
 	case checksMsg:
 		p.checking = false
 		p.statuses = msg.statuses
@@ -271,94 +212,11 @@ func (p *pluginsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 				return nil
 			}
 			p.screen = viewInstalled
-			return p.config.flush()
+			return tea.Batch(p.config.flush(), p.loadDetail())
 		}
 		return p.config.update(msg)
 	}
-	if handled, cmd := p.list.handleKey(msg); handled {
-		return cmd
-	}
-	switch msg.String() {
-	case "m":
-		p.screen = viewMarket
-		if p.repos == nil && !p.marketBusy {
-			return p.search(1)
-		}
-		return nil
-	case "i":
-		p.mode = pluginsInstallInput
-		p.input = newInput("install owner/repo[/subdir][@ref]: ", "")
-		return textinput.Blink
-	case "c":
-		return p.editRegistry()
-	case "r":
-		return tea.Batch(loadPlugins, setStatus("refreshing…"))
-	case "U":
-		return p.updateAll()
-	}
-	pl, action := p.selected()
-	if pl == nil {
-		return nil
-	}
-	if action != nil {
-		switch msg.String() {
-		case "enter":
-			qualified := action.QualifiedID(pl.ID)
-			return quitThen(func() error { return plugins.InvokeAfterClose(qualified) })
-		case "b":
-			return goTo("keys", bindActionMsg{qualified: action.QualifiedID(pl.ID), title: firstNonEmpty(action.Title, action.ID)})
-		}
-		return nil
-	}
-	switch msg.String() {
-	case "s":
-		p.screen, p.config = viewConfig, newPluginConfig(*pl)
-		return loadPluginConfig(*pl)
-	case "enter":
-		available := 0
-		for _, a := range pl.Actions {
-			if a.Available() {
-				available++
-			}
-		}
-		if available == 0 {
-			return setStatus(pl.Name + " has no actions")
-		}
-		p.expanded[pl.ID] = !p.expanded[pl.ID]
-		p.rebuild()
-	case "u":
-		return p.updateOne(*pl)
-	case "e":
-		target, verb := *pl, "disabled"
-		if !pl.Enabled {
-			verb = "enabled"
-		}
-		return func() tea.Msg {
-			return pluginOpMsg{text: verb + " " + target.Name, err: plugins.SetEnabled(target.ID, !target.Enabled)}
-		}
-	case "x":
-		target, verb := *pl, "uninstall"
-		if !pl.GitHub() {
-			verb = "unlink"
-		}
-		p.mode = pluginsConfirm
-		p.ask = &confirm{question: fmt.Sprintf("%s %s (%s)?", verb, pl.Name, pl.ID), yes: func() tea.Cmd {
-			return func() tea.Msg { return pluginOpMsg{text: verb + "ed " + target.Name, err: plugins.Remove(target)} }
-		}}
-	case "o":
-		if !pl.GitHub() {
-			return setStatus(pl.Name + " is linked from a local checkout")
-		}
-		if err := plugins.OpenURL(pl.RepoURL()); err != nil {
-			return setError(err)
-		}
-		return setStatus("opened " + pl.RepoURL())
-	case "l":
-		p.screen, p.logsFor, p.logs, p.logsErr = viewLogs, pl.ID, nil, nil
-		p.logsList.setRows(nil)
-		return p.loadLogs()
-	}
-	return nil
+	return p.handleInstalledKey(msg)
 }
 
 func (p *pluginsPage) loadLogs() tea.Cmd {
@@ -632,105 +490,7 @@ func (p *pluginsPage) view(width, height int) string {
 	case viewConfig:
 		return p.config.view(width, height, lines)
 	}
-	if !p.loaded {
-		return "loading plugins…"
-	}
-	if p.loadErr != nil {
-		return styleError.Render("herdr plugin list: "+p.loadErr.Error()) + "\n" + styleDim.Render("i installs a plugin by owner/repo · m opens the marketplace")
-	}
-	if len(p.plugins) == 0 {
-		return "No plugins installed.\n" + styleDim.Render("i installs a plugin by owner/repo · m opens the marketplace")
-	}
-	footer := p.footer()
-	listHeight := max(height-len(lines)-strings.Count(footer, "\n")-2, 3)
-	nameWidth := min(max(width/4, 18), 32)
-	body := p.list.view(listHeight, func(i int, selected bool) string {
-		r := p.rows[i]
-		pl := p.plugins[r.plugin]
-		if r.action >= 0 {
-			a := pl.Actions[r.action]
-			return row("    ▸ "+firstNonEmpty(a.Title, a.ID)+styleDim.Render("  "+a.QualifiedID(pl.ID)), selected)
-		}
-		return row(p.pluginLine(pl, nameWidth), selected)
-	})
-	lines = append(lines, fit(body, width, listHeight), "", footer)
-	return strings.Join(lines, "\n")
-}
-
-func (p *pluginsPage) pluginLine(pl plugins.Plugin, nameWidth int) string {
-	status := p.statuses[pl.ID]
-	dot := styleDim.Render("·")
-	switch {
-	case !pl.GitHub():
-		dot = styleDim.Render("⌂")
-	case status.State == plugins.Current:
-		dot = styleOK.Render("●")
-	case status.State == plugins.Behind:
-		dot = styleWarn.Render("↑")
-	case status.State == plugins.Failed:
-		dot = styleError.Render("?")
-	}
-	marker := " "
-	if p.expanded[pl.ID] {
-		marker = "▾"
-	} else if len(pl.Actions) > 0 {
-		marker = "▸"
-	}
-	version := pl.Version
-	if status.State == plugins.Behind && status.Version != "" && status.Version != pl.Version {
-		version += styleWarn.Render(" → " + status.Version)
-	} else if status.State == plugins.Behind {
-		version += styleWarn.Render(" → " + short(status.Remote))
-	}
-	source := "linked " + pl.Root
-	if pl.GitHub() {
-		source = pl.Spec()
-		if ref := pl.Ref(); ref != "" {
-			if pl.Pinned() {
-				ref = short(ref) + " (pinned)"
-			}
-			source += "@" + ref
-		}
-	}
-	name := padRight(pl.Name, nameWidth)
-	if !pl.Enabled {
-		name = styleDim.Render(name) + styleDim.Render(" (disabled)")
-	}
-	return fmt.Sprintf("%s %s %s %s  %s", dot, marker, name, padRight(version, 8), styleDim.Render(source))
-}
-
-func (p *pluginsPage) footer() string {
-	pl, action := p.selected()
-	switch {
-	case !p.haveGit:
-		return styleDim.Render("install git to check for updates")
-	case p.checking:
-		return styleDim.Render("checking for updates…")
-	}
-	behind, failed := 0, 0
-	for _, s := range p.statuses {
-		switch s.State {
-		case plugins.Behind:
-			behind++
-		case plugins.Failed:
-			failed++
-		}
-	}
-	text := styleDim.Render("all plugins up to date")
-	if behind > 0 {
-		text = styleWarn.Render(fmt.Sprintf("↑ %d update(s) available: u this row · U all", behind))
-	}
-	if failed > 0 {
-		text += styleError.Render(fmt.Sprintf(" · %d could not be checked", failed))
-	}
-	if pl != nil {
-		if s := p.statuses[pl.ID]; s.State == plugins.Failed && s.Err != nil {
-			text += "\n" + styleError.Render(s.Err.Error())
-		} else if action == nil && pl.Description != "" {
-			text += "\n" + styleDim.Render(pl.Description)
-		}
-	}
-	return text
+	return p.installedView(width, height, lines)
 }
 
 func (p *pluginsPage) marketView(width, height int, lines []string) string {
