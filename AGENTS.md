@@ -8,10 +8,11 @@
 - `internal/schema/`: Herdr's config reference (embedded copy plus per-version cache).
 - `internal/keys/`: key parsing, Herdr's binding rules, and conflict detection.
 - `internal/plugins/`: `herdr plugin` calls, update checks, marketplace search, and detached action runs.
+- `internal/pluginconfig/`: typed reading and editing of any plugin's TOML/`.env` config files, with an optional `config-schema.json`.
 - `internal/theme/`: palette loading, user themes, `[theme.custom]` persistence, and terminal color sync.
 - `internal/terminal/`: client discovery, OSC color writes/readback, and sync tracking.
 - `internal/herdr/`, `internal/fsutil/`, `internal/proc/`, `internal/instance/`: Herdr CLI wrapper, atomic writes, detached helpers, and file locking.
-- `tests/{config,plugins,theme,terminal,instance}/`: public API and regression tests; `tests/testutil/` provides fake subprocesses, including a scripted `herdr`.
+- `tests/{config,plugins,pluginconfig,schema,theme,terminal,instance}/`: public API and regression tests; `tests/testutil/` provides fake subprocesses, including a scripted `herdr`.
 - `themes/`: bundled Ghostty-format palettes and `index.txt`; `preview.png` is the preview asset.
 - `herdr-plugin.toml`: plugin metadata, build commands, panes, and actions. `docs/` records persistence edge cases.
 

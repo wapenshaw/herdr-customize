@@ -19,6 +19,9 @@ match the `version` field in `herdr-plugin.toml`.
   update checks, single and bulk updates through Herdr's trust prompt,
   install, enable/disable, uninstall/unlink, marketplace, command logs, and
   running actions after the popup closes.
+- Plugin settings: **s** on a plugin edits the TOML and `.env` files in its
+  config directory with types inferred from values and commented-out
+  defaults, or taken from a `config-schema.json` the plugin ships.
 - Keys: built-in bindings, custom `[[keys.command]]` entries and unbound
   plugin actions in one list, with key recording, conflict detection and
   Herdr's binding rules.

@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wapenshaw/herdr-customize/internal/plugins"
 	"github.com/wapenshaw/herdr-customize/tests/testutil"
@@ -114,5 +116,58 @@ func TestPluginsRegistryMissing(t *testing.T) {
 	d.keys("c")
 	if !d.app.statusErr || !strings.Contains(d.app.status, "plugins.json") {
 		t.Fatalf("status %q", d.app.status)
+	}
+}
+
+func TestPluginSettings(t *testing.T) {
+	t.Setenv("HERDR_CONFIG_PATH", filepath.Join(t.TempDir(), "config.toml"))
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	dir := t.TempDir()
+	env := filepath.Join(dir, "config.env")
+	os.WriteFile(env, []byte("# Where the panel opens.\n#DEMO_MODE=split\n# Debug logging.\n#DEMO_DEBUG=false\n#DEMO_POLL=500\n"), 0o644)
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "config-schema.json"), []byte(`{"file": "config.env", "sections": [{"id": "a", "keys": [
+		{"key": "DEMO_MODE", "type": "enum", "default": "\"split\"", "values": ["split", "popup", "tab"]}]}]}`), 0o644)
+	list := strings.Replace(managedPluginsJSON, `"plugin_id":"demo",`, `"plugin_id":"demo","plugin_root":`+strconv.Quote(root)+`,`, 1)
+	testutil.FakeHerdr(t,
+		testutil.HerdrResponse{Args: "plugin list --json", Stdout: list},
+		testutil.HerdrResponse{Args: "plugin config-dir demo", Stdout: dir + "\n"},
+	)
+	old := pickDelay
+	pickDelay = time.Millisecond
+	t.Cleanup(func() { pickDelay = old })
+	d := newDriver(t, Options{Tab: "plugins"})
+	page := d.app.pages[1].(*pluginsPage)
+	d.keys("s")
+	if page.screen != viewConfig || page.config.cfg == nil {
+		t.Fatalf("settings did not load: %v", page.config.err)
+	}
+	view := d.view()
+	for _, want := range []string{"Settings · Demo", "DEMO_MODE", "[split]", "popup", "DEMO_DEBUG", "[off]", "DEMO_POLL", "500"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("missing %q in:\n%s", want, view)
+		}
+	}
+	// The first row is the file heading; the cursor starts on a setting.
+	d.keys("right", "right")
+	if d.app.active != 1 {
+		t.Fatal("right left the page")
+	}
+	d.keys("j", "enter", "j", "enter", "ctrl+u", "250", "enter")
+	want := "# Where the panel opens.\n#DEMO_MODE=split\nDEMO_MODE=tab\n# Debug logging.\n#DEMO_DEBUG=false\nDEMO_DEBUG=true\n#DEMO_POLL=500\nDEMO_POLL=250\n"
+	if got := readConfig(t, env); got != want {
+		t.Fatalf("got:\n%s", got)
+	}
+	d.keys("enter", "ctrl+u", "soon", "enter")
+	if !d.app.statusErr || !page.config.editing {
+		t.Fatal("text accepted for a number")
+	}
+	d.keys("esc", "x")
+	if got := readConfig(t, env); strings.Contains(got, "DEMO_POLL=250") {
+		t.Fatalf("reset left the value:\n%s", got)
+	}
+	d.keys("esc")
+	if page.screen != viewInstalled {
+		t.Fatal("esc did not go back")
 	}
 }

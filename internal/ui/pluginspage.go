@@ -22,6 +22,7 @@ const (
 	viewInstalled pluginsView = iota
 	viewMarket
 	viewLogs
+	viewConfig
 )
 
 type pluginsMode int
@@ -69,6 +70,8 @@ type pluginsPage struct {
 	logsFor  string
 	logsErr  error
 	haveGit  bool
+	// config is the settings screen of one plugin.
+	config *pluginConfig
 }
 
 type (
@@ -115,8 +118,14 @@ func (p *pluginsPage) capturing() bool {
 		return p.market.filtering
 	case viewLogs:
 		return p.logsList.filtering
+	case viewConfig:
+		return p.config.editing || p.config.list.filtering
 	}
 	return p.list.filtering
+}
+
+func (p *pluginsPage) claims(msg tea.KeyMsg) bool {
+	return p.screen == viewConfig && p.mode == pluginsBrowse && p.config.claims(msg)
 }
 
 // back leaves the marketplace or logs before the popup closes.
@@ -141,11 +150,13 @@ func (p *pluginsPage) help() string {
 		return "↵ install · o open repo · / search · s sort · r refresh · esc back"
 	case viewLogs:
 		return "j/k move · r refresh · esc back"
+	case viewConfig:
+		return p.config.help()
 	}
 	if _, action := p.selected(); action != nil {
 		return "↵ run · b bind a key · esc back"
 	}
-	return "↵ actions · u/U update · e on/off · x remove · o repo · l logs · m market · i install · c plugins.json"
+	return "↵ actions · s settings · u/U update · e on/off · x remove · o repo · l logs · m market · i install · c plugins.json"
 }
 
 // selected returns the plugin under the cursor and, on an action row, the
@@ -224,6 +235,10 @@ func (p *pluginsPage) update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(setStatus(msg.text), loadPlugins)
 	case pinMsg:
 		return p.confirmPinMove(msg)
+	case pluginConfigMsg, pluginConfigSavedMsg, pluginConfigPickMsg, pluginConfigReloadMsg:
+		if p.config != nil {
+			return p.config.update(msg)
+		}
 	case registryEditedMsg:
 		if msg.err != nil {
 			return tea.Batch(setError(fmt.Errorf("editor: %w", msg.err)), loadPlugins)
@@ -250,6 +265,15 @@ func (p *pluginsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return p.handleMarketKey(msg)
 	case viewLogs:
 		return p.handleLogsKey(msg)
+	case viewConfig:
+		if msg.String() == "esc" && !p.config.editing {
+			if p.config.list.clearFilter() {
+				return nil
+			}
+			p.screen = viewInstalled
+			return p.config.flush()
+		}
+		return p.config.update(msg)
 	}
 	if handled, cmd := p.list.handleKey(msg); handled {
 		return cmd
@@ -287,6 +311,9 @@ func (p *pluginsPage) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch msg.String() {
+	case "s":
+		p.screen, p.config = viewConfig, newPluginConfig(*pl)
+		return loadPluginConfig(*pl)
 	case "enter":
 		available := 0
 		for _, a := range pl.Actions {
@@ -602,6 +629,8 @@ func (p *pluginsPage) view(width, height int) string {
 		return p.marketView(width, height, lines)
 	case viewLogs:
 		return p.logsView(width, height, lines)
+	case viewConfig:
+		return p.config.view(width, height, lines)
 	}
 	if !p.loaded {
 		return "loading plugins…"

@@ -6,9 +6,9 @@ Customize [Herdr](https://herdr.dev) from one popup instead of editing
 - **Themes**: 112 bundled [terminalcolors.com](https://terminalcolors.com)
   palettes with a live preview, mapped onto Herdr's UI and your terminal's ANSI
   colors.
-- **Plugins**: installed plugins and their actions, update checks, install,
-  enable, disable, remove, logs, and a marketplace of `topic:herdr-plugin`
-  repositories.
+- **Plugins**: installed plugins and their actions, each plugin's own settings,
+  update checks, install, enable, disable, remove, logs, and a marketplace of
+  `topic:herdr-plugin` repositories.
 - **Keys**: every Herdr action with its binding, custom `[[keys.command]]`
   entries, and plugin actions that have no key yet. Conflicts and keys that break
   Herdr's rules are flagged before you save.
@@ -211,6 +211,47 @@ the installed ref and need no GitHub token.
   sorted by stars or recent activity (**s**), searchable with **/**. Searches use
   `GH_TOKEN`, `GITHUB_TOKEN` or `gh auth token` when available for a higher rate
   limit; set `HERDR_CUSTOMIZE_NO_TOKEN=1` to stay anonymous.
+- **s** opens the selected plugin's settings (below).
+
+### Plugin settings
+
+Herdr gives each plugin a config directory (`herdr plugin config-dir <id>`) but
+no format, so **s** reads whatever the plugin keeps there and works for any
+plugin:
+
+- `*.toml` files: every key, typed from its value (on/off, number, text, list).
+  Commented-out defaults such as `# port = 6363` are listed too, with the
+  comment above as the description.
+- `*.env` files: `KEY=value` lines and commented-out defaults (`#KEY=500`),
+  typed from the value. Setting a key writes `KEY=value` below its default;
+  **x** removes the line again.
+- Other files (scripts, JSON) are listed; **Enter** opens them in your editor.
+
+The keys work as on the Settings page: **←**/**→** for on/off and listed
+values, **Enter** to edit, **x** to reset, **E** to open the file. Edits keep
+comments and layout and back the file up once a day. Herdr does not check
+plugin settings: the plugin reads them itself, and some only apply after it
+restarts.
+
+Plugin authors can describe their settings by shipping `config-schema.json` in
+the plugin root, in the format of Herdr's config reference plus an optional
+`file` (default `config.toml`). Listed keys then show with their description,
+default and `enum` values even before the file exists:
+
+```json
+{
+  "file": "config.toml",
+  "sections": [{ "id": "general", "title": "General", "keys": [
+    { "key": "toggle_placement", "type": "enum", "default": "\"split\"",
+      "values": ["split", "popup", "tab"], "description": "Where the panel opens." },
+    { "key": "index_on_startup", "type": "boolean", "default": "true",
+      "description": "Index sessions when Herdr starts." }
+  ]}]
+}
+```
+
+Types are `boolean`, `integer`, `float`, `string`, `enum` and `array`;
+`default` is a TOML value.
 
 ## Keys
 

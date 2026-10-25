@@ -40,12 +40,17 @@ const (
 	TypeStringList  = "list of strings"
 	TypeTokenRows   = "list of token rows"
 	TypeTokenTables = "table of token rows"
+	// TypeFloat is not in Herdr's reference; plugin values can be decimals.
+	TypeFloat = "float"
 )
 
 // Reference is the whole config reference.
 type Reference struct {
 	// Version is the Herdr release it describes.
-	Version  string    `json:"-"`
+	Version string `json:"-"`
+	// File names the config file the keys live in, for plugin schemas that
+	// use this format; Herdr's own reference leaves it empty.
+	File     string    `json:"file,omitempty"`
 	Sections []Section `json:"sections"`
 }
 
@@ -145,6 +150,9 @@ func (r *Reference) Lookup(key string) (Key, bool) {
 	}
 	return Key{}, false
 }
+
+// Parse reads a reference in Herdr's config-reference.json format.
+func Parse(data []byte) (*Reference, error) { return parse(data, "") }
 
 func parse(data []byte, version string) (*Reference, error) {
 	var ref Reference

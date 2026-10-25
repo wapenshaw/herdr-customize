@@ -352,6 +352,12 @@ func parseValue(k schema.Key, text string) (any, error) {
 			return nil, fmt.Errorf("%s needs a whole number", k.Key)
 		}
 		return n, nil
+	case k.Type == schema.TypeFloat:
+		n, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			return nil, fmt.Errorf("%s needs a number", k.Key)
+		}
+		return n, nil
 	case structured(k):
 		var document map[string]any
 		if err := toml.Unmarshal([]byte("v = "+text), &document); err != nil {
@@ -507,12 +513,12 @@ func selectedOption(opts []option, value any) int {
 
 // strip renders a row's values with the one in force marked, or the one
 // about to be saved highlighted.
-func (p *settingsPage) strip(r settingRow, opts []option) string {
+func strip(r settingRow, opts []option, pending *pendingValue) string {
 	value := effective(r)
 	current := selectedOption(opts, value)
 	picked := -1
-	if p.pending != nil && p.pending.key == r.key.Key {
-		picked = selectedOption(opts, p.pending.value)
+	if pending != nil && pending.key == r.key.Key {
+		picked = selectedOption(opts, pending.value)
 	}
 	parts := make([]string, len(opts))
 	for i, o := range opts {
@@ -621,7 +627,7 @@ func (p *settingsPage) view(width, height int) string {
 		name := padRight(r.name(), keyWidth)
 		if r.unknown == nil {
 			if opts := options(r.key); len(opts) > 0 {
-				return row(name+" "+p.strip(r, opts), selected)
+				return row(name+" "+strip(r, opts, p.pending), selected)
 			}
 		}
 		return row(name+" "+p.display(r), selected)
