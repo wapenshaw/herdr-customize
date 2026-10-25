@@ -46,7 +46,7 @@ echo {"result":{}}
 "#,
 );
 
-const PLUGINS: &str = r#"{"result":{"plugins":[{"plugin_id":"demo","name":"Demo","version":"1.0.0","description":"A demo plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"local"},"actions":[{"id":"hello","title":"Say hello"}]}]}}"#;
+const PLUGINS: &str = r#"{"result":{"plugins":[{"plugin_id":"demo","name":"Demo","version":"1.0.0","description":"A demo plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"local"},"actions":[{"id":"hello","title":"Say hello"}]},{"plugin_id":"remote","name":"Remote","version":"1.0.0","description":"A GitHub plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"github","owner":"someone","repo":"remote","requested_ref":"main","resolved_commit":"0000000000000000000000000000000000000000"},"actions":[]}]}}"#;
 
 fn sandbox() -> &'static Path {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -67,6 +67,7 @@ fn sandbox() -> &'static Path {
         set("HERDR_PLUGIN_ROOT", Path::new(env!("CARGO_MANIFEST_DIR")));
         // Nothing reaches GitHub, an editor, or a live Herdr session.
         set("HERDR_CUSTOMIZE_GIT_BASE", &dir.join("no-such-remote"));
+        set("GIT_TRACE", &dir.join("git.log"));
         set("HERDR_CUSTOMIZE_RAW_BASE", Path::new("http://127.0.0.1:9"));
         set("HERDR_CUSTOMIZE_API_BASE", Path::new("http://127.0.0.1:9"));
         set("HERDR_CUSTOMIZE_NO_TOKEN", Path::new("1"));
@@ -90,6 +91,7 @@ impl Driver {
         fs::write(dir.join("config.toml"), config).unwrap();
         fs::write(dir.join("plugins.json"), PLUGINS).unwrap();
         fs::write(dir.join("herdr.log"), "").unwrap();
+        fs::write(dir.join("git.log"), "").unwrap();
         let _ = fs::remove_dir_all(dir.join("pc"));
         let mut d = Driver { app: App::new(tab), _guard: guard };
         d.drain();
@@ -144,6 +146,11 @@ impl Driver {
 
     fn herdr_calls(&self, prefix: &str) -> usize {
         fs::read_to_string(sandbox().join("herdr.log")).unwrap().lines().filter(|l| l.starts_with(prefix)).count()
+    }
+
+    /// Update checks, counted from git's own trace.
+    fn git_checks(&self) -> usize {
+        fs::read_to_string(sandbox().join("git.log")).unwrap().lines().filter(|l| l.contains("ls-remote")).count()
     }
 }
 
@@ -362,4 +369,15 @@ fn theme_block_is_checked_and_not_reloaded() {
     assert_eq!(d.herdr_calls("server reload-config"), 0);
     let config = d.config();
     assert!(config.contains("[theme.custom]\npanel_bg = ") && config.contains("[theme.custom.dark]\naccent = \"#ffffff\""), "{config}");
+}
+
+// Opening the popup on another page must not start update checks.
+#[test]
+fn plugin_checks_wait_for_the_page() {
+    let mut d = Driver::new("themes", "");
+    assert_eq!(d.git_checks(), 0);
+    assert_eq!(d.herdr_calls("plugin config-dir"), 0);
+    d.press(&["2"]);
+    assert_eq!(d.git_checks(), usize::from(crate::plugins::have_git()));
+    assert_eq!(d.herdr_calls("plugin config-dir"), 1);
 }

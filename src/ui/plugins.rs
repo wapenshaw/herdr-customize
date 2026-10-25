@@ -82,6 +82,8 @@ pub struct PluginsPage {
     list: List,
     statuses: HashMap<String, Status>,
     checking: bool,
+    /// Update checks and details wait until the page is first shown.
+    shown: bool,
     have_git: bool,
     // marketplace
     market: List,
@@ -164,6 +166,7 @@ impl PluginsPage {
             list: List::new(),
             statuses: HashMap::new(),
             checking: false,
+            shown: false,
             have_git: plugins::have_git(),
             market: List::new(),
             repos: None,
@@ -781,6 +784,16 @@ impl Page for PluginsPage {
         "Plugins"
     }
 
+    fn activated(&mut self, ctx: &mut Ctx) {
+        if !self.shown {
+            self.shown = true;
+            if self.loaded {
+                self.check_updates(ctx);
+                self.load_detail(ctx);
+            }
+        }
+    }
+
     fn update(&mut self, msg: &mut Msg, ctx: &mut Ctx) {
         match msg {
             Msg::Plugins(list) => {
@@ -794,8 +807,10 @@ impl Page for PluginsPage {
                 if self.selected().is_none() {
                     self.panel = false;
                 }
-                self.check_updates(ctx);
-                self.load_detail(ctx);
+                if self.shown {
+                    self.check_updates(ctx);
+                    self.load_detail(ctx);
+                }
             }
             Msg::PluginDetail { id, settings, last } => {
                 self.details.insert(id.clone(), Detail { settings: std::mem::take(settings), last: std::mem::take(last) });

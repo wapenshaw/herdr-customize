@@ -318,6 +318,8 @@ pub type Hint = (&'static str, &'static str);
 pub trait Page {
     fn title(&self) -> &'static str;
     fn init(&mut self, _ctx: &mut Ctx) {}
+    /// Runs each time the page becomes the visible one.
+    fn activated(&mut self, _ctx: &mut Ctx) {}
     fn update(&mut self, _msg: &mut Msg, _ctx: &mut Ctx) {}
     fn key(&mut self, key: &Key, ctx: &mut Ctx);
     fn view(&mut self, sh: &Shared, width: usize, height: usize) -> Vec<Line<'static>>;
@@ -377,7 +379,13 @@ impl App {
         };
         app.apply(vec![Effect::Spawn(Box::new(|| Msg::Reference(schema::for_installed()))), Effect::Spawn(Box::new(load_plugins))]);
         app.each_page(|page, ctx| page.init(ctx));
+        app.switch(active);
         app
+    }
+
+    fn switch(&mut self, i: usize) {
+        self.active = i;
+        self.with_page(i, |page, ctx| page.activated(ctx));
     }
 
     /// Runs f on page i with a fresh Ctx and applies its effects.
@@ -408,7 +416,7 @@ impl App {
                     self.quit = true;
                 }
                 Effect::Goto(i, msg) => {
-                    self.active = i;
+                    self.switch(i);
                     if let Some(mut msg) = msg {
                         self.with_page(i, |page, ctx| page.update(&mut msg, ctx));
                     }
@@ -468,18 +476,9 @@ impl App {
                     return;
                 }
                 // Arrows belong to the page; only Tab and the digits switch.
-                "tab" => {
-                    self.active = (self.active + 1) % n;
-                    return;
-                }
-                "shift+tab" => {
-                    self.active = (self.active + n - 1) % n;
-                    return;
-                }
-                "1" | "2" | "3" | "4" => {
-                    self.active = (key.name.as_bytes()[0] - b'1') as usize;
-                    return;
-                }
+                "tab" => return self.switch((self.active + 1) % n),
+                "shift+tab" => return self.switch((self.active + n - 1) % n),
+                "1" | "2" | "3" | "4" => return self.switch((key.name.as_bytes()[0] - b'1') as usize),
                 _ => {}
             }
         }
