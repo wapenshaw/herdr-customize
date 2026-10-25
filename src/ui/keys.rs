@@ -20,9 +20,56 @@ fn command_path() -> Vec<String> {
 }
 
 /// The [[keys.command]] kinds Herdr accepts.
-const COMMAND_TYPES: [&str; 4] = ["plugin_action", "popup", "pane", "shell"];
+#[derive(Clone, Copy, Default, PartialEq)]
+enum CommandType {
+    #[default]
+    PluginAction,
+    Popup,
+    Pane,
+    Shell,
+}
 
-const FORM_FIELDS: [&str; 5] = ["key", "command", "description", "width", "height"];
+impl CommandType {
+    const ALL: [CommandType; 4] = [CommandType::PluginAction, CommandType::Popup, CommandType::Pane, CommandType::Shell];
+
+    fn name(self) -> &'static str {
+        match self {
+            CommandType::PluginAction => "plugin_action",
+            CommandType::Popup => "popup",
+            CommandType::Pane => "pane",
+            CommandType::Shell => "shell",
+        }
+    }
+
+    /// The type n places to the right, wrapping around.
+    fn next(self, n: usize) -> CommandType {
+        CommandType::ALL[(self as usize + n) % CommandType::ALL.len()]
+    }
+}
+
+/// The command form's text fields, in screen order.
+#[derive(Clone, Copy, PartialEq)]
+enum FormField {
+    Key,
+    Command,
+    Description,
+    Width,
+    Height,
+}
+
+impl FormField {
+    const ALL: [FormField; 5] = [FormField::Key, FormField::Command, FormField::Description, FormField::Width, FormField::Height];
+
+    fn name(self) -> &'static str {
+        match self {
+            FormField::Key => "key",
+            FormField::Command => "command",
+            FormField::Description => "description",
+            FormField::Width => "width",
+            FormField::Height => "height",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 enum Kind {
@@ -140,7 +187,7 @@ impl KeysPage {
         for (index, entry) in doc.array_table(&command_path()).into_iter().enumerate() {
             let (key, kind, command, desc) = (text(&entry, "key"), text(&entry, "type"), text(&entry, "command"), text(&entry, "description"));
             let mut missing = false;
-            if kind == "plugin_action" {
+            if kind == CommandType::PluginAction.name() {
                 bound.insert(command.clone());
                 missing = self.plugins.is_some() && !installed.contains(&command) && !installed_suffix(&installed, &command);
             }
@@ -267,8 +314,8 @@ impl KeysPage {
             "esc" => self.mode = Mode::Browse,
             "tab" | "down" => f.focus_on((f.focus + 1) % n),
             "shift+tab" | "up" => f.focus_on((f.focus + n - 1) % n),
-            "ctrl+right" | "ctrl+n" => f.kind = (f.kind + 1) % COMMAND_TYPES.len(),
-            "ctrl+left" | "ctrl+p" => f.kind = (f.kind + COMMAND_TYPES.len() - 1) % COMMAND_TYPES.len(),
+            "ctrl+right" | "ctrl+n" => f.kind = f.kind.next(1),
+            "ctrl+left" | "ctrl+p" => f.kind = f.kind.next(CommandType::ALL.len() - 1),
             "enter" => match f.entry() {
                 Err(e) => ctx.error(e),
                 Ok(fields) => {
@@ -358,35 +405,36 @@ impl KeysPage {
         let title = f.index.map_or("New custom command".into(), |i| format!("Edit custom command {}", i + 1));
         let mut lines = vec![line(heading(title)), Line::default()];
         let mut types = vec![raw(format!("{:<12}", "type"))];
-        for (i, t) in COMMAND_TYPES.iter().enumerate() {
-            types.push(if i == f.kind { styled(TAB_ACTIVE, format!(" {t} ")) } else { dim(format!(" {t} ")) });
+        for t in CommandType::ALL {
+            let label = format!(" {} ", t.name());
+            types.push(if t == f.kind { styled(TAB_ACTIVE, label) } else { dim(label) });
             types.push(raw(" "));
         }
         types.push(dim("  ctrl+←/→ change"));
         lines.push(Line::from(types));
-        let popup = COMMAND_TYPES[f.kind] == "popup";
-        for (i, input) in f.fields.iter().enumerate() {
-            if !popup && (FORM_FIELDS[i] == "width" || FORM_FIELDS[i] == "height") {
+        let popup = f.kind == CommandType::Popup;
+        for (field, input) in FormField::ALL.into_iter().zip(&f.fields) {
+            if !popup && matches!(field, FormField::Width | FormField::Height) {
                 continue;
             }
             lines.push(input.view());
         }
         lines.push(Line::default());
-        match COMMAND_TYPES[f.kind] {
-            "plugin_action" => {
+        match f.kind {
+            CommandType::PluginAction => {
                 lines.push(line(dim("command is a plugin action id such as herdr-customize.open")));
-                let q = f.value("command");
+                let q = f.value(FormField::Command);
                 if let (false, Some(plugins)) = (q.is_empty(), &self.plugins)
                     && !plugins.iter().any(|p| p.actions.iter().any(|a| a.qualified(&p.id) == q))
                 {
                     lines.push(line(warn(format!("no installed plugin has the action {q}"))));
                 }
             }
-            "popup" => lines.push(line(dim("opens a popup running command; width/height are cells or a percentage"))),
-            "pane" => lines.push(line(dim("opens a temporary zoomed pane running command"))),
-            _ => lines.push(line(dim("runs command detached in the background"))),
+            CommandType::Popup => lines.push(line(dim("opens a popup running command; width/height are cells or a percentage"))),
+            CommandType::Pane => lines.push(line(dim("opens a temporary zoomed pane running command"))),
+            CommandType::Shell => lines.push(line(dim("runs command detached in the background"))),
         }
-        let key = f.value("key");
+        let key = f.value(FormField::Key);
         if !key.is_empty() {
             lines.extend(keys::problems("command", &key).into_iter().map(|p| line(warn(p))));
             let mine = f.index.map(|i| self.command_owner(i));
@@ -436,7 +484,7 @@ fn record_key(key: &Key) -> Option<String> {
 struct CommandForm {
     /// None for a new entry.
     index: Option<usize>,
-    kind: usize,
+    kind: CommandType,
     fields: Vec<TextInput>,
     focus: usize,
     original: toml::Table,
@@ -444,11 +492,12 @@ struct CommandForm {
 
 impl CommandForm {
     fn new(entry: toml::Table, index: Option<usize>) -> CommandForm {
-        let kind = COMMAND_TYPES.iter().position(|t| *t == text(&entry, "type")).unwrap_or(0);
-        let fields = FORM_FIELDS
+        let kind = CommandType::ALL.into_iter().find(|t| t.name() == text(&entry, "type")).unwrap_or_default();
+        let fields = FormField::ALL
             .iter()
-            .map(|name| {
-                let value = match entry.get(*name) {
+            .map(|field| {
+                let name = field.name();
+                let value = match entry.get(name) {
                     Some(Value::String(s)) => s.clone(),
                     Some(Value::Integer(n)) => n.to_string(),
                     _ => String::new(),
@@ -469,33 +518,31 @@ impl CommandForm {
         self.fields[i].focus();
     }
 
-    fn value(&self, name: &str) -> String {
-        let i = FORM_FIELDS.iter().position(|n| *n == name).unwrap();
-        self.fields[i].value().trim().to_string()
+    fn value(&self, field: FormField) -> String {
+        self.fields[field as usize].value().trim().to_string()
     }
 
     fn entry(&self) -> Result<Vec<Field>> {
-        let key = self.value("key");
+        let key = self.value(FormField::Key);
         if key.is_empty() {
             bail!("a key is required");
         }
         if let Some(p) = keys::problems("command", &key).into_iter().next() {
             bail!(p);
         }
-        let command = self.value("command");
+        let command = self.value(FormField::Command);
         if command.is_empty() {
             bail!("a command is required");
         }
-        let kind = COMMAND_TYPES[self.kind];
         let s = |v: &str| Value::String(v.into());
-        let mut fields: Vec<Field> = vec![("key".into(), s(&key)), ("type".into(), s(kind)), ("command".into(), s(&command))];
-        let desc = self.value("description");
+        let mut fields: Vec<Field> = vec![("key".into(), s(&key)), ("type".into(), s(self.kind.name())), ("command".into(), s(&command))];
+        let desc = self.value(FormField::Description);
         if !desc.is_empty() {
             fields.push(("description".into(), s(&desc)));
         }
-        for name in ["width", "height"] {
-            let value = self.value(name);
-            if value.is_empty() || kind != "popup" {
+        for field in [FormField::Width, FormField::Height] {
+            let (name, value) = (field.name(), self.value(field));
+            if value.is_empty() || self.kind != CommandType::Popup {
                 continue;
             }
             if let Ok(n) = value.parse::<i64>() {
@@ -508,7 +555,7 @@ impl CommandForm {
         }
         // Keep keys this form does not know about.
         for (k, v) in &self.original {
-            if k != "type" && !FORM_FIELDS.contains(&k.as_str()) {
+            if k != "type" && !FormField::ALL.iter().any(|f| f.name() == k) {
                 fields.push((k.clone(), v.clone()));
             }
         }
