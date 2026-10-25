@@ -430,8 +430,9 @@ fn newline(data: &str) -> &'static str {
     if data.contains("\r\n") { "\r\n" } else { "\n" }
 }
 
-/// Writes KEY=value: in place of an existing line (keeping its quotes), else
-/// just below the commented-out default, else at the end.
+/// Writes KEY=value: in place of the last existing line, the one that takes
+/// effect (keeping its quotes), else just below the commented-out default,
+/// else at the end.
 fn set_env(data: &str, key: &str, value: &str) -> Result<String> {
     if value.contains(['\r', '\n']) {
         bail!("a value cannot span lines");
@@ -439,20 +440,16 @@ fn set_env(data: &str, key: &str, value: &str) -> Result<String> {
     let nl = newline(data);
     let normalized = data.replace("\r\n", "\n");
     let mut lines: Vec<String> = normalized.split('\n').map(String::from).collect();
-    let mut commented = None;
-    for (i, line) in lines.iter_mut().enumerate() {
-        if let Some(m) = ENV_SET.captures(line).filter(|m| &m[2] == key) {
-            let quoted = match quote_of(m[3].trim()) {
-                Some(q) => format!("{q}{value}{q}"),
-                None => value.to_string(),
-            };
-            *line = format!("{}{quoted}", &line[..=line.find('=').unwrap()]);
-            return Ok(lines.join(nl));
-        }
-        if commented.is_none() && ENV_COMMENTED.captures(line).is_some_and(|m| &m[1] == key) {
-            commented = Some(i);
-        }
+    if let Some(line) = lines.iter_mut().rev().find(|line| ENV_SET.captures(line).is_some_and(|m| &m[2] == key)) {
+        let old = ENV_SET.captures(line).unwrap()[3].trim().to_string();
+        let quoted = match quote_of(&old) {
+            Some(q) => format!("{q}{value}{q}"),
+            None => value.to_string(),
+        };
+        *line = format!("{}{quoted}", &line[..=line.find('=').unwrap()]);
+        return Ok(lines.join(nl));
     }
+    let commented = lines.iter().position(|line| ENV_COMMENTED.captures(line).is_some_and(|m| &m[1] == key));
     let entry = format!("{key}={value}");
     if let Some(i) = commented {
         lines.insert(i + 1, entry);
@@ -497,6 +494,15 @@ mod tests {
         assert_eq!(set_env(data, "D", "4").unwrap(), "A=\"x\"\n#B=1\nC=3\nD=4\n");
         assert_eq!(unset_env(data, "C"), "A=\"x\"\n#B=1\n");
         assert!(set_env(data, "A", "a\nb").is_err());
+    }
+
+    // The reader takes the last of duplicate assignments, so that is the one
+    // an edit must change.
+    #[test]
+    fn env_edits_change_the_effective_duplicate() {
+        let data = set_env("A=1\nA=2\n", "A", "3").unwrap();
+        assert_eq!(data, "A=1\nA=3\n");
+        assert_eq!(read_env(&data)[0].value, Some(Value::Integer(3)));
     }
 
     #[test]
