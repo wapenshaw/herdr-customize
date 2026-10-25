@@ -103,6 +103,8 @@ pub struct Saved {
     pub key: Option<String>,
     pub result: SaveResult,
     pub err: Option<anyhow::Error>,
+    /// The config as the save left it, decoded; None when it failed.
+    pub config: Option<toml::Table>,
 }
 
 impl Saved {
@@ -264,8 +266,16 @@ pub fn load_doc(store: &Store, err: &mut Option<String>) -> Doc {
 
 /// Saves through store.
 fn save(store: &Store, what: String, key: Option<String>, edit: impl FnOnce(&mut Doc) -> Result<()>) -> Saved {
+    // Decoded here, off the UI thread, and before the lock is let go, so it
+    // is exactly what the file holds.
+    let mut config = None;
+    let edit = |d: &mut Doc| {
+        edit(d)?;
+        config = Some(d.decoded());
+        Ok(())
+    };
     match store.update(edit) {
-        Ok(result) => Saved { what, key, result, err: None },
+        Ok(result) => Saved { what, key, result, err: None, config },
         Err(e) => Saved { what, key, err: Some(e), ..Default::default() },
     }
 }

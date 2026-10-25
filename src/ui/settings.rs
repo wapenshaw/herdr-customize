@@ -115,6 +115,10 @@ impl SettingsPage {
         // Decoded once: a lookup per key would re-serialize and re-parse the
         // whole document each time.
         let table = load_doc(&sh.store, &mut self.load_err).decoded();
+        self.rebuild_from(sh, &table);
+    }
+
+    fn rebuild_from(&mut self, sh: &Shared, table: &toml::Table) {
         let mut rows = Vec::new();
         for section in &sh.reference.sections {
             // Keybindings and themes have their own pages.
@@ -123,14 +127,14 @@ impl SettingsPage {
             }
             rows.push(Row::Header(section.title.clone()));
             for k in &section.keys {
-                rows.push(Row::Setting(SettingRow { value: config::lookup(&table, &k.path()).cloned(), key: k.clone(), unknown: None }));
+                rows.push(Row::Setting(SettingRow { value: config::lookup(table, &k.path()).cloned(), key: k.clone(), unknown: None }));
             }
         }
-        let unknown = unknown_keys(&table, &sh.reference, &[]);
+        let unknown = unknown_keys(table, &sh.reference, &[]);
         if !unknown.is_empty() {
             rows.push(Row::Header("Not Herdr settings".into()));
             for path in unknown {
-                rows.push(Row::Setting(SettingRow { value: config::lookup(&table, &path).cloned(), unknown: Some(path), ..Default::default() }));
+                rows.push(Row::Setting(SettingRow { value: config::lookup(table, &path).cloned(), unknown: Some(path), ..Default::default() }));
             }
         }
         self.rows = rows;
@@ -361,7 +365,7 @@ impl Page for SettingsPage {
     fn update(&mut self, msg: &mut ui::Msg, ctx: &mut Ctx) {
         match msg {
             ui::Msg::Reference(_) => self.rebuild(ctx.sh),
-            ui::Msg::Saved(Saved { key, result, err, .. }) => {
+            ui::Msg::Saved(Saved { key, result, err, config, .. }) => {
                 match key {
                     Some(key) => match self.assumed.get_mut(key) {
                         Some(a) if a.inflight > 1 => a.inflight -= 1,
@@ -372,7 +376,13 @@ impl Page for SettingsPage {
                     None if err.is_none() => self.raw = None,
                     None => {}
                 }
-                self.rebuild(ctx.sh);
+                match config {
+                    Some(table) => {
+                        self.load_err = None;
+                        self.rebuild_from(ctx.sh, table);
+                    }
+                    None => self.rebuild(ctx.sh),
+                }
                 if err.is_none() && result.changed {
                     self.issues = result.issues.clone();
                 }
