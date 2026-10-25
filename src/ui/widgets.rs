@@ -578,8 +578,8 @@ pub struct Confirm<P> {
 pub type Yes<P> = Box<dyn FnOnce(&mut P, &mut Ctx)>;
 
 impl<P> Confirm<P> {
-    pub fn new(question: impl Into<String>, yes: impl FnOnce(&mut P, &mut Ctx) + 'static) -> Option<Confirm<P>> {
-        Some(Confirm { question: question.into(), yes: Box::new(yes) })
+    pub fn new(question: impl Into<String>, yes: impl FnOnce(&mut P, &mut Ctx) + 'static) -> Confirm<P> {
+        Confirm { question: question.into(), yes: Box::new(yes) }
     }
 
     /// Answers the question; any key but y cancels.

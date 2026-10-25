@@ -547,7 +547,7 @@ impl Page for SettingsPage {
                 let (path, name) = (r.path(), r.name());
                 if r.unknown.is_some() {
                     self.mode = Mode::Confirm;
-                    self.ask = Confirm::new(format!("Remove {name} from config.toml?"), move |p: &mut SettingsPage, ctx| p.write(name, path, None, ctx));
+                    self.ask = Some(Confirm::new(format!("Remove {name} from config.toml?"), move |p: &mut SettingsPage, ctx| p.write(name, path, None, ctx)));
                 } else {
                     self.write(format!("{name} default"), path, None, ctx);
                 }
