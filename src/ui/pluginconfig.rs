@@ -149,6 +149,8 @@ impl PluginConfig {
                 self.editing = true;
             }
             "x" => {
+                // Even with nothing set, a pick waiting on its delay is dropped.
+                self.pending.take_if(|p| p.key == e.key.key && p.file.as_ref() == Some(&f.name));
                 if !e.set() {
                     return ctx.status(format!("{} already uses the default", e.key.key));
                 }
@@ -190,6 +192,8 @@ impl PluginConfig {
     /// Writes key, or removes it when value is None, showing the new value
     /// at once.
     fn save(&mut self, f: &File, key: &str, value: Option<Value>, ctx: &mut Ctx) {
+        // A pick on this row waiting on its delay would otherwise undo this.
+        self.pending.take_if(|p| p.key == key && p.file.as_ref() == Some(&f.name));
         self.assume(&f.name, key, value.clone());
         self.saving += 1;
         let (id, f, key) = (self.plugin.id.clone(), f.clone(), key.to_string());

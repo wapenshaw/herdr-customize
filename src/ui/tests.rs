@@ -360,6 +360,37 @@ fn plugin_settings_are_typed() {
     assert!(d.screen().contains("saved FAST"));
 }
 
+// The pick's delayed save would otherwise put back the value just reset, or
+// set one the reset meant to leave unset.
+#[test]
+fn reset_drops_a_waiting_pick() {
+    let k = enum_key(&Driver::new("settings", "").app.sh);
+    let mut set = Doc::default();
+    set.set(&k.path(), &Value::String(k.choices()[0].clone())).unwrap();
+    for start in [set.text(), String::new()] {
+        let mut d = Driver::new("settings", &start);
+        d.typ("/");
+        d.typ(&k.key);
+        d.press(&["enter", "right", "x"]);
+        d.fire();
+        let doc = Doc::parse(&d.config()).unwrap();
+        assert!(config::lookup(&doc.decoded(), &k.path()).is_none(), "{}", d.config());
+    }
+}
+
+#[test]
+fn plugin_settings_reset_drops_a_waiting_pick() {
+    for start in ["#FAST=false\nFAST=true\n", "#FAST=false\n"] {
+        let mut d = Driver::new("plugins", "");
+        let pc = sandbox().join("pc/demo");
+        fs::create_dir_all(&pc).unwrap();
+        fs::write(pc.join("a.env"), start).unwrap();
+        d.press(&["s", "right", "x"]);
+        d.fire();
+        assert_eq!(fs::read_to_string(pc.join("a.env")).unwrap(), "#FAST=false\n");
+    }
+}
+
 // A pick waiting in one file must not be lost when a pick starts in another.
 #[test]
 fn plugin_settings_picks_in_two_files_write_both() {
