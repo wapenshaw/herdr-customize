@@ -566,26 +566,34 @@ fn subsequence(s: &str, term: &str) -> bool {
 /* --------------------------------------------------------------- confirm */
 
 /// A yes/no question shown in place of the help line. yes gets the page back
-/// so it can act on it.
+/// so it can act on it. While a page holds one, it takes every key.
 pub struct Confirm<P> {
-    pub question: String,
-    pub yes: Yes<P>,
+    question: String,
+    yes: Yes<P>,
 }
 
-pub type Yes<P> = Box<dyn FnOnce(&mut P, &mut Ctx)>;
+type Yes<P> = Box<dyn FnOnce(&mut P, &mut Ctx)>;
 
 impl<P> Confirm<P> {
     pub fn new(question: impl Into<String>, yes: impl FnOnce(&mut P, &mut Ctx) + 'static) -> Confirm<P> {
         Confirm { question: question.into(), yes: Box::new(yes) }
     }
 
-    /// Answers the question; any key but y cancels.
-    pub fn answer(self, page: &mut P, key: &Key, ctx: &mut Ctx) {
+    /// Answers ask, taken out of the page first, with key: y runs it and any
+    /// other key cancels. Reports whether there was a question.
+    pub fn handle(ask: Option<Self>, page: &mut P, key: &Key, ctx: &mut Ctx) -> bool {
+        let Some(ask) = ask else { return false };
         if key.name.eq_ignore_ascii_case("y") {
-            (self.yes)(page, ctx);
+            (ask.yes)(page, ctx);
         } else {
             ctx.status("cancelled");
         }
+        true
+    }
+
+    /// The help line while a question waits.
+    pub fn help(ask: &Option<Self>) -> Option<String> {
+        ask.as_ref().map(|a| format!("{} [y/N]", a.question))
     }
 }
 

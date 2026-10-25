@@ -31,7 +31,6 @@ enum Screen {
 #[derive(PartialEq)]
 enum Mode {
     Browse,
-    Confirm,
     InstallInput,
     MarketQuery,
 }
@@ -287,7 +286,6 @@ impl PluginsPage {
             }
             Action::Remove => {
                 let verb = if p.github() { "uninstall" } else { "unlink" };
-                self.mode = Mode::Confirm;
                 self.ask = Some(Confirm::new(format!("{verb} {} ({})?", p.name, p.id), move |page: &mut PluginsPage, ctx| {
                     page.panel = false;
                     ctx.spawn(move || Msg::PluginOp { text: format!("{verb}ed {}", p.name), err: plugins::remove(&p).err().map(|e| format!("{e:#}")) });
@@ -322,7 +320,6 @@ impl PluginsPage {
         if sha.eq_ignore_ascii_case(&p.source.commit) {
             return ctx.status(format!("{} is pinned to the latest commit", p.name));
         }
-        self.mode = Mode::Confirm;
         let question = format!("{} is pinned to {}; move the pin to {} (default branch)?", p.name, short(&p.source.commit), short(&sha));
         self.ask = Some(Confirm::new(question, move |_: &mut PluginsPage, ctx| interactive(ctx, format!("update {}", p.name), args(&["plugin", "install", &p.spec(), "--ref", &sha]))));
     }
@@ -348,7 +345,6 @@ impl PluginsPage {
         if ids.is_empty() {
             return ctx.status("nothing to update");
         }
-        self.mode = Mode::Confirm;
         self.ask = Some(Confirm::new(format!("Update {} plugin(s): {}?", ids.len(), names.join(", ")), move |_: &mut PluginsPage, ctx| {
             let n = ids.len();
             let mut a = args(&["plugin", "update"]);
@@ -439,7 +435,6 @@ impl PluginsPage {
                 if self.installed(&repo.full_name) {
                     return ctx.status(format!("{} is already installed; update it from the list", repo.full_name));
                 }
-                self.mode = Mode::Confirm;
                 self.ask = Some(Confirm::new(format!("Install {} (★ {})?", repo.full_name, repo.stars), move |_: &mut PluginsPage, ctx| {
                     interactive(ctx, format!("install {}", repo.full_name), args(&["plugin", "install", &repo.full_name]));
                 }));
@@ -870,16 +865,11 @@ impl Page for PluginsPage {
     }
 
     fn key(&mut self, key: &Key, ctx: &mut Ctx) {
-        match self.mode {
-            Mode::Confirm => {
-                self.mode = Mode::Browse;
-                if let Some(ask) = self.ask.take() {
-                    ask.answer(self, key, ctx);
-                }
-                return;
-            }
-            Mode::InstallInput | Mode::MarketQuery => return self.input_key(key, ctx),
-            Mode::Browse => {}
+        if Confirm::handle(self.ask.take(), self, key, ctx) {
+            return;
+        }
+        if self.mode != Mode::Browse {
+            return self.input_key(key, ctx);
         }
         match self.screen {
             Screen::Market => self.market_key(key, ctx),
@@ -925,10 +915,11 @@ impl Page for PluginsPage {
     }
 
     fn help(&self) -> String {
-        match self.mode {
-            Mode::Confirm => return format!("{} [y/N]", self.ask.as_ref().map_or("", |a| &a.question)),
-            Mode::InstallInput | Mode::MarketQuery => return "↵ confirm · esc cancel".into(),
-            Mode::Browse => {}
+        if let Some(help) = Confirm::help(&self.ask) {
+            return help;
+        }
+        if self.mode != Mode::Browse {
+            return "↵ confirm · esc cancel".into();
         }
         match self.screen {
             Screen::Market => "↵ install · o open repo · / search · s sort · r refresh · esc back",
@@ -944,7 +935,7 @@ impl Page for PluginsPage {
     }
 
     fn capturing(&self) -> bool {
-        if self.mode != Mode::Browse {
+        if self.mode != Mode::Browse || self.ask.is_some() {
             return true;
         }
         match self.screen {
@@ -956,7 +947,7 @@ impl Page for PluginsPage {
     }
 
     fn claims(&self, key: &Key) -> bool {
-        self.screen == Screen::Config && self.mode == Mode::Browse && self.config.as_ref().is_some_and(|c| c.claims(key))
+        self.screen == Screen::Config && self.mode == Mode::Browse && self.ask.is_none() && self.config.as_ref().is_some_and(|c| c.claims(key))
     }
 
     /// Leaves the marketplace, logs or the panel before the popup closes.

@@ -260,6 +260,46 @@ fn keys_marks_conflicts() {
 }
 
 #[test]
+fn keys_delete_asks_first() {
+    let mut d = Driver::new("keys", "[[keys.command]]\nkey = \"prefix+g\"\ntype = \"pane\"\ncommand = \"lazygit\"\n");
+    d.typ("/lazygit");
+    d.press(&["enter", "d"]);
+    assert!(d.screen().contains("Delete command 1 (lazygit)? [y/N]"));
+    d.press(&["n"]);
+    assert!(d.screen().contains("cancelled") && d.config().contains("lazygit"));
+    d.press(&["d", "y"]);
+    assert!(!d.config().contains("lazygit"), "{}", d.config());
+}
+
+#[test]
+fn themes_delete_asks_first() {
+    let mut d = Driver::new("themes", "");
+    let body = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/dracula-default")).unwrap();
+    crate::theme::save_user_theme("mine", &body, true).unwrap();
+    let file = sandbox().join("state/themes/mine");
+    d.press(&["ctrl+r"]);
+    d.typ("mine");
+    d.press(&["ctrl+d"]);
+    assert!(d.screen().contains("Delete \"mine\"? [y/N]"));
+    d.press(&["n"]);
+    assert!(d.screen().contains("cancelled") && file.exists());
+    d.press(&["ctrl+d", "y"]);
+    assert!(!file.exists());
+}
+
+#[test]
+fn plugins_unlink_asks_first() {
+    let mut d = Driver::new("plugins", "");
+    d.press(&["x"]);
+    assert!(d.screen().contains("unlink Demo (demo)? [y/N]"));
+    d.press(&["n"]);
+    assert!(d.screen().contains("cancelled"));
+    assert_eq!(d.herdr_calls("plugin unlink"), 0);
+    d.press(&["x", "y"]);
+    assert_eq!(d.herdr_calls("plugin unlink demo"), 1);
+}
+
+#[test]
 fn plugins_panel_binds_an_action() {
     let mut d = Driver::new("plugins", "");
     let screen = d.screen();

@@ -22,7 +22,6 @@ const FILTERS: [&str; 4] = ["All", "Dark", "Light", "Yours"];
 enum Mode {
     Browse,
     Naming,
-    Confirm,
     Editing,
     EditingColor,
 }
@@ -197,7 +196,7 @@ impl ThemesPage {
     fn save_new(&mut self, overwrite: bool, ctx: &mut Ctx) {
         match theme::save_user_theme(&self.input.value(), &self.pending_body, overwrite) {
             Ok(Saved::Exists(slug)) => {
-                self.mode = Mode::Confirm;
+                self.mode = Mode::Browse;
                 self.ask = Some(Confirm::new(format!("{slug:?} already exists. Overwrite?"), |p: &mut ThemesPage, ctx| {
                     p.mode = Mode::Naming;
                     p.save_new(true, ctx);
@@ -307,7 +306,6 @@ impl ThemesPage {
             },
             "ctrl+d" => match item {
                 Some(item) if item.user => {
-                    self.mode = Mode::Confirm;
                     self.ask = Some(Confirm::new(format!("Delete {:?}?", item.slug), move |_: &mut ThemesPage, ctx| match theme::remove_user_theme(&item.slug) {
                         Ok(()) => {
                             ctx.spawn(load_themes);
@@ -463,6 +461,7 @@ impl Page for ThemesPage {
                 self.remote_only = *only;
                 if *only {
                     self.mode = Mode::Browse;
+                    self.ask = None;
                 }
             }
             Msg::ThemesLoaded { items, looks, warnings, err } => {
@@ -490,13 +489,10 @@ impl Page for ThemesPage {
     }
 
     fn key(&mut self, key: &Key, ctx: &mut Ctx) {
+        if Confirm::handle(self.ask.take(), self, key, ctx) {
+            return;
+        }
         match self.mode {
-            Mode::Confirm => {
-                self.mode = Mode::Browse;
-                if let Some(ask) = self.ask.take() {
-                    ask.answer(self, key, ctx);
-                }
-            }
             Mode::Naming => match key.name.as_str() {
                 "esc" => {
                     self.mode = Mode::Browse;
@@ -559,9 +555,11 @@ impl Page for ThemesPage {
     }
 
     fn help(&self) -> String {
+        if let Some(help) = Confirm::help(&self.ask) {
+            return help;
+        }
         match self.mode {
             Mode::Naming => return "type a name · ↵ save and apply · esc cancel".into(),
-            Mode::Confirm => return format!("{} [y/N]", self.ask.as_ref().map_or("", |a| &a.question)),
             Mode::Editing => return "↵ change color · s save & apply · esc discard".into(),
             Mode::EditingColor => return "#rrggbb · ↵ set · esc cancel".into(),
             Mode::Browse if self.remote_only => return String::new(),
@@ -575,14 +573,14 @@ impl Page for ThemesPage {
     }
 
     fn capturing(&self) -> bool {
-        self.mode != Mode::Browse || self.list.filtering
+        self.mode != Mode::Browse || self.ask.is_some() || self.list.filtering
     }
 
     /// Takes typed characters for the search, ahead of the app's letter keys.
     /// ? still opens the key sheet, and 1–4 still switch pages until a search
     /// has started.
     fn claims(&self, key: &Key) -> bool {
-        if self.mode != Mode::Browse || self.remote_only {
+        if self.mode != Mode::Browse || self.ask.is_some() || self.remote_only {
             return false;
         }
         if key.paste.is_some() {
