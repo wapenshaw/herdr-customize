@@ -135,13 +135,15 @@ impl Config {
 }
 
 fn read(f: &mut File, documented: Vec<Key>) -> Result<()> {
-    let data = if f.missing { String::new() } else { fs::read_to_string(&f.path)? };
-    let found = match f.format {
-        Format::Toml => read_toml(&data)?,
-        Format::Env => read_env(&data),
+    // Decided before the read: a binary file in the config directory must
+    // not fail the whole screen.
+    let parse: fn(&str) -> Result<Vec<Entry>> = match f.format {
+        Format::Toml => read_toml,
+        Format::Env => |data| Ok(read_env(data)),
         Format::Other => return Ok(()),
     };
-    f.entries = merge(documented, found, f.format);
+    let data = if f.missing { String::new() } else { fs::read_to_string(&f.path)? };
+    f.entries = merge(documented, parse(&data)?, f.format);
     Ok(())
 }
 
@@ -523,11 +525,13 @@ mod tests {
         fs::create_dir_all(&cfg).unwrap();
         fs::write(cfg.join("settings.env"), "A=1\n").unwrap();
         fs::write(cfg.join("notes.txt"), "hi").unwrap();
+        // A binary file is listed but never read, so it cannot fail the load.
+        fs::write(cfg.join("icon.png"), [0x89, b'P', b'N', b'G', 0xff, 0xfe]).unwrap();
         fs::write(cfg.join("settings.env.bak-20250101"), "A=0\n").unwrap();
         fs::write(root.join(SCHEMA_FILE), r#"{"file":"config.toml","sections":[{"id":"x","title":"X","keys":[{"key":"poll","type":"integer","default":"5"}]}]}"#).unwrap();
         let c = load(&cfg, &root).unwrap();
         let names: Vec<&str> = c.files.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, ["config.toml", "settings.env", "notes.txt"]);
+        assert_eq!(names, ["config.toml", "settings.env", "icon.png", "notes.txt"]);
         assert!(c.files[0].missing);
         assert_eq!(c.files[0].entries[0].key.key, "poll");
         c.files[0].set("poll", &Value::Integer(9)).unwrap();
