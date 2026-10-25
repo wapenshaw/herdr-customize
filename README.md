@@ -49,6 +49,10 @@ Rust 1.99 or newer, plus the Visual Studio Build Tools (C++ workload) on
 Windows. Set `HERDR_CUSTOMIZE_BUILD_FROM_SOURCE=1` to always build from
 source.
 
+On Windows the install step runs in the Windows PowerShell 5.1 that ships
+with Windows, so PowerShell 7 is not needed. Herdr started from PowerShell 7
+works too.
+
 The Plugins page uses `git` for update checks.
 
 ### Bind a key
@@ -193,8 +197,8 @@ sh scripts/fetch-or-build.sh
 ./target/release/herdr-customize ui themes
 ```
 
-On Windows, run `powershell -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1`,
-then `.\target\release\herdr-customize.exe ui themes`.
+On Windows, run `powershell -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1`
+(or the same with `pwsh`), then `.\target\release\herdr-customize.exe ui themes`.
 
 Run it in a terminal outside Herdr. A Herdr pane runs on the server, so a
 picker started there would change the server's config. The binary finds the
