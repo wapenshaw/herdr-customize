@@ -539,7 +539,7 @@ impl Page for ThemesPage {
         if matches!(self.mode, Mode::Editing | Mode::EditingColor) {
             return self.editor_view(width, height);
         }
-        let left_width = if width < 90 { width } else { 38.min(width) };
+        let left_width = if width < 90 { width } else { 38 };
         let mut list_height = height.saturating_sub(4);
         if self.mode == Mode::Naming {
             list_height = list_height.saturating_sub(2);

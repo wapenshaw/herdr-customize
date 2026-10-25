@@ -554,7 +554,7 @@ fn schema_cache_dir() -> PathBuf {
 fn load_reference() -> Msg {
     let bundled = || Msg::Reference(schema::bundled());
     let Ok(version) = herdr::version() else { return bundled() };
-    if version == schema::bundled().version {
+    if version == schema::BUNDLED_VERSION {
         return bundled();
     }
     if let Some(r) = schema::cached(&schema_cache_dir(), &version) {

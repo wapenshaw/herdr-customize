@@ -11,7 +11,7 @@ use ratatui::text::{Line, Span};
 use regex::Regex;
 
 use super::pluginconfig::{self, PluginConfig};
-use super::widgets::*;
+use super::widgets::{self, *};
 use super::{Ctx, Hint, Key, Msg, Page, Shared, load_plugins};
 use crate::fsutil;
 use crate::plugins::{self, Log, MARKET_TOPIC, Plugin, Repo, State, Status};
@@ -665,7 +665,7 @@ impl PluginsPage {
             _ => self.update_info(p),
         };
         let title = Line::from(vec![heading(p.name.clone()), dim(format!("  {}", p.version))]);
-        let mut title = pad_line(title, width.saturating_sub(width_of(&state) + 2));
+        let mut title = pad_line(title, width.saturating_sub(widgets::width(&state) + 2));
         title.spans.extend([self.status_glyph(p), raw(" "), dim(state)]);
         let source = if p.github() {
             let r = p.git_ref();
@@ -682,7 +682,7 @@ impl PluginsPage {
             lines.extend([line(error(clip_str(&s.error, width))), Line::default()]);
         }
         let items = self.menu(p);
-        let label_width = items.iter().map(|i| width_of(&i.label)).max().unwrap_or(0).min(width / 2);
+        let label_width = items.iter().map(|i| widgets::width(&i.label)).max().unwrap_or(0).min(width / 2);
         for (i, item) in items.iter().enumerate() {
             let selected = self.panel && i == self.menu_cursor;
             let label = pad(&clip_str(&item.label, label_width), label_width);
@@ -776,10 +776,6 @@ impl PluginsPage {
         tail("stderr", &l.stderr, error);
         lines
     }
-}
-
-fn width_of(s: &str) -> usize {
-    super::widgets::width(s)
 }
 
 /// YYYY-MM-DD HH:MM:SS in local time.
