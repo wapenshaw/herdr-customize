@@ -180,7 +180,7 @@ pub fn host_payload(colors: &str) -> String {
 /// Splits a Windows command line as the C runtime builds argv: the program
 /// ends at the first unquoted space; before a quote, 2n backslashes give n and
 /// toggle quoting, 2n+1 give n and a literal quote.
-#[cfg_attr(not(windows), allow(dead_code, reason = "tested on every OS, used on Windows"))]
+#[cfg(any(windows, test))]
 fn split_command_line(line: &str) -> Vec<String> {
     let chars: Vec<char> = line.chars().collect();
     let mut args = Vec::new();
