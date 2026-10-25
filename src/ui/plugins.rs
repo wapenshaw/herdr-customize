@@ -144,8 +144,8 @@ fn ago(t: SystemTime) -> String {
 
 /// Runs herdr on the terminal; install and update show Herdr's trust
 /// preview there.
-fn interactive(ctx: &mut Ctx, what: String, args: Vec<String>) {
-    match plugins::interactive(&args) {
+fn interactive(ctx: &mut Ctx, what: String, args: &[String]) {
+    match plugins::interactive(args) {
         Ok(cmd) => ctx.exec(cmd, move |ok| match ok {
             Ok(()) => Msg::Op { text: format!("{what} done"), err: None }.into(),
             Err(_) => Msg::Op { text: what, err: Some(anyhow::anyhow!("cancelled or failed")) }.into(),
@@ -336,7 +336,7 @@ impl PluginsPage {
         if self.statuses.get(&p.id).is_some_and(|s| s.state == State::Current) {
             return ctx.status(format!("{} is up to date", p.name));
         }
-        interactive(ctx, format!("update {}", p.name), args(&["plugin", "update", &p.id]));
+        interactive(ctx, format!("update {}", p.name), &args(&["plugin", "update", &p.id]));
     }
 
     /// Offers to move an exact-commit pin to the default branch.
@@ -345,7 +345,7 @@ impl PluginsPage {
             return ctx.status(format!("{} is pinned to the latest commit", p.name));
         }
         let question = format!("{} is pinned to {}; move the pin to {} (default branch)?", p.name, short(&p.source.commit), short(&sha));
-        self.ask = Some(Confirm::new(question, move |_: &mut PluginsPage, ctx| interactive(ctx, format!("update {}", p.name), args(&["plugin", "install", &p.spec(), "--ref", &sha]))));
+        self.ask = Some(Confirm::new(question, move |_: &mut PluginsPage, ctx| interactive(ctx, format!("update {}", p.name), &args(&["plugin", "install", &p.spec(), "--ref", &sha]))));
     }
 
     /// Updates every plugin that is behind. Exact-commit pins are left alone:
@@ -373,7 +373,7 @@ impl PluginsPage {
             let n = ids.len();
             let mut a = args(&["plugin", "update"]);
             a.extend(ids);
-            interactive(ctx, format!("update of {n} plugin(s)"), a);
+            interactive(ctx, format!("update of {n} plugin(s)"), &a);
         }));
     }
 
@@ -391,7 +391,7 @@ impl PluginsPage {
                     return;
                 }
                 match install_args(&text) {
-                    Ok(a) => interactive(ctx, format!("install {}", a[2]), a),
+                    Ok(a) => interactive(ctx, format!("install {}", a[2]), &a),
                     Err(e) => ctx.error(e),
                 }
             }
@@ -457,7 +457,7 @@ impl PluginsPage {
                     return ctx.status(format!("{} is already installed; update it from the list", repo.full_name));
                 }
                 self.ask = Some(Confirm::new(format!("Install {} (★ {})?", repo.full_name, repo.stars), move |_: &mut PluginsPage, ctx| {
-                    interactive(ctx, format!("install {}", repo.full_name), args(&["plugin", "install", &repo.full_name]));
+                    interactive(ctx, format!("install {}", repo.full_name), &args(&["plugin", "install", &repo.full_name]));
                 }));
             }
             "o" => {
@@ -941,7 +941,7 @@ impl Page for PluginsPage {
     }
 
     fn help(&self) -> String {
-        if let Some(help) = Confirm::help(&self.ask) {
+        if let Some(help) = Confirm::help(self.ask.as_ref()) {
             return help;
         }
         if self.mode != Mode::Browse {

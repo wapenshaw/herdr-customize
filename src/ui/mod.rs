@@ -396,7 +396,7 @@ impl App {
         }
     }
 
-    pub fn key(&mut self, key: Key) {
+    pub fn key(&mut self, key: &Key) {
         self.status.clear();
         if key.is("ctrl+c") {
             self.quit = true;
@@ -408,7 +408,7 @@ impl App {
             return;
         }
         let page = &mut self.pages[self.active];
-        if !page.claims(&key) && !page.capturing() {
+        if !page.claims(key) && !page.capturing() {
             let n = self.pages.len();
             match key.name.as_str() {
                 "esc" => {
@@ -432,7 +432,7 @@ impl App {
                 _ => {}
             }
         }
-        self.with_page(self.active, |page, ctx| page.key(&key, ctx));
+        self.with_page(self.active, |page, ctx| page.key(key, ctx));
     }
 
     pub fn view(&mut self, width: usize, height: usize) -> Vec<Line<'static>> {
@@ -589,11 +589,11 @@ fn event_loop(app: &mut App, term: &mut Term, tx: &Sender<Msg>, rx: &Receiver<Ms
         if event::poll(wait)? {
             match event::read()? {
                 Event::Key(k) if let Some(key) = Key::from_event(k) => {
-                    app.key(key);
+                    app.key(&key);
                     dirty = true;
                 }
                 Event::Paste(text) => {
-                    app.key(Key { paste: Some(text), ..Default::default() });
+                    app.key(&Key { paste: Some(text), ..Default::default() });
                     dirty = true;
                 }
                 Event::Resize(..) => dirty = true,

@@ -591,7 +591,7 @@ impl Page for ThemesPage {
     }
 
     fn help(&self) -> String {
-        if let Some(help) = Confirm::help(&self.ask) {
+        if let Some(help) = Confirm::help(self.ask.as_ref()) {
             return help;
         }
         match self.mode {
