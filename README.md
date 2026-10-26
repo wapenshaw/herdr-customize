@@ -4,6 +4,11 @@ Settings and key bindings for [Herdr](https://herdr.dev) in one popup instead
 of hand-editing `config.toml`, with optional Themes and Plugins pages. Runs on
 Linux, macOS and Windows.
 
+This is a personal plugin. I wrote it for my own Herdr setup, and to
+experiment and learn Rust along the way. The Themes and Plugins pages are Rust
+ports of two community plugins (see [Credits](#credits)), brought into one
+popup for my convenience. Use it if it helps you too.
+
 ![The Settings page: every Herdr setting grouped by section, with the allowed values on each row](docs/screenshots/settings.png)
 
 ## Features
@@ -72,10 +77,10 @@ title builders, sounds and notifications, and restoring config backups.
 
 ## Credits
 
-- The Themes page started as
+- The Themes page is a Rust port of
   [qintmb/herdr-theme-picker](https://github.com/qintmb/herdr-theme-picker).
   Thanks to its contributors.
-- The Plugins page is a port of
+- The Plugins page is a Rust port of
   [speardragon/herdr-plugin-manager](https://github.com/speardragon/herdr-plugin-manager)
   (MIT).
 
