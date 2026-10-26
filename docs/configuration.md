@@ -34,3 +34,6 @@ State is stored in `HERDR_PLUGIN_STATE_DIR` when it is set, and otherwise in
 `~/.local/state/...`, or `%LOCALAPPDATA%\herdr\plugins\herdr-customize` on
 Windows). Standalone runs and the installed plugin therefore share your themes,
 the record of the applied one, and the write locks.
+
+`pages` in the state folder lists the optional pages turned on, one per line
+(`themes`, `plugins`). Delete it to hide both again.

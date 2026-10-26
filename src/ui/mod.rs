@@ -33,6 +33,20 @@ use widgets::*;
 
 pub const PAGES: [&str; 4] = ["settings", "keys", "themes", "plugins"];
 
+/// Pages hidden until turned on in Settings, in PAGES order.
+pub const OPTIONAL: [&str; 2] = ["themes", "plugins"];
+
+/// Lists the optional pages turned on, one per line.
+fn pages_file() -> PathBuf {
+    crate::theme::state_dir().join("pages")
+}
+
+/// The optional pages turned on. A missing or unreadable file means none.
+fn load_pages() -> Vec<&'static str> {
+    let text = std::fs::read_to_string(pages_file()).unwrap_or_default();
+    OPTIONAL.into_iter().filter(|p| text.lines().any(|l| l.trim() == *p)).collect()
+}
+
 /// One key press, named the way the pages match on it: "a", "A", " ",
 /// "enter", "ctrl+c", "shift+tab", "pgdown". A paste comes whole.
 #[derive(Debug, Clone, Default)]
@@ -135,6 +149,8 @@ pub enum Msg {
     Reference(Reference),
     Saved(Saved),
     PluginList(Result<Vec<Plugin>>),
+    /// The optional pages were saved, or why not.
+    PagesSaved(Result<()>),
     /// Asks the Keys page for a binding to a plugin action.
     BindAction {
         qualified: String,
@@ -149,10 +165,12 @@ pub enum Msg {
     Settings(settings::Msg),
 }
 
-/// State every page reads: the config file and the key reference.
+/// State every page reads: the config file, the key reference and the
+/// optional pages turned on.
 pub struct Shared {
     pub store: Arc<Store>,
     pub reference: Reference,
+    pub pages: Vec<&'static str>,
 }
 
 type Job = Box<dyn FnOnce() -> Msg + Send>;
@@ -165,6 +183,7 @@ enum Effect {
     Status(String, bool),
     QuitThen(After),
     Goto(usize, Option<Msg>),
+    ShowPage(&'static str, bool),
     Spawn(Job),
     Write(Job),
     Timer(Duration, Msg),
@@ -218,6 +237,11 @@ impl Ctx<'_> {
         if let Some(i) = PAGES.iter().position(|p| *p == page) {
             self.fx.push(Effect::Goto(i, msg));
         }
+    }
+
+    /// Turns an optional page on or off, for this popup and the next ones.
+    pub fn show_page(&mut self, page: &'static str, on: bool) {
+        self.fx.push(Effect::ShowPage(page, on));
     }
 
     /// Delivers Msg::PendingSave for pick seq once PICK_DELAY has passed.
@@ -313,6 +337,8 @@ pub trait Page {
 pub struct App {
     sh: Shared,
     pages: Vec<Box<dyn Page>>,
+    /// Which pages are on the tab bar, in PAGES order.
+    visible: Vec<bool>,
     active: usize,
     status: String,
     status_err: bool,
@@ -337,13 +363,15 @@ pub struct App {
 
 impl App {
     pub fn new(tab: &str) -> App {
-        let sh = Shared { store: Arc::new(Store::default_store()), reference: schema::bundled() };
+        let sh = Shared { store: Arc::new(Store::default_store()), reference: schema::bundled(), pages: load_pages() };
         // In PAGES order.
         let pages: Vec<Box<dyn Page>> = vec![Box::new(settings::SettingsPage::new()), Box::new(keys::KeysPage::new()), Box::new(themes::ThemesPage::new()), Box::new(plugins::PluginsPage::new())];
         let active = PAGES.iter().position(|p| p.eq_ignore_ascii_case(tab)).unwrap_or(0);
+        let visible = PAGES.iter().map(|p| !OPTIONAL.contains(p) || sh.pages.contains(p)).collect();
         let mut app = App {
             sh,
             pages,
+            visible,
             active,
             status: String::new(),
             status_err: false,
@@ -365,7 +393,15 @@ impl App {
         app
     }
 
+    /// The pages on the tab bar, in order.
+    fn shown(&self) -> Vec<usize> {
+        (0..self.pages.len()).filter(|&i| self.visible[i]).collect()
+    }
+
+    /// Shows page i, even a hidden one: asking for a page by name shows it
+    /// for this popup.
     fn switch(&mut self, i: usize) {
+        self.visible[i] = true;
         self.active = i;
         self.with_page(i, |page, ctx| page.activated(ctx));
     }
@@ -403,6 +439,7 @@ impl App {
                         self.with_page(i, |page, ctx| page.update(&mut msg, ctx));
                     }
                 }
+                Effect::ShowPage(page, on) => self.show_page(page, on),
                 Effect::Spawn(job) => self.jobs.push(job),
                 Effect::Write(job) => self.writes.push(job),
                 Effect::Timer(delay, msg) => self.timers.push((Instant::now() + delay, msg)),
@@ -412,11 +449,25 @@ impl App {
         }
     }
 
+    fn show_page(&mut self, page: &'static str, on: bool) {
+        let Some(i) = PAGES.iter().position(|p| *p == page) else { return };
+        self.visible[i] = on;
+        self.sh.pages.retain(|p| *p != page);
+        if on {
+            self.sh.pages.push(page);
+        }
+        let text: String = OPTIONAL.iter().filter(|p| self.sh.pages.contains(p)).map(|p| format!("{p}\n")).collect();
+        self.writes.push(Box::new(move || Msg::PagesSaved(crate::fsutil::atomic_write(&pages_file(), text.as_bytes(), 0o644))));
+        let title = self.pages[i].title();
+        (self.status, self.status_err) = (format!("{title} page {}", if on { "on" } else { "off" }), false);
+    }
+
     /// Delivers msg to the app and then to every page.
     pub fn dispatch(&mut self, mut msg: Msg) {
         match &mut msg {
             Msg::Reference(r) => self.sh.reference = std::mem::take(r),
             Msg::Saved(saved) => (self.status, self.status_err) = saved.describe(),
+            Msg::PagesSaved(Err(e)) => (self.status, self.status_err) = (format!("pages not saved: {e:#}"), true),
             _ => {}
         }
         self.each_page(|page, ctx| page.update(&mut msg, ctx));
@@ -451,7 +502,9 @@ impl App {
         }
         let page = &mut self.pages[self.active];
         if !page.claims(key) && !page.capturing() {
-            let n = self.pages.len();
+            let shown = self.shown();
+            let at = shown.iter().position(|&i| i == self.active).unwrap_or(0);
+            let n = shown.len();
             match key.name.as_str() {
                 "esc" => {
                     if !self.pages[self.active].back() {
@@ -468,9 +521,14 @@ impl App {
                     return;
                 }
                 // Arrows belong to the page; only Tab and the digits switch.
-                "tab" => return self.switch((self.active + 1) % n),
-                "shift+tab" => return self.switch((self.active + n - 1) % n),
-                "1" | "2" | "3" | "4" => return self.switch((key.name.as_bytes()[0] - b'1') as usize),
+                "tab" => return self.switch(shown[(at + 1) % n]),
+                "shift+tab" => return self.switch(shown[(at + n - 1) % n]),
+                "1" | "2" | "3" | "4" => {
+                    if let Some(&i) = shown.get((key.name.as_bytes()[0] - b'1') as usize) {
+                        self.switch(i);
+                    }
+                    return;
+                }
                 _ => {}
             }
         }
@@ -479,9 +537,13 @@ impl App {
 
     pub fn view(&mut self, width: usize, height: usize) -> Vec<Line<'static>> {
         let mut tabs = Vec::new();
-        for (i, p) in self.pages.iter().enumerate() {
-            let label = format!(" {} {} ", i + 1, p.title());
+        for (n, i) in self.shown().into_iter().enumerate() {
+            let label = format!(" {} {} ", n + 1, self.pages[i].title());
             tabs.push(if i == self.active { styled(TAB_ACTIVE, label) } else { dim(label) });
+        }
+        let hidden: Vec<&str> = (0..self.pages.len()).filter(|&i| !self.visible[i]).map(|i| self.pages[i].title()).collect();
+        if !hidden.is_empty() {
+            tabs.push(dim(format!("  {} can be turned on in Settings", hidden.join(" and "))));
         }
         let page = &mut self.pages[self.active];
         // Tab leads, so a narrow popup clips the page's own keys instead.
