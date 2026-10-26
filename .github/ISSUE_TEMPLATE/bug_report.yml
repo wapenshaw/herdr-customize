@@ -7,7 +7,7 @@ body:
       value: |
         If the popup does not open at all, check `herdr plugin list` first:
         the plugin has to be installed and enabled, and a key has to be bound
-        to `herdr-customize.open` (see the README's "Bind a key").
+        to `herdr-customize.open` (see "Bind a key" in docs/install.md).
 
   - type: dropdown
     id: page
