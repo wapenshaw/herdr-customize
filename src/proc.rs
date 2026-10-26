@@ -70,7 +70,7 @@ pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
     let give_up = |mut child: std::process::Child| -> Result<Output> {
         let _ = child.kill();
         let _ = child.wait();
-        bail!("gave up after {timeout:?}")
+        Err(TimedOut(timeout).into())
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     for _ in 0..2 {
@@ -90,6 +90,18 @@ pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
     };
     Ok(Output { status, stdout, stderr })
 }
+
+/// The error output_within gives when its timeout passes.
+#[derive(Debug)]
+pub struct TimedOut(pub Duration);
+
+impl std::fmt::Display for TimedOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "gave up after {:?}", self.0)
+    }
+}
+
+impl std::error::Error for TimedOut {}
 
 /// Waits until pid has exited or timeout passes, and reports whether it exited.
 pub fn wait_exit(pid: i32, timeout: Duration) -> bool {
@@ -293,7 +305,8 @@ mod tests {
             cmd.arg("30");
         }
         let start = Instant::now();
-        assert!(output_within(&mut cmd, Duration::from_millis(200)).is_err());
+        let err = output_within(&mut cmd, Duration::from_millis(200)).unwrap_err();
+        assert!(err.is::<TimedOut>(), "{err:#}");
         assert!(start.elapsed() < Duration::from_secs(5));
         let mut cmd = if cfg!(windows) { Command::new("cmd") } else { Command::new("sh") };
         cmd.args(if cfg!(windows) { ["/C", "echo hi"] } else { ["-c", "echo hi"] });

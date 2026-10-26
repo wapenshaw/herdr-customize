@@ -467,10 +467,11 @@ impl Store {
         fs::write(&tmp, data)?;
         let after = herdr::check_config(&tmp);
         let _ = fs::remove_file(&tmp);
+        let after = after?;
         if after.issues.is_empty() {
             return Ok((Vec::new(), after));
         }
-        let before = if missing { Vec::new() } else { herdr::check_config(&self.path).issues };
+        let before = if missing { Vec::new() } else { herdr::check_config(&self.path)?.issues };
         Ok((fresh_issues(&before, &after.issues), after))
     }
 }
