@@ -4,6 +4,13 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.5.0](https://github.com/wapenshaw/herdr-customize/compare/v0.4.1...v0.5.0) (2026-10-26)
+
+
+### Features
+
+* **ui:** hide the themes and plugins pages until turned on in settings ([b2775eb](https://github.com/wapenshaw/herdr-customize/commit/b2775eb1bcff5e0d975b8d05cc0d15da486d159e))
+
 ## [0.4.1](https://github.com/wapenshaw/herdr-customize/compare/v0.4.0...v0.4.1) (2026-10-26)
 
 
