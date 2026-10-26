@@ -22,7 +22,7 @@ The plugin is written in Rust. The first, Go implementation is kept on the
 - `themes/`: bundled Ghostty-format palettes and `index.txt`.
 - `scripts/fetch-or-build.{sh,ps1}`: the manifest's build step; downloads the release binary for this version or falls back to `cargo build`.
 - `docs/screenshots/`: README images, rendered from a sandboxed run of the popup.
-- `herdr-plugin.toml`: plugin metadata, build command, panes, and actions. `docs/` records persistence edge cases and the language comparison.
+- `herdr-plugin.toml`: plugin metadata, build command, panes, and actions. `docs/` holds the user guide (install, pages, themes, configuration, plugin authors) and the technical notes: development, persistence edge cases, the Windows test plan and the language comparison.
 
 ## Build, Test, and Development Commands
 
@@ -77,5 +77,5 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md); these rules are mandatory.
 - Conventional Commits: `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period, 72 characters at most. Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `chore`; scope is a module or area, or `deps`. The body says why. One logical change per commit, never a co-author trailer, and no "Generated with" line in commits or pull request bodies.
 - Pull requests are rebased, never squashed or merged, so each commit subject becomes a changelog line; `feat`, `fix`, `perf` and `refactor` are the visible ones.
 - One thing per pull request. The body follows `.github/pull_request_template.md`: Summary (the smallest view that shows the change), Evidence (before and after), Merge Danger (one-way or two-way door, blast radius), and the checklist with only true items ticked. Include screenshots for UI changes.
-- Update README or persistence notes when behavior changes; leave `CHANGELOG.md` and versions to release-please.
+- Update the guide in `docs/` when behavior changes, and the README only when a feature or the install steps change. The README stays a short landing page: features, install, a few keys and links; leave `CHANGELOG.md` and versions to release-please.
 
