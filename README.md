@@ -1,8 +1,8 @@
 # herdr-customize
 
-Settings, key bindings, themes and plugins for [Herdr](https://herdr.dev), in
-one popup instead of hand-editing `config.toml`. Runs on Linux, macOS and
-Windows.
+Settings and key bindings for [Herdr](https://herdr.dev) in one popup instead
+of hand-editing `config.toml`, with optional Themes and Plugins pages. Runs on
+Linux, macOS and Windows.
 
 ![The Settings page: every Herdr setting grouped by section, with the allowed values on each row](docs/screenshots/settings.png)
 
@@ -13,13 +13,16 @@ Windows.
 - **Keys**: Herdr's actions, your custom commands and plugin actions that
   have no key yet, in one list. Press a key to record it; conflicts are
   flagged before you save.
-- **Themes**: 112 palettes with a live preview. One key recolors Herdr and
-  the terminal it runs in. Add your own from the clipboard.
-- **Plugins**: update, install, enable, remove and configure your plugins,
-  read their logs, and browse the marketplace.
+- **Themes** (optional): 112 palettes with a live preview. One key recolors
+  Herdr and the terminal it runs in. Add your own from the clipboard.
+- **Plugins** (optional): update, install, enable, remove and configure your
+  plugins, read their logs, and browse the marketplace.
 - **Safe edits**: your comments and layout stay put. Herdr checks every change
   before it is written, the original is backed up daily, and Herdr reloads
   by itself.
+
+The popup starts with Settings and Keys. Turn on Themes and Plugins at the top
+of the Settings page when you want them.
 
 | Keys | Themes | Plugins |
 | --- | --- | --- |
@@ -39,11 +42,12 @@ keys, binding by hand and building from source.
 ## Use
 
 - **prefix+t** opens the popup.
-- **Tab** and **Shift+Tab** switch pages, as do **1** to **4**.
+- **Tab** and **Shift+Tab** switch pages, as do the number keys.
+- **Themes page** and **Plugins page**, at the top of Settings, add those
+  pages to the popup.
 - **?** lists every key on a page, and **Esc** closes the popup.
 
-To update, run `herdr plugin update herdr-customize` or update it from its own
-Plugins page.
+To update, run `herdr plugin update herdr-customize`.
 
 Coming from herdr-theme-picker or Plugin Manager? This plugin replaces both;
 [here is how to switch](docs/install.md#coming-from-herdr-theme-picker-or-plugin-manager).

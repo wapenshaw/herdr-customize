@@ -53,7 +53,7 @@ Check platform-sensitive changes for every target: `cargo clippy --target x86_64
 
 ## Coding Style & Naming Conventions
 
-Follow `rustfmt` and clippy. Platform code uses `#[cfg(unix)]`/`#[cfg(windows)]` on items, or separate `unix.rs`/`windows.rs` modules when a whole implementation differs; Windows APIs come from `windows-sys`, Unix ones from `libc`. `snake_case` for functions and modules, `PascalCase` for types. Errors use `anyhow` with context; a type the caller must recognize (such as `CheckError`) is a struct it can `downcast_ref`. UI state changes only in `Page::update`/`key`; side effects go through `Ctx` (`spawn`, `after`, `exec`, `save`) so pages stay testable.
+Follow `rustfmt` and clippy. Platform code uses `#[cfg(unix)]`/`#[cfg(windows)]` on items, or separate `unix.rs`/`windows.rs` modules when a whole implementation differs; Windows APIs come from `windows-sys`, Unix ones from `libc`. `snake_case` for functions and modules, `PascalCase` for types. Errors use `anyhow` with context; a type the caller must recognize (such as `CheckError`) is a struct it can `downcast_ref`. UI state changes only in `Page::update`/`key`; side effects go through `Ctx` (`spawn`, `after`, `exec`, `save`, `show_page`) so pages stay testable. Themes and Plugins are optional pages, listed in `<state>/pages`.
 
 Theme filenames use lowercase hyphenated slugs, such as `catppuccin-mocha`, without extensions. Register bundled additions in `themes/index.txt`; include foreground, background, and all 16 ANSI palette entries.
 

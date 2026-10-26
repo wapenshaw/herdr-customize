@@ -93,9 +93,16 @@ struct Driver {
 }
 
 impl Driver {
+    /// Opens tab with every optional page turned on.
     fn new(tab: &str, config: &str) -> Driver {
+        Driver::with_pages(tab, config, "themes\nplugins\n")
+    }
+
+    /// Opens tab with the optional pages listed in pages turned on.
+    fn with_pages(tab: &str, config: &str, pages: &str) -> Driver {
         let guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
         let dir = sandbox();
+        fs::write(dir.join("state/pages"), pages).unwrap();
         fs::write(dir.join("config.toml"), config).unwrap();
         fs::write(dir.join("plugins.json"), PLUGINS).unwrap();
         fs::write(dir.join("herdr.log"), "").unwrap();
@@ -174,6 +181,44 @@ fn boolean_key(sh: &Shared) -> schema::Key {
 /// An enum setting with at least three values.
 fn enum_key(sh: &Shared) -> schema::Key {
     sh.reference.sections.iter().filter(|s| s.id != "keys" && s.id != "theme").flat_map(|s| &s.keys).find(|k| !k.open() && k.choices().len() >= 3).cloned().unwrap()
+}
+
+// A fresh install shows only Settings and Keys, and says where the rest are.
+#[test]
+fn optional_pages_start_hidden() {
+    let mut d = Driver::with_pages("settings", "", "");
+    let tabs = d.screen().lines().next().unwrap().to_string();
+    assert!(tabs.contains("1 Settings") && tabs.contains("2 Keys") && !tabs.contains("3 Themes") && tabs.contains("Themes and Plugins can be turned on in Settings"), "{tabs}");
+    d.press(&["tab", "tab"]);
+    assert_eq!(PAGES[d.app.active], "settings");
+    d.press(&["3"]);
+    assert_eq!(PAGES[d.app.active], "settings");
+}
+
+// Turning a page on in Settings must show it now and in the next popup.
+#[test]
+fn optional_pages_turn_on_and_off() {
+    let mut d = Driver::with_pages("settings", "", "");
+    assert!(d.screen().contains("Themes page"), "{}", d.screen());
+    d.press(&["right"]);
+    assert_eq!(fs::read_to_string(sandbox().join("state/pages")).unwrap(), "themes\n");
+    assert!(d.screen().lines().next().unwrap().contains("3 Themes"), "{}", d.screen());
+    assert!(d.screen().contains("Themes page on"), "{}", d.screen());
+    assert!(App::new("settings").visible[PAGES.iter().position(|p| *p == "themes").unwrap()]);
+    d.press(&["x"]);
+    assert_eq!(fs::read_to_string(sandbox().join("state/pages")).unwrap(), "");
+    assert!(!d.screen().lines().next().unwrap().contains("3 Themes"), "{}", d.screen());
+}
+
+// Bindings to herdr-customize.themes and the --remote laptop setup open a
+// page by name, so a hidden one still opens for that popup.
+#[test]
+fn a_hidden_page_opens_by_name() {
+    let mut d = Driver::with_pages("themes", "", "");
+    assert_eq!(PAGES[d.app.active], "themes");
+    let tabs = d.screen().lines().next().unwrap().to_string();
+    assert!(tabs.contains("3 Themes") && tabs.contains("Plugins can be turned on in Settings"), "{tabs}");
+    assert_eq!(fs::read_to_string(sandbox().join("state/pages")).unwrap(), "");
 }
 
 #[test]

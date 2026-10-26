@@ -1,8 +1,10 @@
 # Using the popup
 
-The popup has four pages. **Tab** and **Shift+Tab** switch pages, as do
-**1** to **4**. Arrow keys only move within a page. **?** lists every key on
-the current page, and **Esc** closes the popup.
+The popup has four pages. Settings and Keys are always there; Themes and
+Plugins are optional and start turned off (see [Optional pages](#optional-pages)).
+**Tab** and **Shift+Tab** switch pages, as do the number keys, which follow
+the tab bar. Arrow keys only move within a page. **?** lists every key on the
+current page, and **Esc** closes the popup.
 
 Pages that open a file use the editor from `VISUAL` or `EDITOR`, which may
 include arguments such as `code --wait`. Without either, the plugin tries
@@ -34,6 +36,18 @@ show their default.
 
 The reference for your Herdr version is downloaded once and cached. Without a
 network connection, the bundled 0.9.5 reference is used.
+
+### Optional pages
+
+The **herdr-customize** section at the top of the Settings page turns the
+Themes and Plugins pages on and off. **←**/**→**, **Enter** or **Space**
+toggle a page, and **x** turns it off. The change shows on the tab bar at once
+and is remembered for the next popup. While a page is off, the tab bar says
+where to turn it on.
+
+Opening a page by name still works while it is off: a binding to
+`herdr-customize.themes` or `herdr-customize.plugins`, or
+`herdr-customize ui themes`, opens that page for that popup only.
 
 ## Keys
 

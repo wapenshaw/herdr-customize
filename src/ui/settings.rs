@@ -1,5 +1,6 @@
 //! Settings: every key in Herdr's config reference with its value, edited in
-//! place. ←/→ step through a setting's listed values.
+//! place, and the popup's optional pages. ←/→ step through a setting's listed
+//! values.
 
 use std::collections::HashMap;
 use std::fs;
@@ -21,6 +22,25 @@ const RAW_WHAT: &str = "config.toml";
 enum Row {
     Header(String),
     Setting(SettingRow),
+    Page(PageRow),
+}
+
+/// An optional page of the popup, turned on or off.
+struct PageRow {
+    page: &'static str,
+    /// Shaped like a boolean setting, so the row draws like one.
+    key: schema::Key,
+}
+
+impl PageRow {
+    fn new(page: &'static str) -> PageRow {
+        let (key, description) = match page {
+            "themes" => ("Themes page", "Shows the Themes page: palettes for Herdr and the terminal it runs in, with a live preview."),
+            _ => ("Plugins page", "Shows the Plugins page: update, install, configure and remove plugins, and browse the marketplace."),
+        };
+        let key = schema::Key { key: key.into(), kind: schema::BOOLEAN.into(), default: "false".into(), description: description.into(), values: Vec::new() };
+        PageRow { page, key }
+    }
 }
 
 /// A setting with its value (None when unset).
@@ -107,7 +127,14 @@ impl SettingsPage {
     fn current(&self) -> Option<&SettingRow> {
         match self.rows.get(self.list.selected()?)? {
             Row::Setting(r) => Some(r),
-            Row::Header(_) => None,
+            _ => None,
+        }
+    }
+
+    fn current_page(&self) -> Option<&PageRow> {
+        match self.rows.get(self.list.selected()?)? {
+            Row::Page(p) => Some(p),
+            _ => None,
         }
     }
 
@@ -119,7 +146,8 @@ impl SettingsPage {
     }
 
     fn rebuild_from(&mut self, sh: &Shared, table: &toml::Table) {
-        let mut rows = Vec::new();
+        let mut rows = vec![Row::Header("herdr-customize".into())];
+        rows.extend(ui::OPTIONAL.into_iter().map(|p| Row::Page(PageRow::new(p))));
         for section in &sh.reference.sections {
             // Keybindings and themes have their own pages.
             if section.id == "keys" || section.id == "theme" {
@@ -145,6 +173,7 @@ impl SettingsPage {
             .map(|r| match r {
                 Row::Header(h) => h.clone(),
                 Row::Setting(r) => format!("{} {}", r.name(), r.key.description),
+                Row::Page(p) => format!("{} {}", p.key.key, p.key.description),
             })
             .collect();
         let headers = self.rows.iter().map(|r| matches!(r, Row::Header(_))).collect();
@@ -307,6 +336,11 @@ impl SettingsPage {
         if self.mode == Mode::Editing {
             return vec![self.input.view()];
         }
+        if let Some(p) = self.current_page() {
+            let mut lines: Vec<Line<'static>> = wrap(&p.key.description, width).into_iter().map(Line::raw).collect();
+            lines.push(line(dim("Settings and Keys are always shown. Opening a page by name shows it either way.")));
+            return lines;
+        }
         let Some(r) = self.current() else {
             if self.mode == Mode::Browse && self.list.query().is_empty() {
                 return vec![line(dim("Keybindings are on the Keys page and themes on the Themes page."))];
@@ -412,6 +446,16 @@ impl Page for SettingsPage {
         if key.is("E") {
             return self.edit_raw(ctx);
         }
+        if let Some(p) = self.current_page() {
+            let (page, on) = (p.page, ctx.sh.pages.contains(&p.page));
+            match key.name.as_str() {
+                "left" | "right" | "enter" | " " => ctx.show_page(page, !on),
+                "x" if on => ctx.show_page(page, false),
+                "x" => ctx.status(format!("{} is already off", p.key.key)),
+                _ => {}
+            }
+            return;
+        }
         let Some(r) = self.current().cloned() else { return };
         match key.name.as_str() {
             "left" | "right" if r.unknown.is_none() => self.cycle(&r, &key.name, ctx),
@@ -448,9 +492,15 @@ impl Page for SettingsPage {
         let list_height = height.saturating_sub(lines.len() + detail.len() + 1).max(3);
         let key_width = (width / 3).clamp(24, 40);
         let rows = self.list.window(list_height);
+        let on = Value::Boolean(true);
         let body = self.list.render(rows, |i, selected| {
             let r = match &self.rows[i] {
                 Row::Header(h) => return line(heading(h.clone())),
+                Row::Page(p) => {
+                    let mut spans = vec![raw(pad(&p.key.key, key_width)), raw(" ")];
+                    spans.extend(strip(&p.key, sh.pages.contains(&p.page).then_some(&on), &options(&p.key), None));
+                    return row(Line::from(spans), selected);
+                }
                 Row::Setting(r) => r,
             };
             let mut spans = vec![raw(pad(&r.name(), key_width)), raw(" ")];
@@ -474,6 +524,9 @@ impl Page for SettingsPage {
         }
         if self.mode == Mode::Editing {
             return "↵ save · esc cancel".into();
+        }
+        if self.current_page().is_some() {
+            return "←/→ turn on or off · / search · E edit config.toml".into();
         }
         match self.current() {
             None => "/ search · E edit config.toml",

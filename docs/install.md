@@ -54,12 +54,17 @@ herdr server reload-config
 ```
 
 `herdr-customize.open` opens the popup on Settings, and `.keys`, `.themes`
-and `.plugins` open it on that page.
+and `.plugins` open it on that page, even when Themes or Plugins is turned off
+in Settings.
 
 ## Update
 
 Run `herdr plugin update herdr-customize`, or update it from its own Plugins
 page.
+
+Since 0.5.0 the Themes and Plugins pages start turned off. Turn them on at the
+top of the Settings page; bindings to `.themes` and `.plugins` keep working
+either way.
 
 ## Coming from herdr-theme-picker or Plugin Manager
 
@@ -67,7 +72,8 @@ This plugin replaces both. The Keys page marks bindings whose action is no
 longer installed, such as `herdr-theme-picker.open` or
 `ray.plugin-manager.open`. Point them at `herdr-customize.themes` or
 `herdr-customize.plugins`, or delete them, then uninstall the old plugins from
-the Plugins page. Themes you added to herdr-theme-picker can be added again
+the Plugins page. Turn on the Themes and Plugins pages at the top of Settings
+to keep them on the tab bar. Themes you added to herdr-theme-picker can be added again
 from the clipboard or your editor.
 
 ## Commands
