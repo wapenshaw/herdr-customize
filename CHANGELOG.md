@@ -4,6 +4,29 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.4.1](https://github.com/wapenshaw/herdr-customize/compare/v0.4.0...v0.4.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **config:** lock config writes across processes ([dfc3db3](https://github.com/wapenshaw/herdr-customize/commit/dfc3db3d0b7b169ecc3c8a266331ebf3cf8052e2))
+* **config:** tell new check issues from old ones by more than position ([50fc99c](https://github.com/wapenshaw/herdr-customize/commit/50fc99c69c08934bd164fcd6deb7c5c2a524ebf0))
+* **fsutil:** write the daily backup atomically ([5edd614](https://github.com/wapenshaw/herdr-customize/commit/5edd614210f0ad1975d9874c74c6687523c9bb3c))
+* **herdr:** give config checks and reloads a deadline ([cc35298](https://github.com/wapenshaw/herdr-customize/commit/cc3529882e6f3b199c9cfdd8ab43e34e17fdf853))
+* **pluginconfig:** edit the env assignment that takes effect ([8072ba1](https://github.com/wapenshaw/herdr-customize/commit/8072ba109ba8ef58537a28068f6b6345b40036ff))
+* **pluginconfig:** keep quoted toml keys whole ([e0ab2d1](https://github.com/wapenshaw/herdr-customize/commit/e0ab2d18420cedf29d76806672963b6916d39f5e))
+* **pluginconfig:** read and edit files named .env ([0825f98](https://github.com/wapenshaw/herdr-customize/commit/0825f983d03a6019e2df336c0279a0930b84c3b9))
+* **plugins:** keep an explicit ref's namespace in update checks ([88eda96](https://github.com/wapenshaw/herdr-customize/commit/88eda96923238d91abbe1b7537e161b50a268ef1))
+* **ui:** drop a waiting pick when its setting is saved or reset ([b0ef688](https://github.com/wapenshaw/herdr-customize/commit/b0ef688f24b08ed8c37ed853984acf6262e42741))
+* **ui:** save in order and finish saving before the popup closes ([29032a8](https://github.com/wapenshaw/herdr-customize/commit/29032a8d9b405dc7b48f183919b45a9792cfaf63))
+
+
+### Performance
+
+* **plugins:** share and bound update checks and report each as it lands ([c57d341](https://github.com/wapenshaw/herdr-customize/commit/c57d3416f5ed1ccfd720d0107f403ffefa94c3ee))
+* **ui:** load themes when the themes page first opens ([2d4b9b0](https://github.com/wapenshaw/herdr-customize/commit/2d4b9b03acf56934ea925ffbb51e8a0d30e48a04))
+* **ui:** rebuild settings and keys from the config a save wrote ([9835a72](https://github.com/wapenshaw/herdr-customize/commit/9835a728c8925e0c0f362af00a9a3bcce0a7287a))
+
 ## [0.4.0](https://github.com/wapenshaw/herdr-customize/compare/v0.3.0...v0.4.0) (2026-10-25)
 
 
