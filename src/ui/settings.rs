@@ -85,7 +85,7 @@ impl From<Msg> for ui::Msg {
 
 fn check(sh: &Shared) -> impl FnOnce() -> ui::Msg + Send + 'static {
     let path = sh.store.path.clone();
-    move || Msg::Issues(herdr::check_config(&path)).into()
+    move || Msg::Issues(herdr::check_config(&path).unwrap_or_default()).into()
 }
 
 impl SettingsPage {
