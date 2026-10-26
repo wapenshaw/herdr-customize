@@ -59,26 +59,18 @@ pub fn write_backed_up(path: &Path, data: &[u8], mode: u32) -> Result<()> {
 }
 
 /// Keeps one copy of the original file per day as path.bak-YYYYMMDD. An
-/// existing backup for today is never overwritten.
+/// existing backup for today is never overwritten; callers hold path's write
+/// lock, so none can appear between the check and the write.
 fn daily_backup(path: &Path, data: &[u8]) -> Result<()> {
     let mut bak = path.as_os_str().to_owned();
     bak.push(format!(".bak-{}", today()));
     let bak = PathBuf::from(bak);
-    match with_mode(OpenOptions::new().write(true).create_new(true), 0o600).open(&bak) {
-        Ok(mut f) => {
-            if let Err(e) = f.write_all(data).and_then(|_| f.sync_all()) {
-                let _ = fs::remove_file(&bak);
-                return Err(e).context("config backup failed");
-            }
-            Ok(())
-        }
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-            if !fs::symlink_metadata(&bak).context("check config backup")?.is_file() {
-                bail!("config backup is not a regular file: {}", bak.display());
-            }
-            Ok(())
-        }
-        Err(e) => Err(e).context("config backup failed"),
+    match fs::symlink_metadata(&bak) {
+        Ok(meta) if meta.is_file() => Ok(()),
+        Ok(_) => bail!("config backup is not a regular file: {}", bak.display()),
+        // Atomic, so an exit part way through never leaves half a backup.
+        Err(e) if e.kind() == io::ErrorKind::NotFound => atomic_write(&bak, data, 0o600).context("config backup failed"),
+        Err(e) => Err(e).context("check config backup"),
     }
 }
 
@@ -298,5 +290,6 @@ mod tests {
         let bak = fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).find(|p| p != &path).unwrap();
         assert_eq!(fs::read(bak).unwrap(), b"first");
         assert_eq!(fs::read(&path).unwrap(), b"third");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2, "nothing else is left beside them");
     }
 }
