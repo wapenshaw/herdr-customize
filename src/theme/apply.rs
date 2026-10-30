@@ -59,8 +59,14 @@ fn replace_custom_tokens(doc: &mut Doc, tokens: &Tokens) -> Result<()> {
     let theme = root["theme"].as_table_like_mut().ok_or_else(|| anyhow!("theme must be a TOML table"))?;
     let custom = theme.entry("custom").or_insert(Item::Table(Table::new()));
     // A table that only held layers was implicit; it now needs its header.
+    // A comment above it described the previous colors, so it goes too.
     if let Item::Table(t) = custom {
         t.set_implicit(false);
+        let prefix = t.decor().prefix().and_then(|p| p.as_str()).unwrap_or_default();
+        if prefix.contains('#') {
+            let blank = prefix.lines().take_while(|l| l.trim().is_empty()).count();
+            t.decor_mut().set_prefix("\n".repeat(blank));
+        }
     }
     let custom = custom.as_table_like_mut().ok_or_else(|| anyhow!("theme.custom must be a TOML table"))?;
     let stale: Vec<String> = custom.iter().map(|(k, _)| k.to_string()).filter(|k| !LAYERS.contains(&k.as_str())).collect();
@@ -204,6 +210,15 @@ mod tests {
         let decoded = doc.decoded();
         assert_eq!(config::lookup(&decoded, &["theme".into(), "name".into()]).and_then(|v| v.as_str()), Some("x"));
         assert_eq!(config::lookup(&decoded, &["theme".into(), "custom".into(), "accent".into()]).and_then(|v| v.as_str()), Some("#89b4fa"));
+    }
+
+    // A comment left by an earlier picker named colors that are no longer there.
+    #[test]
+    fn drops_the_comment_above_the_replaced_block() {
+        let mut doc = Doc::parse("[theme]\nname = \"x\"\n\n# Ayu Dark, as applied by Theme Picker.\n[theme.custom]\naccent = \"#000000\"\n").unwrap();
+        replace_custom_tokens(&mut doc, &tokens()).unwrap();
+        let text = doc.text();
+        assert!(!text.contains("Ayu") && text.contains("name = \"x\"\n\n[theme.custom]\n"), "{text}");
     }
 
     #[test]
