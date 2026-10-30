@@ -18,7 +18,9 @@ The picker therefore acts on the machine it runs on:
    only runs `--remote` clients), print a warning pointing to the client's
    reload key, `prefix+shift+r`.
 
-No background process exists. Nothing runs at server startup or on reconnect.
+Nothing runs in the background. When the server starts, Herdr runs
+`herdr-customize sync --startup`, which syncs each client that appears within
+ten seconds and then exits.
 
 ## Connection matrix
 
@@ -32,8 +34,9 @@ No background process exists. Nothing runs at server startup or on reconnect.
 | Client without the plugin, or no theme picked | Nothing is written. It keeps Herdr's default or its own config. |
 | Client with its own terminal palette on another machine | Never touched. |
 | Client on the same machine with its own terminal palette | Recolored on apply, because it reads the same config. Use a separate `HERDR_CONFIG_PATH` and run its own picker to keep it independent. |
-| Several named sessions/servers on one machine | No shared daemon or lock; applies affect every local client, which share the config. |
-| New terminal window | Starts with its emulator's colors. Run `sync`, or use a terminal scheme file (see [Themes](themes.md#keeping-the-colors-in-new-windows)). Most terminals read it only when they start. |
+| Several named sessions/servers on one machine | No shared daemon or lock; applies affect every local client, which share the config. Starting a server also re-sends the same colors to windows already open. |
+| New terminal window that starts the server | Synced within ten seconds by `sync --startup`. |
+| New terminal window attaching to a running server, or on a machine with no server (`--remote` only) | Starts with its emulator's colors. Run `sync`, or use a terminal scheme file (see [Themes](themes.md#keeping-the-colors-in-new-windows)). Most terminals read it only when they start. |
 | Client changes its own palette after apply | Nothing restores the old palette. |
 | `applied` no longer matches the config | `sync` refuses rather than send colors from a stale selection. |
 

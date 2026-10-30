@@ -87,6 +87,7 @@ herdr-customize bind [key]             # bind a key to the popup (default: prefi
 herdr-customize apply dracula-default  # apply a theme by name
 herdr-customize sync                   # send the applied colors to local clients again
 herdr-customize sync --client 12345    # ... to one client PID only
+herdr-customize sync --startup         # ... to each client that appears within 10 s (Herdr runs this)
 herdr-customize preview dracula-default
 ```
 

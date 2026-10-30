@@ -17,7 +17,7 @@ use regex::Regex;
 
 #[cfg(test)]
 pub(crate) use apply::write_custom_block;
-pub use apply::{apply_theme, only_remote_clients, sync_applied_theme};
+pub use apply::{apply_theme, only_remote_clients, sync_applied_theme, sync_at_startup};
 
 use crate::config::{self, env};
 use crate::{fsutil, proc};

@@ -140,7 +140,8 @@ herdr server reload-config
 | --- | --- |
 | `prefix+t` in the local Windows Herdr | The popup opens. Enter applies and reloads with no warning; the window recolors. |
 | Customize: sync terminal colors action | Recolors the local Herdr window. |
-| `Get-Process herdr-customize` while idle | Nothing running; no background daemon. |
+| `Get-Process herdr-customize` while idle | Nothing running; `sync --startup` exits ten seconds after the server starts. |
+| `herdr server stop`, then `herdr` in a Windows Terminal window with another color scheme | Within ten seconds the panes show the applied palette. |
 | Mac attached to this Windows server via `--remote`, no local Windows client | `prefix+t` from the Mac shows "Themes belong to your client machine". |
 
 ## 7. Plugins, Keys and Settings (local Windows server)

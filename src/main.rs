@@ -23,6 +23,7 @@ const USAGE: &str = "Usage: herdr-customize [command]
   bind [key]                         bind a key to the popup (default: prefix+t)
   apply <slug>                       apply a theme
   sync [--client <pid>]              re-send the applied colors to local clients
+  sync --startup                     the same once the first client appears
   preview <slug>                     print a theme preview
 
 Themes are written to this machine's Herdr config. Clients attached with
@@ -61,6 +62,7 @@ fn run(args: &[String]) -> Result<()> {
             }
         }
         ("bind", 1 | 2) => bind::run(arg(1))?,
+        ("sync", 2) if arg(1) == Some("--startup") => theme::sync_at_startup()?,
         ("sync", 1 | 3) => {
             let client = match (arg(1), arg(2)) {
                 (Some("--client"), Some(pid)) => pid.to_string(),

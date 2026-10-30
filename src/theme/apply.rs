@@ -1,8 +1,11 @@
 //! Applying a theme: [theme.custom] in config.toml, the selection marker,
 //! the host terminals' colors, and a reload.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use toml_edit::{Item, Table};
@@ -10,6 +13,8 @@ use toml_edit::{Item, Table};
 use super::{Palette, TOKENS, Tokens, applied_file, resolve_palette, state_dir};
 use crate::config::{self, Doc, SaveResult, Store, env};
 use crate::{fsutil, herdr, terminal};
+
+const STARTUP_WAIT: Duration = Duration::from_secs(10);
 
 /// Writes [theme.custom] to this machine's config, records the selection,
 /// recolors the client terminals and reloads. Sync and reload are best
@@ -144,6 +149,33 @@ pub fn sync_applied_theme(client_pid: &str) -> Result<()> {
     sync_terminal_colors(&pal, &palette_path, client_pid)
 }
 
+/// Syncs each Herdr client on this machine that shows up within STARTUP_WAIT,
+/// once. The window that started the server may appear before or after this
+/// starts, and other windows may already be open, so all of them are watched.
+pub fn sync_at_startup() -> Result<()> {
+    if super::applied_slug()?.is_empty() {
+        return Ok(());
+    }
+    let deadline = Instant::now() + STARTUP_WAIT;
+    let mut synced = HashSet::new();
+    let mut errors = Vec::new();
+    while Instant::now() < deadline {
+        for client in terminal::active_clients("").unwrap_or_default() {
+            if synced.insert(client.pid)
+                && let Err(e) = sync_applied_theme(&client.pid.to_string())
+                && !terminal::is_unavailable(&e)
+            {
+                errors.push(format!("{e:#}"));
+            }
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    if !errors.is_empty() {
+        bail!("{}", errors.join("; "));
+    }
+    Ok(())
+}
+
 /// Whether this runs inside Herdr while only herdr --remote clients are
 /// attached. Whoever opened it is then on another machine whose theme comes
 /// from its own config, so changing this machine's would not affect them.
@@ -215,5 +247,16 @@ mod tests {
         let p = osc_payload(&parse_palette(BODY).unwrap());
         assert!(p.starts_with("\x1b]10;#cdd6f4\x07\x1b]11;#1e1e2e\x07"));
         assert!(p.ends_with("\x1b]4;15;#a6adc8\x07"));
+    }
+
+    // A server start with no theme picked must neither wait nor touch any
+    // terminal.
+    #[test]
+    fn startup_sync_without_a_theme_returns_at_once() {
+        let _env = crate::ui::tests::isolated();
+        let _ = fs::remove_file(applied_file());
+        let started = Instant::now();
+        sync_at_startup().unwrap();
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 }
