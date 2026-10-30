@@ -3,6 +3,7 @@
 
 mod apply;
 pub mod preview;
+mod schemes;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;

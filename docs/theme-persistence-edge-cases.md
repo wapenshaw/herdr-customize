@@ -11,8 +11,9 @@ The picker therefore acts on the machine it runs on:
 1. Write `[theme.custom]` into that machine's config and record the slug in
    `<state>/applied`.
 2. Recolor every interactive Herdr client terminal on that machine (OSC 4/10/11
-   setters, then readback queries), and refresh the Ghostty fragment if the user
-   created it.
+   setters, then readback queries), and refresh the scheme files terminals load on start: the Ghostty, kitty,
+   Alacritty and WezTerm ones the user created, and the Windows Terminal
+   fragment and iTerm2 dynamic profile when those terminals are installed.
 3. Run `herdr server reload-config`. If that fails (for example on a laptop that
    only runs `--remote` clients), print a warning pointing to the client's
    reload key, `prefix+shift+r`.
@@ -32,7 +33,7 @@ No background process exists. Nothing runs at server startup or on reconnect.
 | Client with its own terminal palette on another machine | Never touched. |
 | Client on the same machine with its own terminal palette | Recolored on apply, because it reads the same config. Use a separate `HERDR_CONFIG_PATH` and run its own picker to keep it independent. |
 | Several named sessions/servers on one machine | No shared daemon or lock; applies affect every local client, which share the config. |
-| New terminal window | Starts with its emulator's colors. Run `sync`, or use the Ghostty fragment for persistence. |
+| New terminal window | Starts with its emulator's colors. Run `sync`, or use a terminal scheme file (see [Themes](themes.md#keeping-the-colors-in-new-windows)). Most terminals read it only when they start. |
 | Client changes its own palette after apply | Nothing restores the old palette. |
 | `applied` no longer matches the config | `sync` refuses rather than send colors from a stale selection. |
 

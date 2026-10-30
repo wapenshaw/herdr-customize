@@ -41,11 +41,40 @@ refreshes its pane colors.
 - The new colors last as long as the terminal window; a new window starts
   with the emulator's own colors. Run `herdr-customize sync`, or the
   **Customize: sync terminal colors** action, to send them again.
-- In Ghostty, you can keep the colors in new windows: create
-  `~/.config/ghostty/herdr-theme` (on Windows,
-  `%APPDATA%\ghostty\herdr-theme`) and add `config-file = herdr-theme` to your
-  Ghostty config. The plugin refreshes that file each time you apply a theme,
-  but never creates it.
+
+### Keeping the colors in new windows
+
+Each time you apply or sync a theme, the plugin also refreshes a scheme file
+your terminal loads when it starts, so new windows open in the theme.
+
+- **Ghostty, kitty, Alacritty, WezTerm**: the file lives in your own config,
+  so the plugin only refreshes it once you have created it (an empty file is
+  enough) and pointed the terminal at it:
+
+  | Terminal | Create | Then add to your config |
+  | --- | --- | --- |
+  | Ghostty | `~/.config/ghostty/herdr-theme` (Windows: `%APPDATA%\ghostty\herdr-theme`) | `config-file = herdr-theme` |
+  | kitty | `~/.config/kitty/herdr-theme.conf` | `include herdr-theme.conf` in `kitty.conf` |
+  | Alacritty | `~/.config/alacritty/herdr-theme.toml` (Windows: `%APPDATA%\alacritty\herdr-theme.toml`) | `import = ["~/.config/alacritty/herdr-theme.toml"]` under `[general]` |
+  | WezTerm | `~/.config/wezterm/colors/herdr.toml` | `config.color_scheme = "Herdr"` |
+
+  `~/.config` stands for `$XDG_CONFIG_HOME` when that is set. Create the file,
+  apply a theme once, then point the terminal at it.
+- **Windows Terminal**: the plugin writes a color scheme named **Herdr** to
+  `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\herdr-customize\herdr-theme.json`,
+  the folder Windows Terminal reads other apps' settings from. Pick it once for
+  the profile you start Herdr from (Settings → your profile → Appearance →
+  Color scheme, or `"colorScheme": "Herdr"` in `settings.json`).
+- **iTerm2**: the plugin writes a profile named **Herdr** to
+  `~/Library/Application Support/iTerm2/DynamicProfiles/herdr-customize.json`.
+  It takes everything but its colors from your default profile; start Herdr
+  from it, or make it the default.
+
+Terminals read these files when they start (Alacritty and iTerm2 also when
+they change), so a window already open keeps the previous theme until it is
+restarted; `herdr-customize sync` recolors it meanwhile. Uninstalling the
+plugin leaves the files in place, frozen at the last theme; delete them to
+remove them.
 
 Ghostty, iTerm2, WezTerm, kitty, Alacritty and Windows Terminal accept OSC
 color sequences. Other emulators may not, and a multiplexer nested inside
