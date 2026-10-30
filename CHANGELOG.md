@@ -4,6 +4,13 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.6.1](https://github.com/wapenshaw/herdr-customize/compare/v0.6.0...v0.6.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **bind:** take over a key held by an uninstalled plugin's action ([b285c42](https://github.com/wapenshaw/herdr-customize/commit/b285c42fcfb6a5a4b1ce37e65149287ab60b5163))
+
 ## [0.6.0](https://github.com/wapenshaw/herdr-customize/compare/v0.5.0...v0.6.0) (2026-10-30)
 
 
