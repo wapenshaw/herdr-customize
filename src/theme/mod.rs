@@ -17,7 +17,7 @@ use regex::Regex;
 
 #[cfg(test)]
 pub(crate) use apply::write_custom_block;
-pub use apply::{apply_theme, only_remote_clients, sync_applied_theme, sync_at_startup};
+pub use apply::{Builtin, apply_theme, builtin, only_remote_clients, reset_theme, sync_applied_theme, sync_at_startup};
 
 use crate::config::{self, env};
 use crate::{fsutil, proc};
@@ -431,8 +431,9 @@ pub fn applied_slug() -> Result<String> {
     Ok(if is_valid_slug(&applied) { applied } else { String::new() })
 }
 
-/// The applied theme first, then user themes, then bundled ones. Unusable
-/// user entries are skipped and reported as warnings.
+/// The applied theme first, while the config still holds its colors, then
+/// user themes, then bundled ones. Unusable user entries are skipped and
+/// reported as warnings.
 pub fn themes() -> Result<(Vec<Item>, Vec<String>)> {
     let mut warnings = Vec::new();
     let users = read_user_index()?;
@@ -441,7 +442,10 @@ pub fn themes() -> Result<(Vec<Item>, Vec<String>)> {
     if let Some(bad) = invalid.first() {
         bail!("invalid slug {bad:?} in {}", bundled_index.display());
     }
-    let applied = applied_slug()?;
+    let mut applied = applied_slug()?;
+    if !applied.is_empty() && !resolve_palette(&applied).and_then(|(p, _)| apply::config_matches(&p.tokens())).unwrap_or(false) {
+        applied.clear();
+    }
     let mut items: Vec<Item> = Vec::new();
     let mut add = |item: Item| {
         if !items.iter().any(|i| i.slug == item.slug) {

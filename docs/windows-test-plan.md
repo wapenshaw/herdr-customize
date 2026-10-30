@@ -114,6 +114,7 @@ Get-Process herdr | Select-Object Id, ProcessName, StartTime
 | **ctrl+t** on one of your themes, **Enter** on a token, type a hex, **Enter** | The preview changes live; the override is saved. |
 | **ctrl+d** on one of your themes, answer `y` | The theme is removed. The bundled themes are still there. |
 | Apply an unknown slug: `.\target\release\herdr-customize.exe apply nonexistent` | Fails with an error; exit 1. |
+| **Enter** on **↩ Herdr default** after applying a theme | The popup closes and `[theme.custom]` is gone. The Herdr window gets Windows Terminal's own colors back, and after the reload Herdr shows its built-in theme, which the list marks `●`. |
 
 ## 5. Config edge cases
 
