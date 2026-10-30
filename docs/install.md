@@ -35,9 +35,11 @@ herdr plugin action invoke bind --plugin herdr-customize
 
 That binds `prefix+t` to the popup and reloads Herdr, and the result shows
 as a Herdr notification. It changes nothing if one of the plugin's actions
-already has a key, and refuses a key another binding uses. For another key,
-run `./target/release/herdr-customize bind <key>` in the plugin's checkout,
-or change it on the Keys page. The Keys page can add the rest.
+already has a key, and refuses a key another binding uses. A binding to an
+action no installed plugin has, such as `herdr-theme-picker.open` once Theme
+Picker is uninstalled, is pointed at the popup instead. For another key, run
+`./target/release/herdr-customize bind <key>` in the plugin's checkout, or
+change it on the Keys page. The Keys page can add the rest.
 
 To bind it by hand instead, add this to `config.toml` and reload:
 
@@ -68,12 +70,12 @@ either way.
 
 ## Coming from herdr-theme-picker or Plugin Manager
 
-This plugin replaces both. The Keys page marks bindings whose action is no
-longer installed, such as `herdr-theme-picker.open` or
-`ray.plugin-manager.open`. Point them at `herdr-customize.themes` or
-`herdr-customize.plugins`, or delete them, then uninstall the old plugins from
-the Plugins page. Turn on the Themes and Plugins pages at the top of Settings
-to keep them on the tab bar. Themes you added to herdr-theme-picker can be added again
+This plugin replaces both. Uninstall them first, with
+`herdr plugin uninstall <id>`, then run the `bind` action: it points Theme
+Picker's `prefix+t` at the popup. The Keys page marks any other binding whose
+action is no longer installed, such as `ray.plugin-manager.open`; point it at
+`herdr-customize.plugins`, or delete it. Turn on the Themes and Plugins pages
+at the top of Settings to keep them on the tab bar. Themes you added to herdr-theme-picker can be added again
 from the clipboard or your editor.
 
 ## Commands
