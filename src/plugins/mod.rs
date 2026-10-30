@@ -4,6 +4,7 @@
 mod market;
 mod update;
 
+use std::collections::HashSet;
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::process::Command;
@@ -106,6 +107,17 @@ impl Action {
 /// The installed plugins.
 pub fn list() -> Result<Vec<Plugin>> {
     parse_list(&herdr::run(&["plugin", "list", "--json"]).context("herdr plugin list")?)
+}
+
+/// The plugin.action names of every installed action.
+pub fn action_names(plugins: &[Plugin]) -> HashSet<String> {
+    plugins.iter().flat_map(|p| p.actions.iter().map(|a| a.qualified(&p.id))).collect()
+}
+
+/// Whether a plugin_action binding runs an installed action. An unqualified
+/// id counts when exactly one installed action has it, as Herdr resolves it.
+pub fn has_action(installed: &HashSet<String>, command: &str) -> bool {
+    installed.contains(command) || (!command.contains('.') && installed.iter().filter(|q| q.ends_with(&format!(".{command}"))).count() == 1)
 }
 
 /// The GitHub page for an owner/repo slug.

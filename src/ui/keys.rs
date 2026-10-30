@@ -10,7 +10,7 @@ use super::widgets::*;
 use super::{Ctx, Key, Msg, Page, Saved, Shared, load_doc};
 use crate::config::{self, Field, Value};
 use crate::keys::{self, Binding};
-use crate::plugins::Plugin;
+use crate::plugins::{self, Plugin};
 use crate::schema;
 
 const COMMAND_PATH: [&str; 2] = ["keys", "command"];
@@ -184,7 +184,7 @@ impl KeysPage {
             rows.push(r);
         }
         let plugins = self.plugins.as_deref().unwrap_or_default();
-        let installed: HashSet<String> = plugins.iter().flat_map(|p| p.actions.iter().map(|a| a.qualified(&p.id))).collect();
+        let installed = plugins::action_names(plugins);
         let mut bound = HashSet::new();
         rows.push(KeyRow::new(Kind::Header, "Custom commands".into()));
         for (index, entry) in config::tables_at(table, &command_path()).into_iter().enumerate() {
@@ -192,7 +192,7 @@ impl KeysPage {
             let mut missing = false;
             if kind == CommandType::PluginAction.name() {
                 bound.insert(command.clone());
-                missing = self.plugins.is_some() && !installed.contains(&command) && !installed_suffix(&installed, &command);
+                missing = self.plugins.is_some() && !plugins::has_action(&installed, &command);
             }
             let label = [key.as_str(), &kind, &command, &desc].join(" ");
             let mut r = KeyRow::new(Kind::Command { index, entry, missing }, label);
@@ -448,12 +448,6 @@ impl KeysPage {
         }
         lines
     }
-}
-
-/// An unqualified action id that matches exactly one installed action, which
-/// Herdr resolves too.
-fn installed_suffix(installed: &HashSet<String>, command: &str) -> bool {
-    !command.contains('.') && installed.iter().filter(|q| q.ends_with(&format!(".{command}"))).count() == 1
 }
 
 fn split_values(text: &str) -> Vec<String> {
