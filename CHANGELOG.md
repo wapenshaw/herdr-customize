@@ -4,6 +4,19 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.6.0](https://github.com/wapenshaw/herdr-customize/compare/v0.5.0...v0.6.0) (2026-10-30)
+
+
+### Features
+
+* **theme:** keep the palette in new terminal windows ([19b7aae](https://github.com/wapenshaw/herdr-customize/commit/19b7aae0d3ce2308f76a5f12e293600034d99415))
+* **theme:** sync the theme once when the herdr server starts ([e7e4677](https://github.com/wapenshaw/herdr-customize/commit/e7e4677e05dd757b4ced4c88273bddd14ed7c266))
+
+
+### Bug Fixes
+
+* **theme:** drop the stale comment above the replaced custom block ([07df7f9](https://github.com/wapenshaw/herdr-customize/commit/07df7f99b7718b0e524cc111a3e4a83fd047a96b))
+
 ## [0.5.0](https://github.com/wapenshaw/herdr-customize/compare/v0.4.1...v0.5.0) (2026-10-26)
 
 
