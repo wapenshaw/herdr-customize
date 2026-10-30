@@ -20,8 +20,7 @@ machine.
 | A `herdr --remote` client and a local client attached at the same time | The picker opens | Herdr cannot tell who pressed the key, so picking changes only the host's theme. |
 | A client without this plugin, or with no theme picked | Not applicable | Nothing is written. That client keeps Herdr's default theme or its own config. |
 
-The plugin never runs in the background and never recolors terminals on other
-machines. [Theme persistence edge cases](theme-persistence-edge-cases.md) has
+The plugin never recolors terminals on other machines. [Theme persistence edge cases](theme-persistence-edge-cases.md) has
 the full matrix.
 
 ## Terminal colors
@@ -38,14 +37,37 @@ refreshes its pane colors.
 - Left alone: the Herdr server, CLI commands such as `herdr status`, the
   `remote-client-bridge` process that serves another machine's client, and
   terminals owned by other user accounts.
-- The new colors last as long as the terminal window; a new window starts
-  with the emulator's own colors. Run `herdr-customize sync`, or the
-  **Customize: sync terminal colors** action, to send them again.
+- The new colors last as long as the terminal window, so a new window starts
+  with the emulator's own colors. When Herdr starts, the plugin recolors the
+  window that started it (see below).
+- Run `herdr-customize sync`, or the **Customize: sync terminal colors**
+  action, to send the colors again by hand.
+
+Ghostty, iTerm2, WezTerm, kitty, Alacritty and Windows Terminal accept OSC
+color sequences. Other emulators may not, and a multiplexer nested inside
+Herdr can swallow them.
+
+### When Herdr starts
+
+When the Herdr server starts, it runs `herdr-customize sync --startup` once.
+For ten seconds this sends the applied colors to each Herdr client on the
+machine as it appears, including the window that started the server, and
+then it exits. Nothing keeps running.
+
+- After you install or update the plugin, it first runs at the next server
+  start.
+- With no theme applied it exits at once.
+- A window you open later, attaching to a server that is already running,
+  keeps the terminal's colors. Run `sync`, or use a scheme file (below). The
+  same goes for a laptop that only runs `herdr --remote` clients, since it
+  starts no server.
 
 ### Keeping the colors in new windows
 
-Each time you apply or sync a theme, the plugin also refreshes a scheme file
-your terminal loads when it starts, so new windows open in the theme.
+A scheme file makes every new window open in the theme, including one that
+attaches to a running server and one on a machine with no Herdr server. Each
+time you apply or sync a theme, the plugin refreshes the scheme file your
+terminal loads when it starts.
 
 - **Ghostty, kitty, Alacritty, WezTerm**: the file lives in your own config,
   so the plugin only refreshes it once you have created it (an empty file is
@@ -75,10 +97,6 @@ they change), so a window already open keeps the previous theme until it is
 restarted; `herdr-customize sync` recolors it meanwhile. Uninstalling the
 plugin leaves the files in place, frozen at the last theme; delete them to
 remove them.
-
-Ghostty, iTerm2, WezTerm, kitty, Alacritty and Windows Terminal accept OSC
-color sequences. Other emulators may not, and a multiplexer nested inside
-Herdr can swallow them.
 
 ## Using `herdr --remote` from another machine
 

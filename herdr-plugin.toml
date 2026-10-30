@@ -16,6 +16,16 @@ command = ["/bin/sh", "scripts/fetch-or-build.sh"]
 platforms = ["windows"]
 command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/fetch-or-build.ps1"]
 
+# Syncs each Herdr window that appears in the 10 seconds after the server
+# starts, so the one that started it gets the colors back, then exits.
+[[startup]]
+platforms = ["linux", "macos"]
+command = ["./target/release/herdr-customize", "sync", "--startup"]
+
+[[startup]]
+platforms = ["windows"]
+command = ["./target/release/herdr-customize.exe", "sync", "--startup"]
+
 # One entrypoint per page; tab moves between pages once the popup is open.
 [[panes]]
 id = "themes"
