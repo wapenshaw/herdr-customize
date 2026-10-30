@@ -19,7 +19,9 @@ popup for my convenience. Use it if it helps you too.
   have no key yet, in one list. Press a key to record it; conflicts are
   flagged before you save.
 - **Themes** (optional): 112 palettes with a live preview. One key recolors
-  Herdr and the terminal it runs in. Add your own from the clipboard.
+  Herdr and the terminal it runs in, and new windows can keep it in Ghostty,
+  kitty, Alacritty, WezTerm, iTerm2 and Windows Terminal. Add your own from
+  the clipboard.
 - **Plugins** (optional): update, install, enable, remove and configure your
   plugins, read their logs, and browse the marketplace.
 - **Safe edits**: your comments and layout stay put. Herdr checks every change

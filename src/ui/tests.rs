@@ -65,6 +65,10 @@ fn sandbox() -> &'static Path {
         set("HERDR_CONFIG_PATH", &dir.join("config.toml"));
         set("HERDR_PLUGIN_STATE_DIR", &dir.join("state"));
         set("HERDR_PLUGIN_ROOT", Path::new(env!("CARGO_MANIFEST_DIR")));
+        // Applying a theme writes terminal scheme files under these.
+        for var in ["HOME", "XDG_CONFIG_HOME", "APPDATA", "LOCALAPPDATA"] {
+            set(var, &dir.join("home").join(var));
+        }
         // Nothing reaches GitHub, an editor, or a live Herdr session.
         set("HERDR_CUSTOMIZE_GIT_BASE", &dir.join("no-such-remote"));
         set("GIT_TRACE", &dir.join("git.log"));

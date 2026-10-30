@@ -16,7 +16,7 @@ The plugin is written in Rust. The first, Go implementation is kept on the
 - `src/keys.rs`: key parsing, Herdr's binding rules, and conflict detection.
 - `src/plugins/`: `herdr plugin` calls, update checks, marketplace search, and detached action runs.
 - `src/pluginconfig.rs`: typed reading and editing of any plugin's TOML/`.env` config files, with an optional `config-schema.json`.
-- `src/theme/`: palette loading, user themes, `[theme.custom]` writes, apply and sync, and the preview.
+- `src/theme/`: palette loading, user themes, `[theme.custom]` writes, apply and sync, the scheme files terminals load on start (`schemes.rs`), and the preview.
 - `src/terminal/`: client discovery and OSC color writes/readback; `unix.rs` (ps, `/dev` TTYs, procargs) and `windows.rs` (Toolhelp, the `terminal-sync` console helper).
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: Herdr CLI wrapper, atomic writes and locks, and starting other programs (detached helpers, the browser, the editor).
 - `themes/`: bundled Ghostty-format palettes and `index.txt`.

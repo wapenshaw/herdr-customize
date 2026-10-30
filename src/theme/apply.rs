@@ -99,21 +99,10 @@ fn osc_payload(pal: &Palette) -> String {
 }
 
 /// Recolors this machine's Herdr client terminals (only client_pid's, when
-/// set) and refreshes the user's Ghostty fragment if it exists. Fails with
+/// set) and refreshes the scheme files terminals load on start. Fails with
 /// terminal::Unavailable when no client was found.
 fn sync_terminal_colors(pal: &Palette, palette_path: &Path, client_pid: &str) -> Result<()> {
-    let mut errors: Vec<String> = Vec::new();
-    // Ghostty only loads this fragment if the user includes it, so an
-    // existing file is the opt-in. Never create it.
-    if let Some(home) = config::home() {
-        for fragment in [home.join(".config").join("ghostty").join("herdr-theme"), home.join("AppData").join("Roaming").join("ghostty").join("herdr-theme")] {
-            if fragment.exists()
-                && let Err(e) = fs::read(palette_path).map_err(anyhow::Error::from).and_then(|data| fsutil::atomic_write(&fragment, &data, 0o644))
-            {
-                errors.push(format!("Ghostty theme: {e:#}"));
-            }
-        }
-    }
+    let mut errors = super::schemes::refresh(pal, palette_path);
     let clients = terminal::active_clients(client_pid)?;
     let payload = osc_payload(pal);
     let mut synced = 0;
