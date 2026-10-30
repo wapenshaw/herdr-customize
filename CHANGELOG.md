@@ -4,6 +4,13 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.7.0](https://github.com/wapenshaw/herdr-customize/compare/v0.6.1...v0.7.0) (2026-10-30)
+
+
+### Features
+
+* **theme:** reset to herdr's built-in theme ([72b8565](https://github.com/wapenshaw/herdr-customize/commit/72b8565d45e48321767305f50d0be2e209ffa61e))
+
 ## [0.6.1](https://github.com/wapenshaw/herdr-customize/compare/v0.6.0...v0.6.1) (2026-10-30)
 
 
