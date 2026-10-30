@@ -145,5 +145,20 @@ The Themes page only replaces the base `[theme.custom]` tokens. The
 `auto_switch` are kept, and with `auto_switch = true` they still take priority
 over the picked tokens.
 
-Deleting a palette leaves the applied config alone. Pick another theme, or
-remove `[theme.custom]` and reload to go back to Herdr's built-in theme.
+## Going back to Herdr's theme
+
+**↩ Herdr default**, below the themes, or `herdr-customize reset`, goes back
+to the theme named by `theme.name` (Catppuccin when it is unset). It removes
+the palette from `[theme.custom]`, forgets the applied theme, resets the
+terminal colors with OSC 104/110/111 and reloads. The `[theme.custom.light]`
+and `[theme.custom.dark]` layers stay, and so do the terminal scheme files,
+which keep the last theme until you apply another.
+
+A `[theme.custom]` that sets only some tokens, such as the `active_row_bg`
+that Herdr Radar keeps between its `# >>> herdr-radar theme block` markers, is
+a tweak on Herdr's theme rather than a palette: the reset leaves it, and the
+row still shows `●` as in use. Only a table holding every token this plugin
+writes counts as a theme.
+
+Deleting a palette leaves the applied config alone; reset or pick another
+theme.

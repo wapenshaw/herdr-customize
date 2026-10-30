@@ -10,7 +10,7 @@ use ratatui::text::{Line, Span};
 use super::widgets::*;
 use super::{self as ui, Ctx, Hint, Key, Page, Shared};
 use crate::theme::preview::{paint, render_mock, render_token_table, rgb};
-use crate::theme::{self, Item, Look, Saved, TokenRow, Tokens};
+use crate::theme::{self, Builtin, Item, Look, Saved, TokenRow, Tokens};
 
 /// Explains how a client attached from another machine picks its theme.
 const CLIENT_SETUP: &str = "Themes belong to your client machine.\n\nOpen a local terminal outside Herdr and run:\n\n  herdr-customize ui themes\n\nThen use Reload config in the Herdr client you want to update.\nInstall herdr-customize locally if you are connected to a remote server.\nThis server's theme and terminal colors are left unchanged.";
@@ -50,11 +50,13 @@ enum Mode {
     EditingColor,
 }
 
-/// A group heading, one theme, or a row that adds themes.
+/// A group heading, one theme, Herdr's built-in theme, or a row that adds
+/// themes.
 #[derive(Clone, Copy, PartialEq)]
 enum Row {
     Header(&'static str),
     Theme(usize),
+    Default,
     Gap,
     AddEditor,
     AddClipboard,
@@ -63,6 +65,8 @@ enum Row {
 pub struct ThemesPage {
     items: Vec<Item>,
     looks: HashMap<String, Look>,
+    /// None when the config cannot be read.
+    builtin: Option<Builtin>,
     rows: Vec<Row>,
     filter: Filter,
     show_tokens: bool,
@@ -90,6 +94,7 @@ pub enum Msg {
     Loaded {
         items: Vec<Item>,
         looks: HashMap<String, Look>,
+        builtin: Option<Builtin>,
         warnings: Vec<String>,
         err: Option<anyhow::Error>,
     },
@@ -107,9 +112,9 @@ fn load_themes() -> ui::Msg {
     match theme::themes() {
         Ok((items, warnings)) => {
             let looks = items.iter().filter_map(|i| Some((i.slug.clone(), theme::load_look(&i.slug).ok()?))).collect();
-            Msg::Loaded { items, looks, warnings, err: None }.into()
+            Msg::Loaded { items, looks, builtin: theme::builtin().ok(), warnings, err: None }.into()
         }
-        Err(e) => Msg::Loaded { items: Vec::new(), looks: HashMap::new(), warnings: Vec::new(), err: Some(e) }.into(),
+        Err(e) => Msg::Loaded { items: Vec::new(), looks: HashMap::new(), builtin: None, warnings: Vec::new(), err: Some(e) }.into(),
     }
 }
 
@@ -121,6 +126,7 @@ impl ThemesPage {
         ThemesPage {
             items: Vec::new(),
             looks: HashMap::new(),
+            builtin: None,
             rows: Vec::new(),
             filter: Filter::All,
             show_tokens: false,
@@ -140,9 +146,13 @@ impl ThemesPage {
         }
     }
 
+    fn selected_row(&self) -> Option<Row> {
+        self.rows.get(self.list.selected()?).copied()
+    }
+
     fn selected_item(&self) -> Option<&Item> {
-        match self.rows.get(self.list.selected()?)? {
-            Row::Theme(i) => self.items.get(*i),
+        match self.selected_row()? {
+            Row::Theme(i) => self.items.get(i),
             _ => None,
         }
     }
@@ -180,6 +190,13 @@ impl ThemesPage {
             groups[g].push(i);
         }
         let (mut rows, mut labels) = (Vec::new(), Vec::new());
+        // Herdr's own theme leads while it is in use, and waits below the
+        // themes otherwise.
+        let builtin = self.builtin.as_ref().filter(|_| self.filter == Filter::All);
+        if let Some(b) = builtin.filter(|b| b.in_use) {
+            rows.extend([Row::Header("In use"), Row::Default]);
+            labels.extend(["In use".into(), format!("herdr default {}", b.name)]);
+        }
         for (g, name) in ["In use", "Yours", "Dark", "Light"].into_iter().enumerate() {
             if groups[g].is_empty() {
                 continue;
@@ -193,8 +210,14 @@ impl ThemesPage {
                 labels.push(self.items[i].slug.clone());
             }
         }
-        rows.extend([Row::Gap, Row::AddEditor, Row::AddClipboard]);
-        labels.extend(["".into(), "add new theme in editor".into(), "add theme from clipboard paste".into()]);
+        rows.push(Row::Gap);
+        labels.push(String::new());
+        if let Some(b) = builtin.filter(|b| !b.in_use) {
+            rows.push(Row::Default);
+            labels.push(format!("herdr default {}", b.name));
+        }
+        rows.extend([Row::AddEditor, Row::AddClipboard]);
+        labels.extend(["add new theme in editor".into(), "add theme from clipboard paste".into()]);
         let headers = rows.iter().map(|r| matches!(r, Row::Header(_) | Row::Gap)).collect();
         self.rows = rows;
         self.list.set_rows(labels, headers);
@@ -333,8 +356,9 @@ impl ThemesPage {
                 self.rebuild();
             }
             "ctrl+t" => self.show_tokens = !self.show_tokens,
-            "enter" => match (item, self.list.selected().and_then(|i| self.rows.get(i))) {
+            "enter" => match (item, self.selected_row()) {
                 (Some(item), _) => ctx.quit_then(move || theme::apply_theme(&item.slug)),
+                (None, Some(Row::Default)) => ctx.quit_then(theme::reset_theme),
                 (None, Some(Row::AddEditor)) => self.add_in_editor(ctx),
                 (None, Some(Row::AddClipboard)) => self.add_from_clipboard(ctx),
                 _ => {}
@@ -393,6 +417,12 @@ impl ThemesPage {
             Row::Gap => return Line::default(),
             Row::AddEditor => return row(Line::from(vec![accent("＋ Add new theme…"), dim("  ctrl+a")]), selected),
             Row::AddClipboard => return row(Line::from(vec![accent("＋ Add from clipboard…"), dim("  ctrl+v")]), selected),
+            Row::Default => {
+                let b = self.builtin.as_ref().expect("the row is listed only with a builtin");
+                let marker = if b.in_use { ok("● ") } else { accent("↩ ") };
+                let name = clip_str(&format!("Herdr default ({})", b.name), name_width + 9);
+                return row(Line::from(vec![marker, if selected { styled(SELECTED, name) } else { raw(name) }]), selected);
+            }
             Row::Theme(i) => &self.items[i],
         };
         let marker = if item.applied {
@@ -456,6 +486,30 @@ impl ThemesPage {
     }
 }
 
+/// What resetting to Herdr's built-in theme changes.
+fn default_card(b: &Builtin) -> Vec<Line<'static>> {
+    let mut title = vec![heading("Herdr default"), dim(format!(" · built-in: {}", b.name))];
+    if b.in_use {
+        title.push(ok(" · ● in use"));
+    }
+    let mut lines = vec![
+        Line::from(title),
+        Line::default(),
+        line(raw("Removes the theme's [theme.custom] colors,")),
+        line(raw("gives your terminal its own colors back,")),
+        line(raw("and reloads, so Herdr shows its own theme.")),
+        line(dim("A partial [theme.custom], such as Herdr")),
+        line(dim("Radar's, is a tweak on it and stays.")),
+        Line::default(),
+    ];
+    if b.layers {
+        lines.push(line(warn("Your [theme.custom.light] and [theme.custom.dark]")));
+        lines.push(line(warn("layers stay, and win with auto_switch.")));
+    }
+    lines.push(line(dim("Terminal scheme files keep the last theme.")));
+    lines
+}
+
 /// A palette's 16 colors in 8 cells: normal over bright.
 fn swatch(look: Option<&Look>) -> Vec<Span<'static>> {
     match look {
@@ -512,12 +566,13 @@ impl Page for ThemesPage {
                     self.ask = None;
                 }
             }
-            Msg::Loaded { items, looks, warnings, err } => {
+            Msg::Loaded { items, looks, builtin, warnings, err } => {
                 if let Some(e) = err {
                     return ctx.error(e);
                 }
                 self.items = std::mem::take(items);
                 self.looks = std::mem::take(looks);
+                self.builtin = builtin.take();
                 self.rebuild();
                 if !warnings.is_empty() {
                     ctx.status(warnings.join("; "));
@@ -590,8 +645,13 @@ impl Page for ThemesPage {
             lines.extend([self.input.view(), Line::default()]);
         }
         lines.push(line(dim("  palettes: terminalcolors.com → Ghostty")));
-        match self.selected_item() {
-            Some(item) if width >= 90 => columns(lines, left_width + 1, self.card(item), height),
+        let card = match (self.selected_item(), self.selected_row()) {
+            (Some(item), _) => Some(self.card(item)),
+            (None, Some(Row::Default)) => self.builtin.as_ref().map(default_card),
+            _ => None,
+        };
+        match card {
+            Some(card) if width >= 90 => columns(lines, left_width + 1, card, height),
             _ => lines,
         }
     }
@@ -645,7 +705,7 @@ impl Page for ThemesPage {
             ("⌫ ctrl+u", "delete a character, clear the search"),
             ("↑/↓", "move; the preview follows"),
             ("←/→", "show all, dark, light or your themes"),
-            ("↵", "apply the theme and close"),
+            ("↵", "apply the theme and close; on ↩ Herdr default, remove it"),
             ("ctrl+t", "token table instead of the preview"),
             ("esc", "clear the search, then close"),
             ("", "Your themes"),

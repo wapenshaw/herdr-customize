@@ -22,6 +22,7 @@ const USAGE: &str = "Usage: herdr-customize [command]
   open [page]                        open the popup as a Herdr plugin pane
   bind [key]                         bind a key to the popup (default: prefix+t)
   apply <slug>                       apply a theme
+  reset                              go back to Herdr's built-in theme
   sync [--client <pid>]              re-send the applied colors to local clients
   sync --startup                     the same once the first client appears
   preview <slug>                     print a theme preview
@@ -86,7 +87,8 @@ fn run(args: &[String]) -> Result<()> {
         ("terminal-sync", 2) => std::process::exit(terminal::run_helper(&args[1])),
         ("preview", 2) => print!("{}", theme::preview::render_swatch(&theme::load_look(&args[1])?.tokens, &args[1])),
         ("apply", 2) => theme::apply_theme(&args[1])?,
-        ("bind" | "sync" | "invoke-after-close" | "preview" | "apply", _) => bail!("wrong arguments (see herdr-customize help)"),
+        ("reset", 1) => theme::reset_theme()?,
+        ("bind" | "sync" | "invoke-after-close" | "preview" | "apply" | "reset", _) => bail!("wrong arguments (see herdr-customize help)"),
         (other, _) => bail!("unknown command: {other} (see herdr-customize help)"),
     }
     Ok(())

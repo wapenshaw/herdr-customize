@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::io;
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -12,7 +13,7 @@ use toml_edit::{Item, Table};
 
 use super::{Palette, TOKENS, Tokens, applied_file, resolve_palette, state_dir};
 use crate::config::{self, Doc, SaveResult, Store, env};
-use crate::{fsutil, herdr, terminal};
+use crate::{fsutil, herdr, schema, terminal};
 
 const STARTUP_WAIT: Duration = Duration::from_secs(10);
 
@@ -42,6 +43,57 @@ pub fn apply_theme(slug: &str) -> Result<()> {
     }
     println!("Applied theme {slug:?}.");
     Ok(())
+}
+
+/// Removes the palette from [theme.custom], forgets the selection, hands the
+/// client terminals back their own colors and reloads, so Herdr shows its
+/// built-in theme. Scheme files and the auto_switch layers are kept.
+pub fn reset_theme() -> Result<()> {
+    let cfg = config::path();
+    fs::create_dir_all(state_dir()).context("create state directory")?;
+    let _lock = fsutil::lock(&applied_file().with_extension("lock")).context("lock theme selection")?;
+    let saved = Store { path: cfg.clone(), no_reload: true }.update(drop_custom_tokens).context("failed to remove the custom theme block")?;
+    if !saved.check_skipped.is_empty() {
+        eprintln!("Warning: herdr config check unavailable: {}", saved.check_skipped);
+    }
+    match fs::remove_file(applied_file()) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e).with_context(|| format!("theme removed from {}, but the selection marker remains", cfg.display())),
+        _ => {}
+    }
+    // OSC 104, 110 and 111 reset the palette, foreground and background to
+    // the terminal's own.
+    if let Err(e) = emit("\x1b]104\x07\x1b]110\x07\x1b]111\x07", &env("HERDR_CUSTOMIZE_CLIENT_PID").unwrap_or_default(), Vec::new())
+        && !terminal::is_unavailable(&e)
+    {
+        eprintln!("Warning: terminal colors not fully reset: {e:#}");
+    }
+    if let Err(e) = herdr::reload() {
+        eprintln!("Theme removed from {}, but reload failed: {e:#}\nUse Herdr's reload config action (default prefix+shift+r).", cfg.display());
+        return Ok(());
+    }
+    println!("Back to Herdr's built-in theme.");
+    Ok(())
+}
+
+/// Herdr's own theme, which a reset hands back to.
+pub struct Builtin {
+    /// theme.name, or Herdr's default when it is unset.
+    pub name: String,
+    /// [theme.custom] holds no palette, so Herdr shows this theme.
+    pub in_use: bool,
+    /// The auto_switch layers a reset keeps.
+    pub layers: bool,
+}
+
+pub fn builtin() -> Result<Builtin> {
+    let doc = read_config()?;
+    let name = config::lookup(&doc, &["theme".into(), "name".into()])
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .or_else(|| schema::bundled().lookup("theme.name")?.default_value()?.as_str().map(String::from))
+        .unwrap_or_else(|| "built-in".into());
+    let custom = config::lookup(&doc, &["theme".into(), "custom".into()]).and_then(|v| v.as_table());
+    Ok(Builtin { name, in_use: !custom.is_some_and(|c| TOKENS.iter().all(|(k, ..)| c.contains_key(*k))), layers: custom_layers(&doc).iter().any(Option::is_some) })
 }
 
 /// Replaces the base tokens of [theme.custom], keeping the auto_switch
@@ -89,6 +141,38 @@ fn replace_custom_tokens(doc: &mut Doc, tokens: &Tokens) -> Result<()> {
     Ok(())
 }
 
+/// Removes every base token of [theme.custom] when it holds a palette, and the
+/// table itself unless auto_switch layers remain in it. A partial table is a
+/// tweak on the built-in theme, such as Herdr Radar's block, and stays.
+fn drop_custom_tokens(doc: &mut Doc) -> Result<()> {
+    let layers = custom_layers(&doc.decoded());
+    let root = doc.raw().as_table_mut();
+    let Some(theme) = root.get_mut("theme").and_then(Item::as_table_like_mut) else {
+        return Ok(());
+    };
+    let Some(custom) = theme.get_mut("custom") else {
+        return Ok(());
+    };
+    let table = custom.as_table_like_mut().ok_or_else(|| anyhow!("theme.custom must be a TOML table"))?;
+    if !TOKENS.iter().all(|(k, ..)| table.contains_key(k)) {
+        return Ok(());
+    }
+    let base: Vec<String> = table.iter().map(|(k, _)| k.to_string()).filter(|k| !LAYERS.contains(&k.as_str())).collect();
+    for key in base {
+        table.remove(&key);
+    }
+    if table.is_empty() {
+        theme.remove("custom");
+    } else if let Item::Table(t) = custom {
+        // Only layers are left, which need no [theme.custom] header.
+        t.set_implicit(true);
+    }
+    if custom_layers(&doc.decoded()) != layers {
+        bail!("could not preserve [theme.custom.light] / [theme.custom.dark]");
+    }
+    Ok(())
+}
+
 /// The user's auto_switch overrides, which the picker leaves alone.
 fn custom_layers(doc: &toml::Table) -> Vec<Option<toml::Value>> {
     LAYERS.iter().map(|l| config::lookup(doc, &["theme".into(), "custom".into(), l.to_string()]).cloned()).collect()
@@ -107,12 +191,17 @@ fn osc_payload(pal: &Palette) -> String {
 /// set) and refreshes the scheme files terminals load on start. Fails with
 /// terminal::Unavailable when no client was found.
 fn sync_terminal_colors(pal: &Palette, palette_path: &Path, client_pid: &str) -> Result<()> {
-    let mut errors = super::schemes::refresh(pal, palette_path);
+    emit(&osc_payload(pal), client_pid, super::schemes::refresh(pal, palette_path))
+}
+
+/// Sends payload to this machine's client terminals (only client_pid's, when
+/// set), failing with errors and its own, or with terminal::Unavailable when
+/// no client was reached.
+fn emit(payload: &str, client_pid: &str, mut errors: Vec<String>) -> Result<()> {
     let clients = terminal::active_clients(client_pid)?;
-    let payload = osc_payload(pal);
     let mut synced = 0;
     for client in &clients {
-        match terminal::emit_client(client, &payload) {
+        match terminal::emit_client(client, payload) {
             Ok(()) => synced += 1,
             Err(e) if terminal::is_unavailable(&e) => {}
             Err(e) => errors.push(format!("client {}: {e:#}", client.pid)),
@@ -137,16 +226,27 @@ pub fn sync_applied_theme(client_pid: &str) -> Result<()> {
     let (pal, palette_path) = resolve_palette(&slug).with_context(|| format!("cannot load theme {slug:?}"))?;
     // A config edited independently, or a failed marker write, must never
     // resurrect stale terminal colors from the previous selection.
-    let cfg = config::path();
-    let doc = Doc::parse(&fs::read_to_string(&cfg).context("read config before sync")?)?.decoded();
-    let custom = config::lookup(&doc, &["theme".into(), "custom".into()]).and_then(|v| v.as_table());
-    for (key, value) in pal.tokens() {
-        let current = custom.and_then(|c| c.get(key)).and_then(|v| v.as_str()).unwrap_or_default();
-        if !current.eq_ignore_ascii_case(&value) {
-            bail!("saved theme {slug:?} does not match {}; run apply {slug} again before syncing", cfg.display());
-        }
+    if !config_matches(&pal.tokens())? {
+        bail!("saved theme {slug:?} does not match {}; run apply {slug} again before syncing", config::path().display());
     }
     sync_terminal_colors(&pal, &palette_path, client_pid)
+}
+
+/// Whether [theme.custom] holds these tokens.
+pub(super) fn config_matches(tokens: &Tokens) -> Result<bool> {
+    let doc = read_config()?;
+    let custom = config::lookup(&doc, &["theme".into(), "custom".into()]).and_then(|v| v.as_table());
+    Ok(tokens.iter().all(|(key, value)| custom.and_then(|c| c.get(*key)).and_then(|v| v.as_str()).is_some_and(|c| c.eq_ignore_ascii_case(value))))
+}
+
+/// This machine's config, empty when there is none yet.
+fn read_config() -> Result<toml::Table> {
+    let cfg = config::path();
+    match fs::read_to_string(&cfg) {
+        Ok(text) => Ok(Doc::parse(&text)?.decoded()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(toml::Table::new()),
+        Err(e) => Err(e).with_context(|| format!("read {}", cfg.display())),
+    }
 }
 
 /// Syncs each Herdr client on this machine that shows up within STARTUP_WAIT,
@@ -258,5 +358,42 @@ mod tests {
         let started = Instant::now();
         sync_at_startup().unwrap();
         assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    // A reset hands the colors back to Herdr but keeps the user's auto_switch
+    // layers, and leaves no empty [theme.custom] behind.
+    #[test]
+    fn reset_drops_tokens_and_keeps_layers() {
+        let tokens = parse_palette(BODY).unwrap().tokens();
+        let mut doc = Doc::parse("[theme]\nname = \"vesper\"\n\n[theme.custom.dark]\naccent = \"#ffffff\"\n").unwrap();
+        replace_custom_tokens(&mut doc, &tokens).unwrap();
+        doc.raw()["theme"]["custom"]["stray"] = toml_edit::value(1);
+        drop_custom_tokens(&mut doc).unwrap();
+        let decoded = doc.decoded();
+        let custom = config::lookup(&decoded, &["theme".into(), "custom".into()]).unwrap().as_table().unwrap();
+        assert_eq!(custom.keys().collect::<Vec<_>>(), ["dark"]);
+        assert_eq!(custom["dark"]["accent"].as_str(), Some("#ffffff"));
+        let mut doc = Doc::parse("[ui]\nsidebar_width = 30\n").unwrap();
+        replace_custom_tokens(&mut doc, &tokens).unwrap();
+        drop_custom_tokens(&mut doc).unwrap();
+        assert!(!doc.text().contains("custom"), "{}", doc.text());
+        let mut doc = Doc::parse("[ui]\nsidebar_width = 30\n").unwrap();
+        drop_custom_tokens(&mut doc).unwrap();
+        assert_eq!(doc.text(), "[ui]\nsidebar_width = 30\n");
+    }
+
+    // Herdr Radar keeps one token in its own marked [theme.custom] block; a
+    // reset must leave it, markers and all, and count the built-in as in use.
+    #[test]
+    fn reset_keeps_a_partial_table() {
+        let text = "[ui]\nsidebar_width = 30\n\n# >>> herdr-radar theme block\n[theme.custom]\nactive_row_bg = \"#414868\"\n# <<< herdr-radar theme block\n";
+        let mut doc = Doc::parse(text).unwrap();
+        drop_custom_tokens(&mut doc).unwrap();
+        assert_eq!(doc.text(), text);
+        let _guard = crate::ui::tests::isolated();
+        fs::write(config::path(), text).unwrap();
+        assert!(builtin().unwrap().in_use);
+        write_custom_block(&config::path(), &parse_palette(BODY).unwrap().tokens()).unwrap();
+        assert!(!builtin().unwrap().in_use);
     }
 }

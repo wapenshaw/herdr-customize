@@ -675,3 +675,34 @@ fn plugin_checks_wait_for_the_page() {
     assert_eq!(d.git_checks(), usize::from(crate::plugins::have_git()));
     assert_eq!(d.herdr_calls("plugin config-dir"), 1);
 }
+
+// With no [theme.custom] colors Herdr shows its own theme; the list names it,
+// marks it in use, and picking it resets.
+#[test]
+fn themes_offer_herdr_default() {
+    let mut d = Driver::new("themes", "[theme]\nname = \"vesper\"\n");
+    let screen = d.screen();
+    assert!(screen.contains("IN USE") && screen.contains("● Herdr default (vesper)"), "{screen}");
+    d.typ("default");
+    d.press(&["enter"]);
+    assert!(d.app.quit && d.app.after.is_some(), "enter resets after closing");
+}
+
+// A recorded selection whose colors are gone from the config is not in use,
+// so the ● follows what Herdr actually shows.
+#[test]
+fn themes_mark_only_what_the_config_holds() {
+    let mut d = Driver::new("themes", "");
+    fs::write(sandbox().join("state/applied"), "dracula-default\n").unwrap();
+    d.press(&["ctrl+r"]);
+    let screen = d.screen();
+    assert!(screen.contains("● Herdr default (catppuccin)") && !screen.contains("● dracula-default"), "{screen}");
+    let pal = crate::theme::parse_palette_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/dracula-default")).unwrap();
+    crate::theme::write_custom_block(&sandbox().join("config.toml"), &pal.tokens()).unwrap();
+    d.press(&["ctrl+r"]);
+    let mut screen = d.screen();
+    d.press(&["home"]);
+    screen += &d.screen();
+    let _ = fs::remove_file(sandbox().join("state/applied"));
+    assert!(screen.contains("● dracula-default") && screen.contains("↩ Herdr default (catppuccin)"), "{screen}");
+}

@@ -69,14 +69,16 @@ with a client's frame output; a native check per emulator is still needed.
   `[theme.custom.dark]` survive whether they are standard tables, dotted keys
   or inline tables; `toml_edit` edits each spelling where it stands.
 - Repeated applies produce byte-identical files.
+- A reset removes the base tokens only when they form a full palette, so a
+  partial `[theme.custom]` such as Herdr Radar's block survives it.
 - Unrelated TOML, comments, CRLF, permissions, and symlinks are preserved; the
   first change each day is backed up; writes are atomic.
 
 ## Regression coverage
 
 - New block, token replacement with layers kept and repeated writes stable,
-  layers without a base block, inline theme tables, and the OSC payload
-  (`src/theme/apply.rs`).
+  layers without a base block, inline theme tables, reset with layers and with
+  a partial table, and the OSC payload (`src/theme/apply.rs`).
 - Interactive command classification (including `herdr.exe` paths), the
   remote-only popup decision, and Windows command-line splitting
   (`src/terminal/mod.rs`); macOS argument parsing (`src/terminal/unix.rs`).

@@ -78,7 +78,8 @@ the selected theme, with a line of status colors and the full palette.
   the popup.
 - **↑**/**↓** move through the list. **←**/**→** switch between all, dark,
   light and your themes.
-- **Enter** applies the selected theme and closes the popup.
+- **Enter** applies the selected theme and closes the popup. On **↩ Herdr
+  default**, it removes the applied theme so Herdr shows its own.
 - **ctrl+t** replaces the mock with the token table, which shows the palette
   entry behind each Herdr color.
 - **ctrl+a**, or **＋ Add new theme…** at the end of the list, opens a
