@@ -443,7 +443,7 @@ impl PluginsPage {
         self.market_busy = true;
         let (query, sort) = (self.market_query.clone(), self.market_sort.clone());
         ctx.spawn(move || {
-            let results = plugins::search(&query, &sort, page, MARKET_PAGE);
+            let results = plugins::search(MARKET_TOPIC, &query, &sort, page, MARKET_PAGE);
             Msg::Market { query, sort, page, results }.into()
         });
     }
