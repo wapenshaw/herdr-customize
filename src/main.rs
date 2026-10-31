@@ -1,6 +1,7 @@
 //! herdr-customize: themes, plugins, keybindings and settings for Herdr in
 //! one popup.
 
+mod app;
 mod bind;
 mod config;
 mod fsutil;
@@ -26,6 +27,14 @@ const USAGE: &str = "Usage: herdr-customize [command]
   sync [--client <pid>]              re-send the applied colors to local clients
   sync --startup                     the same once the first client appears
   preview <slug>                     print a theme preview
+
+The Herdr app (herdr-app) keeps its own themes, keys and mods:
+
+  app [--home DIR] ui [themes|keys|mods]  open the popup for the app
+  app install [key]                  add the popup to the app, on ctrl-shift-m
+  app themes [--force]               write every palette to the app's themes
+  app apply <name>                   show a theme in the app
+  app reset                          back to the app's own themes
 
 Themes are written to this machine's Herdr config. Clients attached with
 herdr --remote use their own machine's config: run herdr-customize there.
@@ -86,10 +95,47 @@ fn run(args: &[String]) -> Result<()> {
         #[cfg(windows)]
         ("terminal-sync", 2) => std::process::exit(terminal::run_helper(&args[1])),
         ("preview", 2) => print!("{}", theme::preview::render_swatch(&theme::load_look(&args[1])?.tokens, &args[1])),
+        ("app", _) => run_app(&args[1..])?,
         ("apply", 2) => theme::apply_theme(&args[1])?,
         ("reset", 1) => theme::reset_theme()?,
         ("bind" | "sync" | "invoke-after-close" | "preview" | "apply" | "reset", _) => bail!("wrong arguments (see herdr-customize help)"),
         (other, _) => bail!("unknown command: {other} (see herdr-customize help)"),
+    }
+    Ok(())
+}
+
+/// The commands for the Herdr app, which never touch Herdr's own config.
+fn run_app(mut args: &[String]) -> Result<()> {
+    if let [flag, dir, rest @ ..] = args
+        && flag == "--home"
+    {
+        // SAFETY: no other thread has started yet.
+        unsafe { std::env::set_var("HERDR_APP_HOME", dir) };
+        args = rest;
+    }
+    let words: Vec<&str> = args.iter().map(String::as_str).collect();
+    match words.as_slice() {
+        [] | ["ui"] => ui::run_herdr_app(ui::APP_PAGES[0])?,
+        ["ui", page] if ui::APP_PAGES.contains(page) => ui::run_herdr_app(page)?,
+        ["ui", page] => bail!("unknown page {page:?} (want one of {})", ui::APP_PAGES.join(", ")),
+        ["install", key @ ..] if key.len() < 2 => match app::install_popup(key.first().copied())? {
+            app::Bound::Added(key) => println!("Added the popup to the Herdr app; press {key} there."),
+            app::Bound::Already(key) => println!("Updated the popup in the Herdr app; {key} opens it."),
+        },
+        ["themes", force @ ..] if force.is_empty() || force == ["--force"] => {
+            let s = app::themes::install_all(!force.is_empty())?;
+            println!("{} written, {} already there, in {}", s.written, s.same, app::themes::themes_dir().display());
+            if !s.kept.is_empty() {
+                println!("Kept your edits to {} (--force replaces them)", s.kept.join(", "));
+            }
+        }
+        ["apply", name] => {
+            let (themes, _) = app::themes::list()?;
+            let t = themes.iter().find(|t| t.name == *name).with_context(|| format!("no theme {name:?}"))?;
+            app::themes::apply(&t.name, t.origin)?;
+        }
+        ["reset"] => app::themes::reset()?,
+        _ => bail!("wrong arguments (see herdr-customize help)"),
     }
     Ok(())
 }

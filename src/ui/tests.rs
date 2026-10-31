@@ -46,6 +46,33 @@ echo {"result":{}}
 "#,
 );
 
+#[cfg(unix)]
+const FAKE_APP: (&str, &str) = (
+    "herdr-app",
+    r#"#!/bin/sh
+dir=$(dirname "$0")
+echo "$*" >> "$dir/herdr-app.log"
+case "$1" in
+  commands) cat "$dir/commands.json" ;;
+  *) echo '{"ok":true}' ;;
+esac
+"#,
+);
+
+#[cfg(windows)]
+const FAKE_APP: (&str, &str) = (
+    "herdr-app.cmd",
+    r#"@echo off
+set "dir=%~dp0"
+>>"%dir%herdr-app.log" echo %*
+if "%~1"=="commands" (type "%dir%commands.json"& exit /b 0)
+echo {"ok":true}
+"#,
+);
+
+/// What the fake herdr-app lists for `herdr-app commands`.
+const COMMANDS: &str = r#"[{"name":"tab.new","args":[],"about":"Open a tab"},{"name":"app.theme","args":[{"name":"name","required":true}],"about":"Set the theme"},{"name":"space.select","args":[{"name":"index","required":true}],"about":"Show a space"},{"name":"mod.open","args":[{"name":"name","required":true}],"about":"Open a mod"}]"#;
+
 const PLUGINS: &str = r#"{"result":{"plugins":[{"plugin_id":"demo","name":"Demo","version":"1.0.0","description":"A demo plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"local"},"actions":[{"id":"hello","title":"Say hello"}]},{"plugin_id":"remote","name":"Remote","version":"1.0.0","description":"A GitHub plugin","enabled":true,"plugin_root":"/nonexistent","source":{"kind":"github","owner":"someone","repo":"remote","requested_ref":"main","resolved_commit":"0000000000000000000000000000000000000000"},"actions":[]}]}}"#;
 
 fn sandbox() -> &'static Path {
@@ -62,6 +89,12 @@ fn sandbox() -> &'static Path {
         // touches the environment holds.
         let set = |k: &str, v: &Path| unsafe { std::env::set_var(k, v) };
         set("HERDR_BIN_PATH", &herdr);
+        let app = dir.join(FAKE_APP.0);
+        fs::write(&app, FAKE_APP.1).unwrap();
+        #[cfg(unix)]
+        fs::set_permissions(&app, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        fs::write(dir.join("commands.json"), COMMANDS).unwrap();
+        set("HERDR_APP_BIN", &app);
         set("HERDR_CONFIG_PATH", &dir.join("config.toml"));
         set("HERDR_PLUGIN_STATE_DIR", &dir.join("state"));
         set("HERDR_PLUGIN_ROOT", Path::new(env!("CARGO_MANIFEST_DIR")));
@@ -79,6 +112,8 @@ fn sandbox() -> &'static Path {
         set("EDITOR", Path::new("false"));
         unsafe { std::env::remove_var("HERDR_ENV") };
         unsafe { std::env::remove_var("HERDR_SOCKET_PATH") };
+        // The app's home then sits under XDG_CONFIG_HOME above.
+        unsafe { std::env::remove_var("HERDR_APP_HOME") };
         dir
     })
 }
@@ -115,6 +150,27 @@ impl Driver {
         let mut d = Driver { app: App::new(tab), _guard: guard };
         d.drain();
         d
+    }
+
+    /// Opens the Herdr app's popup on tab, over an app home holding files.
+    fn herdr_app(tab: &str, files: &[(&str, &str)]) -> Driver {
+        let guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        let dir = sandbox();
+        let home = crate::app::home();
+        let _ = fs::remove_dir_all(&home);
+        for (rel, text) in files {
+            let path = home.join(rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        fs::write(dir.join("herdr-app.log"), "").unwrap();
+        let mut d = Driver { app: App::for_herdr_app(tab), _guard: guard };
+        d.drain();
+        d
+    }
+
+    fn app_calls(&self, text: &str) -> usize {
+        fs::read_to_string(sandbox().join("herdr-app.log")).unwrap().lines().filter(|l| l.contains(text)).count()
     }
 
     /// Runs queued work until nothing is left. Timers wait for fire().
@@ -705,4 +761,79 @@ fn themes_mark_only_what_the_config_holds() {
     screen += &d.screen();
     let _ = fs::remove_file(sandbox().join("state/applied"));
     assert!(screen.contains("● dracula-default") && screen.contains("↩ Herdr default (catppuccin)"), "{screen}");
+}
+
+// Picking a palette in the app's popup writes it as the app's theme file
+// and asks the app to show it; Herdr's own config is never touched.
+#[test]
+fn app_themes_write_then_apply() {
+    let mut d = Driver::herdr_app("themes", &[("shared.json", r#"{"layout":"main"}"#)]);
+    fs::write(sandbox().join("config.toml"), "").unwrap();
+    let screen = d.screen();
+    assert!(screen.contains("1 Themes") && screen.contains("3 Mods") && !screen.contains("Settings"), "{screen}");
+    assert!(screen.contains("IN USE") && screen.contains("● graphite") && screen.contains("HERDR APP"), "{screen}");
+    d.typ("dracula-default");
+    d.press(&["enter"]);
+    assert!(crate::app::home().join("themes/dracula-default.json").is_file());
+    assert_eq!(d.app_calls("app.theme"), 1);
+    assert!(!d.app.quit, "the popup stays open to try another");
+    assert_eq!(d.config(), "");
+}
+
+// An unbound command can be bound from the list; a key the app cannot read
+// is refused before anything is written.
+#[test]
+fn app_keys_bind_an_unbound_command() {
+    let mut d = Driver::herdr_app("keys", &[("keys.json", r#"{"global":{"ctrl-shift-t":"tab.new"}}"#)]);
+    let screen = d.screen();
+    assert!(screen.contains("GLOBAL") && screen.contains("ctrl-shift-t") && screen.contains("UNBOUND COMMANDS") && screen.contains("app.theme"), "{screen}");
+    assert_eq!(screen.matches("Open a tab").count(), 1, "a bound command is not listed as unbound");
+    d.press(&["/"]);
+    d.typ("space.select");
+    d.press(&["enter", "enter"]);
+    assert!(d.screen().contains("New binding"));
+    d.typ("hyper-1");
+    d.press(&["enter"]);
+    assert!(d.screen().contains("unknown modifier"));
+    for _ in 0..7 {
+        d.press(&["backspace"]);
+    }
+    d.typ("alt-1");
+    d.press(&["tab"]);
+    d.typ("1");
+    d.press(&["enter"]);
+    let keys = fs::read_to_string(crate::app::keys::path()).unwrap();
+    assert!(keys.contains(r#""alt-1": "space.select:1""#) && keys.contains("ctrl-shift-t"), "{keys}");
+    // Taking a key another binding holds asks first.
+    d.press(&["n"]);
+    d.typ("ctrl-shift-t");
+    d.press(&["tab"]);
+    d.typ("app.theme:ink");
+    d.press(&["enter"]);
+    assert!(d.app.view(140, 40).last().unwrap().to_string().contains("runs tab.new. Replace it?"));
+    d.press(&["y"]);
+    let keys = fs::read_to_string(crate::app::keys::path()).unwrap();
+    assert!(keys.contains(r#""ctrl-shift-t": "app.theme:ink""#) && !keys.contains("tab.new"), "{keys}");
+}
+
+// A package is reviewed before anything is written, then installed and
+// listed as installed here.
+#[test]
+fn app_mods_review_then_install() {
+    let mut d = Driver::herdr_app("mods", &[("installed.json", r#"{"agents":1,"layout:main":1}"#), ("mods/agents/main.js", "")]);
+    let base = PathBuf::from(config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
+    crate::app::mods::tests::repo(&base, "o/board", &[("mods/board/main.js", "fetch(x)"), ("README.md", "# Board\n\nA board.\n"), ("keys.json", r#"{"global":{"alt-b":"mod.open:board"}}"#)]);
+    let screen = d.screen();
+    assert!(screen.contains("SHIPPED WITH THE APP") && screen.contains("agents") && !screen.contains("ADDED BY HAND"), "{screen}");
+    d.press(&["i"]);
+    d.typ("o/board");
+    d.press(&["enter"]);
+    let screen = d.screen();
+    assert!(screen.contains("o/board · new") && screen.contains("A board.") && screen.contains("alt-b → mod.open:board") && screen.contains("reaches the network"), "{screen}");
+    assert!(!crate::app::home().join("mods/board").exists(), "nothing is written before ↵");
+    d.press(&["enter"]);
+    let screen = d.screen();
+    assert!(screen.contains("INSTALLED HERE") && screen.contains("o/board") && screen.contains("o/board installed"), "{screen}");
+    assert!(crate::app::home().join("mods/board/main.js").is_file());
+    assert_eq!(d.app_calls("check"), 1);
 }

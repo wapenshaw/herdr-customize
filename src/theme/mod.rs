@@ -158,7 +158,7 @@ pub fn is_hex(color: &str, require_hash: bool) -> bool {
     hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-fn normalize_color(color: &str) -> Result<String> {
+pub fn normalize_color(color: &str) -> Result<String> {
     if !is_hex(color, false) {
         bail!("invalid color {color:?}: expected #rrggbb");
     }
@@ -435,6 +435,23 @@ pub fn applied_slug() -> Result<String> {
 /// user themes, then bundled ones. Unusable user entries are skipped and
 /// reported as warnings.
 pub fn themes() -> Result<(Vec<Item>, Vec<String>)> {
+    let (library, warnings) = library()?;
+    let mut applied = applied_slug()?;
+    if !applied.is_empty() && !resolve_palette(&applied).and_then(|(p, _)| apply::config_matches(&p.tokens())).unwrap_or(false) {
+        applied.clear();
+    }
+    let mut items = Vec::new();
+    if !applied.is_empty() {
+        let user = library.iter().any(|i| i.slug == applied && i.user);
+        items.push(Item { slug: applied.clone(), user, applied: true });
+    }
+    items.extend(library.into_iter().filter(|i| i.slug != applied));
+    Ok((items, warnings))
+}
+
+/// Every palette, user themes then bundled ones, none marked applied.
+/// Unusable user entries are skipped and reported as warnings.
+pub fn library() -> Result<(Vec<Item>, Vec<String>)> {
     let mut warnings = Vec::new();
     let users = read_user_index()?;
     let bundled_index = plugin_root().join("themes/index.txt");
@@ -442,27 +459,17 @@ pub fn themes() -> Result<(Vec<Item>, Vec<String>)> {
     if let Some(bad) = invalid.first() {
         bail!("invalid slug {bad:?} in {}", bundled_index.display());
     }
-    let mut applied = applied_slug()?;
-    if !applied.is_empty() && !resolve_palette(&applied).and_then(|(p, _)| apply::config_matches(&p.tokens())).unwrap_or(false) {
-        applied.clear();
-    }
     let mut items: Vec<Item> = Vec::new();
-    let mut add = |item: Item| {
-        if !items.iter().any(|i| i.slug == item.slug) {
-            items.push(item);
-        }
-    };
-    if !applied.is_empty() {
-        add(Item { user: users.contains(&applied) && user_theme_file(&applied).is_ok(), slug: applied, applied: true });
-    }
     for slug in users {
         match user_theme_file(&slug) {
-            Ok(_) => add(Item { slug, user: true, applied: false }),
+            Ok(_) => items.push(Item { slug, user: true, applied: false }),
             Err(e) => warnings.push(format!("skipping unavailable user theme {slug:?}: {e}")),
         }
     }
     for slug in bundled {
-        add(Item { slug, ..Default::default() });
+        if !items.iter().any(|i| i.slug == slug) {
+            items.push(Item { slug, ..Default::default() });
+        }
     }
     Ok((items, warnings))
 }
