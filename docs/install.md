@@ -94,5 +94,7 @@ herdr-customize sync --startup         # ... to each client that appears within 
 herdr-customize preview dracula-default
 ```
 
+For the Herdr desktop app, see [The Herdr app](app.md#commands).
+
 To run it on a machine that only connects with `herdr --remote`, see
 [Themes](themes.md#using-herdr---remote-from-another-machine).
