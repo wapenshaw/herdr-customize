@@ -1,4 +1,5 @@
-//! The marketplace: GitHub repositories tagged with the plugin topic.
+//! The marketplace: GitHub repositories tagged with a topic, the plugin one
+//! for Herdr and the mod and layout ones for the app.
 
 use std::process::Command;
 use std::sync::LazyLock;
@@ -41,14 +42,14 @@ pub struct Results {
 /// plain owner/repo slugs are accepted from the API.
 static SLUG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$").unwrap());
 
-/// Finds repositories tagged with the topic. sort is "stars" or "updated";
+/// Finds repositories tagged with topic. sort is "stars" or "updated";
 /// page counts from 1.
-pub fn search(query: &str, sort: &str, page: usize, per_page: usize) -> Result<Results> {
-    search_at(&api_base(), github_token(), query, sort, page, per_page)
+pub fn search(topic: &str, query: &str, sort: &str, page: usize, per_page: usize) -> Result<Results> {
+    search_at(&api_base(), github_token(), topic, query, sort, page, per_page)
 }
 
-fn search_at(base: &str, token: Option<String>, query: &str, sort: &str, page: usize, per_page: usize) -> Result<Results> {
-    let mut q = format!("topic:{MARKET_TOPIC}");
+fn search_at(base: &str, token: Option<String>, topic: &str, query: &str, sort: &str, page: usize, per_page: usize) -> Result<Results> {
+    let mut q = format!("topic:{topic}");
     if !query.trim().is_empty() {
         q += &format!(" {}", query.trim());
     }
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn search_parses_results_and_sends_token() {
         let (base, server) = serve("200 OK", r#"{"total_count":2,"items":[{"full_name":"a/b","stargazers_count":5,"description":"one\ntwo"},{"full_name":"bad slug/x","stargazers_count":1}]}"#);
-        let r = search_at(&base, Some("t0k".into()), "theme", "stars", 2, 50).unwrap();
+        let r = search_at(&base, Some("t0k".into()), MARKET_TOPIC, "theme", "stars", 2, 50).unwrap();
         let head = server.join().unwrap();
         assert!(head.starts_with("GET /search/repositories?q=topic%3Aherdr-plugin%20theme&sort=stars&order=desc&per_page=50&page=2 "), "{head}");
         assert!(head.to_lowercase().contains("authorization: bearer t0k"), "{head}");
@@ -169,7 +170,7 @@ mod tests {
     #[test]
     fn search_reports_rate_limit_message() {
         let (base, server) = serve("403 Forbidden", r#"{"message":"API rate limit exceeded"}"#);
-        let err = search_at(&base, None, "", "stars", 1, 50).unwrap_err().to_string();
+        let err = search_at(&base, None, MARKET_TOPIC, "", "stars", 1, 50).unwrap_err().to_string();
         server.join().unwrap();
         assert_eq!(err, "GitHub rate limit (HTTP 403): API rate limit exceeded");
     }
@@ -177,7 +178,7 @@ mod tests {
     #[test]
     fn search_reports_status_without_message() {
         let (base, server) = serve("500 Internal Server Error", "oops");
-        let err = search_at(&base, None, "", "stars", 1, 50).unwrap_err().to_string();
+        let err = search_at(&base, None, MARKET_TOPIC, "", "stars", 1, 50).unwrap_err().to_string();
         server.join().unwrap();
         assert_eq!(err, "marketplace search failed (HTTP 500)");
     }
@@ -185,7 +186,7 @@ mod tests {
     #[test]
     fn search_reports_no_connection() {
         // Nothing listens on the discard port.
-        let err = search_at("http://127.0.0.1:9", None, "", "stars", 1, 50).unwrap_err().to_string();
+        let err = search_at("http://127.0.0.1:9", None, MARKET_TOPIC, "", "stars", 1, 50).unwrap_err().to_string();
         assert!(err.starts_with("marketplace search"), "{err}");
     }
 }
