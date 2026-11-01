@@ -2,9 +2,7 @@
 //! and returns as a Msg every page sees, and anything a page wants the app to
 //! do (status, work, timers, an editor, closing) goes through Ctx.
 
-mod app_keys;
 mod keys;
-mod mods;
 mod pluginconfig;
 mod plugins;
 mod settings;
@@ -34,9 +32,6 @@ use crate::schema::{self, Reference};
 use widgets::*;
 
 pub const PAGES: [&str; 4] = ["settings", "keys", "themes", "plugins"];
-
-/// The pages of the popup that customizes the Herdr app.
-pub const APP_PAGES: [&str; 2] = ["keys", "mods"];
 
 /// Pages hidden until turned on in Settings, in PAGES order.
 pub const OPTIONAL: [&str; 2] = ["themes", "plugins"];
@@ -168,17 +163,14 @@ pub enum Msg {
     Themes(themes::Msg),
     Plugins(plugins::Msg),
     Settings(settings::Msg),
-    AppKeys(app_keys::Msg),
-    Mods(mods::Msg),
 }
 
-/// State every page reads: the config file, the key reference, the
-/// optional pages turned on and every page's name.
+/// State every page reads: the config file, the key reference and the
+/// optional pages turned on.
 pub struct Shared {
     pub store: Arc<Store>,
     pub reference: Reference,
     pub pages: Vec<&'static str>,
-    pub names: &'static [&'static str],
 }
 
 type Job = Box<dyn FnOnce() -> Msg + Send>;
@@ -242,7 +234,7 @@ impl Ctx<'_> {
 
     /// Switches to the named page and then delivers msg to it.
     pub fn goto(&mut self, page: &str, msg: Option<Msg>) {
-        if let Some(i) = self.sh.names.iter().position(|p| *p == page) {
+        if let Some(i) = PAGES.iter().position(|p| *p == page) {
             self.fx.push(Effect::Goto(i, msg));
         }
     }
@@ -371,25 +363,11 @@ pub struct App {
 
 impl App {
     pub fn new(tab: &str) -> App {
-        let sh = Shared { store: Arc::new(Store::default_store()), reference: schema::bundled(), pages: load_pages(), names: &PAGES };
+        let sh = Shared { store: Arc::new(Store::default_store()), reference: schema::bundled(), pages: load_pages() };
         // In PAGES order.
         let pages: Vec<Box<dyn Page>> = vec![Box::new(settings::SettingsPage::new()), Box::new(keys::KeysPage::new()), Box::new(themes::ThemesPage::new()), Box::new(plugins::PluginsPage::new())];
+        let active = PAGES.iter().position(|p| p.eq_ignore_ascii_case(tab)).unwrap_or(0);
         let visible = PAGES.iter().map(|p| !OPTIONAL.contains(p) || sh.pages.contains(p)).collect();
-        let mut app = App::with(sh, pages, visible, tab);
-        app.apply(vec![Effect::Spawn(Box::new(|| Msg::Reference(schema::for_installed()))), Effect::Spawn(Box::new(load_plugins))]);
-        app
-    }
-
-    /// The popup for the Herdr app, which has no config.toml or plugins.
-    pub fn for_herdr_app(tab: &str) -> App {
-        let sh = Shared { store: Arc::new(Store::default_store()), reference: Reference::default(), pages: Vec::new(), names: &APP_PAGES };
-        // In APP_PAGES order.
-        let pages: Vec<Box<dyn Page>> = vec![Box::new(app_keys::AppKeysPage::new()), Box::new(mods::ModsPage::new())];
-        App::with(sh, pages, vec![true; APP_PAGES.len()], tab)
-    }
-
-    fn with(sh: Shared, pages: Vec<Box<dyn Page>>, visible: Vec<bool>, tab: &str) -> App {
-        let active = sh.names.iter().position(|p| p.eq_ignore_ascii_case(tab)).unwrap_or(0);
         let mut app = App {
             sh,
             pages,
@@ -409,6 +387,7 @@ impl App {
             timers: Vec::new(),
             execs: Vec::new(),
         };
+        app.apply(vec![Effect::Spawn(Box::new(|| Msg::Reference(schema::for_installed()))), Effect::Spawn(Box::new(load_plugins))]);
         app.each_page(|page, ctx| page.init(ctx));
         app.switch(active);
         app
@@ -471,7 +450,7 @@ impl App {
     }
 
     fn show_page(&mut self, page: &'static str, on: bool) {
-        let Some(i) = self.sh.names.iter().position(|p| *p == page) else { return };
+        let Some(i) = PAGES.iter().position(|p| *p == page) else { return };
         self.visible[i] = on;
         self.sh.pages.retain(|p| *p != page);
         if on {
@@ -682,15 +661,7 @@ fn load_plugins() -> Msg {
 
 /// Shows the popup until the user leaves it.
 pub fn run(tab: &str) -> Result<()> {
-    run_app(App::new(tab))
-}
-
-/// Shows the Herdr app's popup until the user leaves it.
-pub fn run_herdr_app(tab: &str) -> Result<()> {
-    run_app(App::for_herdr_app(tab))
-}
-
-fn run_app(mut app: App) -> Result<()> {
+    let mut app = App::new(tab);
     let (tx, rx) = mpsc::channel();
     // Installed once: enter() runs again after every editor exit, and a hook
     // per run would chain a leave() for each of them.

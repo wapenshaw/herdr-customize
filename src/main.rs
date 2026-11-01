@@ -30,8 +30,7 @@ const USAGE: &str = "Usage: herdr-customize [command]
 
 The Herdr app (herdr-app) keeps its own themes, keys and mods:
 
-  app [--home DIR] ui [keys|mods]    open the popup for the app
-  app install [key]                  add the popup, on ctrl-shift-m, and themes
+  app install [key]                  add the app screen, on ctrl-shift-m, and themes
   app themes [--force]               write the featured palettes to the app
   app apply <name>                   show a theme in the app
   app reset                          back to the app's own themes
@@ -113,18 +112,19 @@ fn run_app(mut args: &[String]) -> Result<()> {
         unsafe { std::env::set_var("HERDR_APP_HOME", dir) };
         args = rest;
     }
+    if let [api, rest @ ..] = args
+        && api == "api"
+    {
+        std::process::exit(app::api::main(rest));
+    }
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
     match words.as_slice() {
-        [] | ["ui"] => ui::run_herdr_app(ui::APP_PAGES[0])?,
-        ["ui", page] if ui::APP_PAGES.contains(page) => ui::run_herdr_app(page)?,
-        ["ui", page] => bail!("unknown page {page:?} (want one of {})", ui::APP_PAGES.join(", ")),
         ["install", key @ ..] if key.len() < 2 => {
             match app::install_popup(key.first().copied())? {
                 app::Bound::Added(key) => println!("Added the popup to the Herdr app; press {key} there."),
                 app::Bound::Already(key) => println!("Updated the popup in the Herdr app; {key} opens it."),
             }
             write_app_themes(false)?;
-            println!("Pick a theme in the app's Settings > Look.");
         }
         ["themes", force @ ..] if force.is_empty() || force == ["--force"] => write_app_themes(!force.is_empty())?,
         ["apply", name] => app::themes::apply(name)?,

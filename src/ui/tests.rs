@@ -152,27 +152,6 @@ impl Driver {
         d
     }
 
-    /// Opens the Herdr app's popup on tab, over an app home holding files.
-    fn herdr_app(tab: &str, files: &[(&str, &str)]) -> Driver {
-        let guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
-        let dir = sandbox();
-        let home = crate::app::home();
-        let _ = fs::remove_dir_all(&home);
-        for (rel, text) in files {
-            let path = home.join(rel);
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::write(path, text).unwrap();
-        }
-        fs::write(dir.join("herdr-app.log"), "").unwrap();
-        let mut d = Driver { app: App::for_herdr_app(tab), _guard: guard };
-        d.drain();
-        d
-    }
-
-    fn app_calls(&self, text: &str) -> usize {
-        fs::read_to_string(sandbox().join("herdr-app.log")).unwrap().lines().filter(|l| l.contains(text)).count()
-    }
-
     /// Runs queued work until nothing is left. Timers wait for fire().
     fn drain(&mut self) {
         loop {
@@ -761,63 +740,4 @@ fn themes_mark_only_what_the_config_holds() {
     screen += &d.screen();
     let _ = fs::remove_file(sandbox().join("state/applied"));
     assert!(screen.contains("● dracula-default") && screen.contains("↩ Herdr default (catppuccin)"), "{screen}");
-}
-
-// An unbound command can be bound from the list; a key the app cannot read
-// is refused before anything is written.
-#[test]
-fn app_keys_bind_an_unbound_command() {
-    let mut d = Driver::herdr_app("keys", &[("keys.json", r#"{"global":{"ctrl-shift-t":"tab.new"}}"#)]);
-    let screen = d.screen();
-    assert!(screen.contains("1 Keys") && screen.contains("2 Mods") && !screen.contains("Themes"), "{screen}");
-    assert!(screen.contains("GLOBAL") && screen.contains("ctrl-shift-t") && screen.contains("UNBOUND COMMANDS") && screen.contains("app.theme"), "{screen}");
-    assert_eq!(screen.matches("Open a tab").count(), 1, "a bound command is not listed as unbound");
-    d.press(&["/"]);
-    d.typ("space.select");
-    d.press(&["enter", "enter"]);
-    assert!(d.screen().contains("New binding"));
-    d.typ("hyper-1");
-    d.press(&["enter"]);
-    assert!(d.screen().contains("unknown modifier"));
-    for _ in 0..7 {
-        d.press(&["backspace"]);
-    }
-    d.typ("alt-1");
-    d.press(&["tab"]);
-    d.typ("1");
-    d.press(&["enter"]);
-    let keys = fs::read_to_string(crate::app::keys::path()).unwrap();
-    assert!(keys.contains(r#""alt-1": "space.select:1""#) && keys.contains("ctrl-shift-t"), "{keys}");
-    // Taking a key another binding holds asks first.
-    d.press(&["n"]);
-    d.typ("ctrl-shift-t");
-    d.press(&["tab"]);
-    d.typ("app.theme:ink");
-    d.press(&["enter"]);
-    assert!(d.app.view(140, 40).last().unwrap().to_string().contains("runs tab.new. Replace it?"));
-    d.press(&["y"]);
-    let keys = fs::read_to_string(crate::app::keys::path()).unwrap();
-    assert!(keys.contains(r#""ctrl-shift-t": "app.theme:ink""#) && !keys.contains("tab.new"), "{keys}");
-}
-
-// A package is reviewed before anything is written, then installed and
-// listed as installed here.
-#[test]
-fn app_mods_review_then_install() {
-    let mut d = Driver::herdr_app("mods", &[("installed.json", r#"{"agents":1,"layout:main":1}"#), ("mods/agents/main.js", "")]);
-    let base = PathBuf::from(config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
-    crate::app::mods::tests::repo(&base, "o/board", &[("mods/board/main.js", "fetch(x)"), ("README.md", "# Board\n\nA board.\n"), ("keys.json", r#"{"global":{"alt-b":"mod.open:board"}}"#)]);
-    let screen = d.screen();
-    assert!(screen.contains("SHIPPED WITH THE APP") && screen.contains("agents") && !screen.contains("ADDED BY HAND"), "{screen}");
-    d.press(&["i"]);
-    d.typ("o/board");
-    d.press(&["enter"]);
-    let screen = d.screen();
-    assert!(screen.contains("o/board · new") && screen.contains("A board.") && screen.contains("alt-b → mod.open:board") && screen.contains("reaches the network"), "{screen}");
-    assert!(!crate::app::home().join("mods/board").exists(), "nothing is written before ↵");
-    d.press(&["enter"]);
-    let screen = d.screen();
-    assert!(screen.contains("INSTALLED HERE") && screen.contains("o/board") && screen.contains("o/board installed"), "{screen}");
-    assert!(crate::app::home().join("mods/board/main.js").is_file());
-    assert_eq!(d.app_calls("check"), 1);
 }
