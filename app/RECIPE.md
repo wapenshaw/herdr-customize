@@ -90,8 +90,8 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   mod's own key context. Focus only an input that is drawn, else the root.
 - `track_scroll` does nothing on `uniform_list`; the theme list is a
   `v_virtual_list` so it can scroll to the selection.
-- Settings > Look draws every theme file and fails at about 118, so only 26
-  are written up front.
+- Settings > Look draws every theme file and fails with all 112 palettes
+  there, so only 26 are written up front.
 - A fixed overlay size is not shrunk to a small window, whose header then
   falls outside it.
 - The app's `PATH` can be shorter than a shell's.
