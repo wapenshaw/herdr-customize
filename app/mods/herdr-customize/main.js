@@ -426,6 +426,7 @@ export default class Customize extends View {
     this.actionInput.set_value(row.action);
     this.recording = record;
     if (record) this.handle.focus();
+    this.check = null;
     this.checkKey(cx);
   }
 
@@ -439,8 +440,10 @@ export default class Customize extends View {
     return args;
   }
 
+  // Only the check of the form as it is now counts: Enter can beat it, and an
+  // older check may be of another key, with --replace for that key's holder.
   canSave() {
-    return Boolean(this.form && value(this.keyInput) && value(this.actionInput) && !this.check?.errors?.length);
+    return Boolean(this.form && value(this.keyInput) && value(this.actionInput) && this.check?.seq === this.checkSeq && !this.check.errors?.length);
   }
 
   checkKey(cx) {
@@ -452,13 +455,13 @@ export default class Customize extends View {
       cx.spawn(async cx => {
         let check;
         try { check = await this.call(["key-check", ...this.keyArgs()]); } catch (e) { check = { errors: [reason(e)], warnings: [] }; }
-        if (seq === this.checkSeq) { this.check = check; cx.notify(); }
+        if (seq === this.checkSeq) { this.check = { ...check, seq }; cx.notify(); }
       });
     });
   }
 
   saveKey(cx) {
-    if (!this.form || this.check?.errors?.length) return;
+    if (!this.canSave()) return;
     const args = ["key-set", ...this.keyArgs()];
     if (this.check?.held) args.push("--replace");
     const key = value(this.keyInput);
