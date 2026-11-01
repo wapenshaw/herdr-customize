@@ -42,9 +42,10 @@ herdr server reload-config
   client's console.
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: the Herdr CLI, atomic
   writes and locks, and detached helpers.
-- `src/app/`: the Herdr desktop app's theme files, `keys.json`, mods and
-  the mod that opens the popup there; its pages are `src/ui/app_keys.rs` and
-  `src/ui/mods.rs`.
+- `src/app/`: the Herdr desktop app's theme files, `keys.json` and mods.
+  `popup.js` is the app's screen for them, drawn with the app's own
+  controls; it does every read and write through the JSON commands in
+  `api.rs`.
 - `scripts/fetch-or-build.*`: the install step that downloads a release
   binary or builds from source.
 
@@ -52,13 +53,14 @@ herdr server reload-config
 
 Herdr in the terminal and the Herdr desktop app share one executable; the
 app's commands sit under `herdr-customize app`. Both use the same palettes,
-popup, key rules and marketplace code, and one binary keeps a single release,
+key rules and marketplace code, and one binary keeps a single release,
 one set of assets for `scripts/fetch-or-build.*` and one version. The
 palettes ship beside the binary, which both sides need.
 
-The two sides stay apart in the code: `src/app/` and its pages never write
-Herdr's `config.toml`, and nothing outside them touches the app's folder.
-The UI tests drive both popups. Splitting the binary is worth it only if the
+The two sides stay apart in the code: `src/app/` never writes Herdr's
+`config.toml`, and nothing outside it touches the app's folder. The app's
+screen keeps no logic of its own beyond what it shows, so the tests in
+`api.rs` cover it. Splitting the binary is worth it only if the
 app gets an install channel that cannot run a command and keep a folder.
 
 ## Tests

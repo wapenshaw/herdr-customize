@@ -11,7 +11,7 @@ The plugin is written in Rust. The first, Go implementation is kept on the
   effects and the `Page` trait; `themes.rs`, `plugins.rs`, `keys.rs`,
   `settings.rs` are the pages, `pluginconfig.rs` the plugin settings screen,
   `values.rs` the value editing both settings screens share, `widgets.rs` shared styles, input and lists, and `tests.rs` the UI driver.
-- `src/app/`: the Herdr desktop app (`herdr-app`): its theme files (`themes.rs`), `keys.json` (`keys.rs`), mods and layouts from GitHub (`mods.rs`), and the mod that opens the popup there (`popup.js`). The popup's app pages are `ui/app_keys.rs` and `ui/mods.rs`; themes are picked in the app's own Settings; see `docs/app.md`.
+- `src/app/`: the Herdr desktop app (`herdr-app`): its theme files (`themes.rs`), `keys.json` (`keys.rs`), mods and layouts from GitHub (`mods.rs`), and the app's own screen for them (`popup.js`, a gpui-kit mod), which reads and writes only through the JSON commands in `api.rs`; see `docs/app.md`.
 - `src/config.rs`: in-place `config.toml` edits with `toml_edit`, `herdr config check` gating, backups, and reloads.
 - `src/schema/`: Herdr's config reference (bundled `reference.json` plus per-version cache).
 - `src/keys.rs`: key parsing, Herdr's binding rules, and conflict detection.
