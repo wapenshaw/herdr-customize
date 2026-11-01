@@ -42,10 +42,10 @@ herdr server reload-config
   client's console.
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: the Herdr CLI, atomic
   writes and locks, and detached helpers.
-- `src/app/`: the Herdr desktop app's theme files, `keys.json` and mods.
-  `popup.js` is the app's screen for them, drawn with the app's own
-  controls; it does every read and write through the JSON commands in
-  `api.rs`.
+- `src/app/`: the Herdr desktop app's theme files, `keys.json` and mods,
+  and `api.rs`, the JSON commands the app's screen reads and writes through.
+- `app/`: the app's screen, a mod drawn with the app's own controls, laid
+  out as a package other people's agents can add; `app install` embeds it.
 - `scripts/fetch-or-build.*`: the install step that downloads a release
   binary or builds from source.
 
