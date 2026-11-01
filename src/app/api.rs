@@ -118,13 +118,16 @@ fn palettes() -> Result<Value> {
 /// programs, and what the key runs now (other than old).
 fn check(a: &Args) -> Result<(Vec<String>, Vec<String>, Option<String>)> {
     let (section, key, action) = (a.need("section")?, a.need("key")?, a.flag("action"));
-    let (mut errors, warnings) = keys::problems(section, key);
+    let (mut errors, mut warnings) = keys::problems(section, key);
+    let bindings = keys::load()?;
+    if let Some(b) = keys::hidden_by(&bindings, section, key) {
+        warnings.push(format!("{} runs {} in {}, which wins there; this works only elsewhere", b.key, b.action, b.section));
+    }
     // Without the app's command list, any action passes.
     let commands = super::commands().unwrap_or_default();
     errors.extend(keys::action_problem(action, &commands, &mods::mod_names()));
     let old = a.flags.get("old").map(|o| keys::normalize(o));
-    let held =
-        keys::load()?.into_iter().find(|b| b.section == section && keys::normalize(&b.key) == keys::normalize(key) && old.as_deref() != Some(keys::normalize(&b.key).as_str())).map(|b| b.action);
+    let held = bindings.into_iter().find(|b| b.section == section && keys::normalize(&b.key) == keys::normalize(key) && old.as_deref() != Some(keys::normalize(&b.key).as_str())).map(|b| b.action);
     Ok((errors, warnings, held))
 }
 
@@ -228,6 +231,10 @@ mod tests {
         assert_eq!(reply["errors"].as_array().unwrap().len(), 2, "{reply}");
         let reply = call(&["key-check", "--section", "global", "--key", "shift-ctrl-t", "--action", "tab.new"]).unwrap();
         assert_eq!(reply["held"], "tab.new");
+        fs::write(keys::path(), r#"{"global":{"ctrl-shift-t":"tab.new"},"terminal":{"ctrl-shift-c":"terminal.copy"}}"#).unwrap();
+        let reply = call(&["key-check", "--section", "global", "--key", "ctrl-shift-c", "--action", "tab.new"]).unwrap();
+        assert!(reply["warnings"][0].as_str().unwrap().contains("terminal.copy in terminal"), "{reply}");
+        fs::write(keys::path(), r#"{"global":{"ctrl-shift-t":"tab.new"}}"#).unwrap();
         assert!(call(&["key-set", "--section", "global", "--key", "ctrl-shift-t", "--action", "app.theme:ink"]).unwrap_err().to_string().contains("already runs tab.new"));
         call(&["key-set", "--section", "global", "--key", "ctrl-shift-t", "--action", "app.theme:ink", "--replace"]).unwrap();
         call(&["key-set", "--section", "global", "--old", "ctrl-shift-t", "--key", "alt-1", "--action", "app.theme:ink"]).unwrap();

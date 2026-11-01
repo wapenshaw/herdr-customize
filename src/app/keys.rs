@@ -133,6 +133,20 @@ pub fn normalize(key: &str) -> String {
         .join(" ")
 }
 
+/// A binding of the same key in a section that wins over section where both
+/// count: `terminal` over `layout:<name>` over `global`.
+pub fn hidden_by<'a>(bindings: &'a [Binding], section: &str, key: &str) -> Option<&'a Binding> {
+    let rank = |s: &str| match s {
+        "terminal" => Some(2),
+        s if s.starts_with("layout:") => Some(1),
+        "global" => Some(0),
+        _ => None,
+    };
+    let mine = rank(section)?;
+    let key = normalize(key);
+    bindings.iter().find(|b| rank(&b.section).is_some_and(|r| r > mine) && normalize(&b.key) == key)
+}
+
 /// What makes key unusable in section, then what it takes from programs.
 pub fn problems(section: &str, key: &str) -> (Vec<String>, Vec<String>) {
     if key.trim().is_empty() {
@@ -198,6 +212,18 @@ mod tests {
         assert!(warnings("global", "ctrl-alt-x")[0].contains("AltGr"));
         assert_eq!(problems("global", "ctrl-shift-k s"), (vec![], vec![]), "a sequence of strokes");
         assert!(errors("ctrl-shift-k nope")[0].contains("unknown key"));
+    }
+
+    // A global key that a terminal binding also takes does nothing while a
+    // terminal has focus, which is most of the time.
+    #[test]
+    fn a_more_specific_section_hides_a_key() {
+        let b = |section: &str, key: &str| Binding { section: section.into(), key: key.into(), action: "x".into() };
+        let all = [b("terminal", "shift-ctrl-c"), b("layout:main", "ctrl-shift-j"), b("mod:editor", "ctrl-shift-y")];
+        assert_eq!(hidden_by(&all, "global", "ctrl-shift-c").map(|b| b.section.as_str()), Some("terminal"));
+        assert_eq!(hidden_by(&all, "global", "ctrl-shift-j").map(|b| b.section.as_str()), Some("layout:main"));
+        assert!(hidden_by(&all, "terminal", "ctrl-shift-c").is_none() && hidden_by(&all, "layout:main", "ctrl-shift-c").is_some());
+        assert!(hidden_by(&all, "global", "ctrl-shift-y").is_none() && hidden_by(&all, "mod:editor", "ctrl-shift-c").is_none());
     }
 
     #[test]
