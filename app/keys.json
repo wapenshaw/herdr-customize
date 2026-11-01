@@ -1,6 +1,6 @@
 {
   "global": {
-    "ctrl-shift-m": "mod.open:herdr-customize",
-    "cmd-shift-m": "mod.open:herdr-customize"
+    "ctrl-shift-y": "mod.open:herdr-customize",
+    "cmd-shift-y": "mod.open:herdr-customize"
   }
 }

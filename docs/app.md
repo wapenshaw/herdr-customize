@@ -9,7 +9,7 @@ touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |
-| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](screenshots/app-keys.png) | ![Mods: the review of a mod that wants a key already in use](screenshots/app-mods.png) |
+| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](screenshots/app-keys.png) | ![Mods: herdr-mod repositories on GitHub by stars, each with Review](screenshots/app-mods.png) |
 
 ## Set it up
 
@@ -33,7 +33,7 @@ already has the plugin, its binary works too.
 `app install` writes 26 well-known palettes, and the ones you added in
 Herdr, to the app's `themes` folder. It also writes a mod,
 `mods/herdr-customize`, that draws the screen with the app's own controls
-and colors, and binds **ctrl+shift+m** (**cmd+shift+m** on macOS) to it.
+and colors, and binds **ctrl+shift+y** (**cmd+shift+y** on macOS) to it.
 There, **Tab** and **Shift+Tab** switch pages and **Esc** closes it. A key already in
 use is never taken: pass another one, as in
 `herdr-customize app install alt-shift-c`. Run it again after moving the

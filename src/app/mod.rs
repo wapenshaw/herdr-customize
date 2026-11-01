@@ -163,7 +163,7 @@ pub fn shipped() -> BTreeSet<String> {
 }
 
 /// The key install binds when none is given: free in the app and in shells.
-pub const DEFAULT_KEY: &str = if cfg!(target_os = "macos") { "cmd-shift-m" } else { "ctrl-shift-m" };
+pub const DEFAULT_KEY: &str = if cfg!(target_os = "macos") { "cmd-shift-y" } else { "ctrl-shift-y" };
 
 /// What install did with the key.
 #[derive(Debug, PartialEq, Eq)]
