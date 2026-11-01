@@ -84,8 +84,10 @@ which wins over `global`, and `mod:<name>` counts while that mod has focus.
 **◆** marks a key another section also binds. The form refuses a key the app
 cannot read and an action it does not know, and warns about a key that
 types text, one programs rely on (ctrl+c, d, l, r, w, a, e, u, k, z and [),
-and ctrl+alt, which is AltGr on Windows. Saving a key another binding holds
-replaces that binding, and the form says which before you save.
+ctrl+alt, which is AltGr on Windows, and a key a section that wins already
+takes, as `terminal` takes ctrl+shift+c to copy. Saving a key another
+binding holds replaces that binding, and the form says which before you
+save. `app install` refuses a key a section that wins already takes.
 
 ## Mods
 

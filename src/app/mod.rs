@@ -196,6 +196,9 @@ pub fn install_popup(key: Option<&str>) -> Result<Bound> {
     if let Some(b) = bindings.iter().find(|b| b.section == "global" && keys::normalize(&b.key) == key) {
         bail!("{} already runs {}; pick another key: herdr-customize app install <key>", b.key, b.action);
     }
+    if let Some(b) = keys::hidden_by(&bindings, "global", &key) {
+        bail!("{} runs {} in {}, so it would not open the screen there; pick another key: herdr-customize app install <key>", b.key, b.action, b.section);
+    }
     keys::set("global", None, &key, &action)?;
     Ok(Bound::Added(key))
 }
@@ -213,6 +216,8 @@ mod tests {
         fs::create_dir_all(home()).unwrap();
         fs::write(keys::path(), format!(r#"{{"global":{{"{DEFAULT_KEY}":"tab.new"}}}}"#)).unwrap();
         assert!(install_popup(None).unwrap_err().to_string().contains("already runs tab.new"));
+        fs::write(keys::path(), format!(r#"{{"global":{{"{DEFAULT_KEY}":"tab.new"}},"terminal":{{"alt-shift-q":"terminal.copy"}}}}"#)).unwrap();
+        assert!(install_popup(Some("alt-shift-q")).unwrap_err().to_string().contains("in terminal"));
         assert_eq!(install_popup(Some("alt-shift-c")).unwrap(), Bound::Added("alt-shift-c".into()));
         assert_eq!(install_popup(Some("f9")).unwrap(), Bound::Already("alt-shift-c".into()));
         let js = fs::read_to_string(home().join("mods").join(MOD_NAME).join("main.js")).unwrap();
