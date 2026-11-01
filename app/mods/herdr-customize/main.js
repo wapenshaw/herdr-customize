@@ -9,10 +9,16 @@ import { exec, home, appHome, theme, themes, settings, keys, commands, run, prop
 const BIN = "@BIN@";
 const REPO = "https://github.com/wapenshaw/herdr-customize";
 const TABS = [["themes", "Themes"], ["keys", "Keys"], ["mods", "Mods"]];
-const FILTERS = [["all", "All"], ["dark", "Dark"], ["light", "Light"], ["added", "In Settings"]];
+const FILTERS = [["all", "All", () => true], ["dark", "Dark", r => !r.light], ["light", "Light", r => r.light], ["added", "In Settings", r => r.added]];
 const MODIFIER_KEYS = ["shift", "control", "ctrl", "alt", "platform", "cmd", "super", "fn", "function", "meta"];
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const reason = e => String(e?.message ?? e).replace(/^Error: /, "");
+const value = input => input.value().trim();
+const commandOf = action => action.split(":")[0];
+const keyRowId = (section, key) => `k:${section}:${key}`;
+const platform = () => window()?.platform;
+// Ctrl, Alt or Cmd held: the key is a shortcut, not Tab or list navigation.
+const chord = m => m.control || m.alt || m.platform;
 // The app's keymap outlives this screen, so the keys are bound once.
 let keysBound = false;
 const looksLikeRepo = text => /^[\w.-]+\/[\w.-]+(\/.*)?$/.test(text.trim());
@@ -27,7 +33,8 @@ export default class Customize extends View {
 
     this.palettes = [];
     this.filter = "all";
-    this.themeSel = settings()[settings().dark ? "theme_dark" : "theme_light"] ?? "";
+    const cur = this.current();
+    this.themeSel = cur[cur.showing] ?? "";
     this.themeScroll = VirtualListScrollHandle.new();
     this.themeSearch = InputState.new({ placeholder: "Search themes" });
     this.themeSearch.on("change", (_e, cx) => { this.themeSel = ""; cx.notify(); });
@@ -54,7 +61,7 @@ export default class Customize extends View {
     this.page = 1;
     this.marketSearch = InputState.new({ placeholder: "Search, or owner/repo to review" });
     this.marketSearch.on("submit", (_e, cx) => {
-      const text = this.marketSearch.value().trim();
+      const text = value(this.marketSearch);
       if (looksLikeRepo(text)) this.review(text, cx);
       else { this.page = 1; this.loadMarket(cx); }
     });
@@ -72,7 +79,6 @@ export default class Customize extends View {
 
     // The app's checker has no window, and a binary started there keeps the
     // checker's output open after it ends, which stalls `app install`.
-    this.bin = window() ? undefined : null;
     this.binFound = window() ? this.findBin() : Promise.resolve(null);
     if (window()) this.loadAll(cx);
     this.themeSearch.focus();
@@ -89,7 +95,7 @@ export default class Customize extends View {
   // one on PATH. The app's PATH can be shorter than a shell's.
   async findBin() {
     if (!BIN.startsWith("@")) return BIN;
-    const name = `herdr-customize${window()?.platform === "windows" ? ".exe" : ""}`;
+    const name = `herdr-customize${platform() === "windows" ? ".exe" : ""}`;
     this.stale = "";
     for (const bin of [`${home()}/.local/share/herdr-customize/target/release/${name}`, name]) {
       try {
@@ -105,10 +111,14 @@ export default class Customize extends View {
       this.bin = await this.binFound;
       if (this.bin) {
         this.load(cx, ["palettes"], data => { this.palettes = data.palettes; });
-        this.load(cx, ["packages"], data => { this.packages = data; });
+        this.refreshPackages(cx);
       }
       cx.notify();
     });
+  }
+
+  refreshPackages(cx) {
+    this.load(cx, ["packages"], data => { this.packages = data; });
   }
 
   async call(args) {
@@ -183,7 +193,7 @@ export default class Customize extends View {
         this.keyInput.set_value(key);
         this.checkKey(cx);
       }
-      cx.stop_propagation?.();
+      cx.stop_propagation();
       cx.notify();
       return;
     }
@@ -191,12 +201,13 @@ export default class Customize extends View {
       if (this.reviewed) this.closeReview(cx); else this.close();
       return;
     }
-    if (e.key === "tab" && !e.modifiers?.control && !e.modifiers?.alt && !e.modifiers?.platform) {
-      this.stepTab(e.modifiers?.shift ? -1 : 1, cx);
-      cx.stop_propagation?.();
+    if (chord(e.modifiers)) return;
+    if (e.key === "tab") {
+      this.stepTab(e.modifiers.shift ? -1 : 1, cx);
+      cx.stop_propagation();
       return;
     }
-    if (this.tab !== "themes" || e.modifiers?.control || e.modifiers?.alt || e.modifiers?.platform) return;
+    if (this.tab !== "themes") return;
     const rows = this.themeRows();
     const at = Math.max(0, rows.findIndex(r => r.name === this.themeSel));
     const move = { up: -1, down: 1, pageup: -10, pagedown: 10 }[e.key];
@@ -213,8 +224,8 @@ export default class Customize extends View {
   keyString(e) {
     const key = (e.key ?? "").toLowerCase();
     if (!key || MODIFIER_KEYS.includes(key)) return null;
-    const m = e.modifiers ?? {};
-    const mac = window()?.platform === "macos";
+    const m = e.modifiers;
+    const mac = platform() === "macos";
     return [m.control || (!mac && m.platform) ? "ctrl" : "", m.alt ? "alt" : "", m.shift ? "shift" : "", mac && m.platform ? "cmd" : "", key].filter(Boolean).join("-");
   }
 
@@ -233,6 +244,16 @@ export default class Customize extends View {
     return div().id(id).px(9).py(4).rounded(6).text_size(11.5).cursor_pointer().flex_none()
       .bg(active ? t.selected : t.surface).text_color(active ? t.foreground : t.muted)
       .hover(s => s.bg(t.hover)).on_click(onClick).child(text);
+  }
+
+  segment(prefix, options, current, pick) {
+    return options.map(([id, text]) => this.chip(`${prefix}-${id}`, text, current === id, (_e, cx) => pick(id, cx)));
+  }
+
+  split(width, left, right) {
+    return h_flex().flex_1().min_h(0).gap(16).items_start()
+      .child(v_flex().w(width).h_full().flex_none().min_h(0).gap(8).children(left))
+      .child(right);
   }
 
   badge(text, color) {
@@ -269,9 +290,9 @@ export default class Customize extends View {
       if (added.has(p.name) || p.error) continue;
       out.push({ name: p.name, light: !p.dark, added: false, bg: p.background, fg: p.foreground, ansi: p.ansi });
     }
-    const query = this.themeSearch.value().trim().toLowerCase();
-    return out.filter(r => (!query || r.name.includes(query))
-      && (this.filter === "all" || (this.filter === "dark" && !r.light) || (this.filter === "light" && r.light) || (this.filter === "added" && r.added)));
+    const query = value(this.themeSearch).toLowerCase();
+    const keep = FILTERS.find(([id]) => id === this.filter)[2];
+    return out.filter(r => (!query || r.name.includes(query)) && keep(r));
   }
 
   current() {
@@ -286,7 +307,16 @@ export default class Customize extends View {
     };
     if (row.added) { use(); cx.notify(); return; }
     // The app picks up a new theme file on its next look at the folder.
-    this.task(cx, `Adding ${row.name}`, ["theme-write", row.name], (_d, cx) => cx.timer.after(400, cx => { use(); cx.notify(); }));
+    this.addTheme(row, cx, (_d, cx) => cx.timer.after(400, cx => { use(); cx.notify(); }));
+  }
+
+  addTheme(row, cx, done) {
+    this.task(cx, `Adding ${row.name}`, ["theme-write", row.name], done);
+  }
+
+  closeAndRun(command, args) {
+    this.close();
+    run(command, args);
   }
 
   swatch(row, size) {
@@ -314,13 +344,12 @@ export default class Customize extends View {
       return out;
     }).track_scroll(this.themeScroll).size_full()
       .on_item_click((name, cx) => { this.themeSel = name; cx.notify(); });
-    return h_flex().flex_1().min_h(0).gap(16).items_start()
-      .child(v_flex().w(300).h_full().flex_none().min_h(0).gap(8)
-        .child(this.input(this.themeSearch))
-        .child(h_flex().gap(5).children(FILTERS.map(([id, text]) => this.chip(`filter-${id}`, text, this.filter === id, (_e, cx) => { this.filter = id; cx.notify(); }))))
-        .child(v_flex().flex_1().min_h(0).child(list))
-        .child(div().text_size(10.5).text_color(t.dim).child(`${plural(rows.length, "theme")} · ↑↓ to browse, Enter to use`)))
-      .child(sel ? this.themeDetail(sel, cur) : v_flex().flex_1().child(this.empty("No theme matches.")));
+    return this.split(300, [
+      this.input(this.themeSearch),
+      h_flex().gap(5).children(this.segment("filter", FILTERS, this.filter, (id, cx) => { this.filter = id; cx.notify(); })),
+      v_flex().flex_1().min_h(0).child(list),
+      div().text_size(10.5).text_color(t.dim).child(`${plural(rows.length, "theme")} · ↑↓ to browse, Enter to use`),
+    ], sel ? this.themeDetail(sel, cur) : v_flex().flex_1().child(this.empty("No theme matches.")));
   }
 
   themeDetail(row, cur) {
@@ -345,64 +374,73 @@ export default class Customize extends View {
           .children([...Array(8).keys()].map(i => div().flex_1().h(16).rounded(3).bg(a(start + i))))))))
       .child(h_flex().gap(8).items_center()
         .child(this.button("use-theme", using ? `Your ${slot} theme` : `Use as ${slot} theme`, (_e, cx) => this.useTheme(row, cx), { primary: true, enabled: !using }))
-        .when(!row.added, el => el.child(this.button("add-theme", "Add to Settings only", (_e, cx) => this.task(cx, `Adding ${row.name}`, ["theme-write", row.name], () => { this.notice = `${row.name} is in Settings > Look.`; }))))
+        .when(!row.added, el => el.child(this.button("add-theme", "Add to Settings only", (_e, cx) => this.addTheme(row, cx, () => { this.notice = `${row.name} is in Settings > Look.`; }))))
         .child(div().flex_1())
-        .child(this.button("open-look", "Settings > Look", () => { this.close(); run("app.settings", { section: "look" }); })))
+        .child(this.button("open-look", "Settings > Look", () => this.closeAndRun("app.settings", { section: "look" }))))
       .when(cur.showing !== slot, el => el.child(div().text_size(11.5).text_color(t.muted)
         .child(`The app is ${cur.showing} now, so a ${slot} theme shows when it switches to ${slot}.`)))
       .child(div().text_size(11).text_color(t.dim).child("The app keeps a dark and a light theme and follows your system between them. Only the themes in Settings appear there; the rest wait here until you use one."));
   }
 
   keyRows() {
-    const query = this.keySearch.value().trim().toLowerCase();
+    const query = value(this.keySearch).toLowerCase();
     const match = (...words) => !query || words.some(w => w.toLowerCase().includes(query));
+    const all = keys();
     const sections = new Map();
-    for (const k of keys()) sections.set(k.keys, (sections.get(k.keys) ?? 0) + 1);
-    const bound = keys().filter(k => match(k.keys, k.action, k.section));
-    const used = new Set(keys().map(k => k.action.split(":")[0]));
+    for (const k of all) sections.set(k.keys, (sections.get(k.keys) ?? 0) + 1);
+    const bound = all.filter(k => match(k.keys, k.action, k.section));
+    const used = new Set(all.map(k => commandOf(k.action)));
     const free = commands().filter(c => !used.has(c.name) && c.args.every(a => !a.required) && match(c.name, c.about));
     const rows = [];
     let section = null;
     for (const k of [...bound].sort((x, y) => (x.section === "global" ? "" : x.section).localeCompare(y.section === "global" ? "" : y.section))) {
       if (k.section !== section) rows.push({ id: `h:${k.section}`, header: k.section });
       section = k.section;
-      rows.push({ id: `k:${k.section}:${k.keys}`, section: k.section, key: k.keys, action: k.action, shared: sections.get(k.keys) > 1 });
+      rows.push({ id: keyRowId(k.section, k.keys), section: k.section, key: k.keys, action: k.action, shared: sections.get(k.keys) > 1 });
     }
     if (free.length) rows.push({ id: "h:free", header: "commands without a key" });
     for (const c of free) rows.push({ id: `c:${c.name}`, section: "global", key: "", action: c.name, about: c.about });
     return rows;
   }
 
+  // A command without a key starts recording one.
   editKey(row, cx) {
     if (!row || row.header) return;
+    this.openForm(row, !row.key, cx);
+  }
+
+  newKey(cx) {
+    this.openForm({ section: "global", key: "", action: "" }, false, cx);
+    this.actionInput.focus();
+  }
+
+  openForm(row, record, cx) {
     this.form = { old: row.key || null, section: row.section };
     this.sectionInput.set_value(row.section);
     this.keyInput.set_value(row.key);
     this.actionInput.set_value(row.action);
-    this.recording = !row.key;
-    if (this.recording) this.handle.focus();
+    this.recording = record;
+    if (record) this.handle.focus();
     this.checkKey(cx);
   }
 
-  newKey(cx) {
-    this.form = { old: null, section: "global" };
-    this.sectionInput.set_value("global");
-    this.keyInput.set_value("");
-    this.actionInput.set_value("");
-    this.check = null;
-    this.actionInput.focus();
-    cx.notify();
+  section() {
+    return value(this.sectionInput) || "global";
   }
 
   keyArgs() {
-    const args = ["--section", this.sectionInput.value().trim() || "global", "--key", this.keyInput.value().trim(), "--action", this.actionInput.value().trim()];
+    const args = ["--section", this.section(), "--key", value(this.keyInput), "--action", value(this.actionInput)];
     if (this.form?.old) args.push("--old", this.form.old);
     return args;
   }
 
+  canSave() {
+    return Boolean(this.form && value(this.keyInput) && value(this.actionInput) && !this.check?.errors?.length);
+  }
+
   checkKey(cx) {
     const seq = ++this.checkSeq;
-    if (!this.keyInput.value().trim()) { this.check = null; cx.notify(); return; }
+    if (!value(this.keyInput)) { this.check = null; cx.notify(); return; }
     cx.spawn(async cx => {
       let check;
       try { check = await this.call(["key-check", ...this.keyArgs()]); } catch (e) { check = { errors: [reason(e)], warnings: [] }; }
@@ -414,10 +452,10 @@ export default class Customize extends View {
     if (!this.form || this.check?.errors?.length) return;
     const args = ["key-set", ...this.keyArgs()];
     if (this.check?.held) args.push("--replace");
-    const key = this.keyInput.value().trim();
+    const key = value(this.keyInput);
     this.task(cx, "Saving the key", args, () => {
-      this.form = { old: key, section: this.sectionInput.value().trim() || "global" };
-      this.notice = `${key} runs ${this.actionInput.value().trim()}.`;
+      this.form = { old: key, section: this.section() };
+      this.notice = `${key} runs ${value(this.actionInput)}.`;
       this.check = null;
     });
   }
@@ -433,7 +471,7 @@ export default class Customize extends View {
   keysPage() {
     const t = theme();
     const rows = this.keyRows();
-    const selected = this.form?.old ? `k:${this.form.section}:${this.form.old}` : null;
+    const selected = this.form?.old ? keyRowId(this.form.section, this.form.old) : null;
     const list = uniform_list("key-list", rows.length, i => rows[i].id, (range, _cx) => {
       const out = [];
       for (let i = range.start; i < range.end; i++) {
@@ -446,21 +484,19 @@ export default class Customize extends View {
       }
       return out;
     }).size_full().on_item_click((id, cx) => this.editKey(rows.find(r => r.id === id), cx));
-    return h_flex().flex_1().min_h(0).gap(16).items_start()
-      .child(v_flex().w(420).h_full().flex_none().min_h(0).gap(8)
-        .child(h_flex().gap(8).child(div().flex_1().child(this.input(this.keySearch))).child(this.button("new-key", "New binding", (_e, cx) => this.newKey(cx))))
-        .child(v_flex().flex_1().min_h(0).child(list)))
-      .child(this.form ? this.keyForm() : v_flex().flex_1().gap(10)
-        .child(this.empty("Pick a binding to change it, or a command without a key to give it one."))
-        .child(div().text_size(11).text_color(t.dim).child("Keys are saved to keys.json, and the app picks them up at once.")));
+    return this.split(420, [
+      h_flex().gap(8).child(div().flex_1().child(this.input(this.keySearch))).child(this.button("new-key", "New binding", (_e, cx) => this.newKey(cx))),
+      v_flex().flex_1().min_h(0).child(list),
+    ], this.form ? this.keyForm() : v_flex().flex_1().gap(10)
+      .child(this.empty("Pick a binding to change it, or a command without a key to give it one."))
+      .child(div().text_size(11).text_color(t.dim).child("Keys are saved to keys.json, and the app picks them up at once.")));
   }
 
   keyForm() {
     const t = theme();
     const check = this.check;
-    const name = this.actionInput.value().trim().split(":")[0];
+    const name = commandOf(value(this.actionInput));
     const about = commands().find(c => c.name === name)?.about;
-    const ready = this.keyInput.value().trim() && this.actionInput.value().trim() && !check?.errors?.length;
     return v_flex().flex_1().min_w(0).gap(10)
       .child(div().text_size(18).font_semibold().child(this.form.old ? `Change ${this.form.old}` : "New binding"))
       .child(v_flex().gap(5).child(this.label("Key"))
@@ -473,14 +509,14 @@ export default class Customize extends View {
         .child(div().text_size(11).text_color(t.dim).child("global works everywhere; terminal only while a terminal has focus; mod:<name> inside that mod.")))
       .children((check?.errors ?? []).map((e, i) => div().id(`key-error-${i}`).text_size(11.5).text_color(t.blocked).child(e)))
       .children((check?.warnings ?? []).map((w, i) => div().id(`key-warning-${i}`).text_size(11.5).text_color(t.working).child(w)))
-      .when(Boolean(check?.held), el => el.child(div().text_size(11.5).text_color(t.working).child(`${this.keyInput.value().trim()} runs ${check.held} now; saving replaces it.`)))
+      .when(Boolean(check?.held), el => el.child(div().text_size(11.5).text_color(t.working).child(`${value(this.keyInput)} runs ${check.held} now; saving replaces it.`)))
       .child(h_flex().gap(8).mt(4)
-        .child(this.button("save-key", check?.held ? "Replace" : "Save", (_e, cx) => this.saveKey(cx), { primary: true, enabled: Boolean(ready) }))
+        .child(this.button("save-key", check?.held ? "Replace" : "Save", (_e, cx) => this.saveKey(cx), { primary: true, enabled: this.canSave() }))
         .when(Boolean(this.form.old), el => el.child(this.button("remove-key", "Unbind", (_e, cx) => this.removeKey(cx), { danger: true }))));
   }
 
   loadMarket(cx) {
-    const args = ["market", "--topic", this.topic, "--sort", this.sort, "--page", String(this.page), "--query", this.marketSearch.value().trim()];
+    const args = ["market", "--topic", this.topic, "--sort", this.sort, "--page", String(this.page), "--query", value(this.marketSearch)];
     this.task(cx, "Searching GitHub", args, data => { this.market = data; });
   }
 
@@ -504,6 +540,7 @@ export default class Customize extends View {
       this.reviewed = null;
       this.modView = "installed";
       this.focusPage();
+      // Read before the busy label clears, so the list already shows the change.
       this.packages = await this.call(["packages"]);
     });
   }
@@ -518,9 +555,7 @@ export default class Customize extends View {
   }
 
   openThing(kind, name) {
-    this.close();
-    if (kind === "layout") run("layout.switch", { name });
-    else run("mod.open", { name });
+    this.closeAndRun(kind === "layout" ? "layout.switch" : "mod.open", { name });
   }
 
   modsPage() {
@@ -528,8 +563,12 @@ export default class Customize extends View {
     const body = this.reviewed ? this.reviewPanel() : this.modView === "browse" ? this.browse() : this.installed();
     return v_flex().flex_1().min_h(0).gap(10)
       .when(!this.reviewed, el => el.child(h_flex().gap(5)
-        .child(this.chip("mods-installed", "Installed", this.modView === "installed", (_e, cx) => { this.modView = "installed"; this.focusPage(); cx.notify(); }))
-        .child(this.chip("mods-browse", "Browse GitHub", this.modView === "browse", (_e, cx) => { this.modView = "browse"; this.focusPage(); if (!this.market) this.loadMarket(cx); cx.notify(); }))
+        .children(this.segment("mods", [["installed", "Installed"], ["browse", "Browse GitHub"]], this.modView, (view, cx) => {
+          this.modView = view;
+          this.focusPage();
+          if (view === "browse" && !this.market) this.loadMarket(cx);
+          cx.notify();
+        }))
         .child(div().flex_1())
         .child(div().text_size(11).text_color(t.dim).child("Mods and layouts from the herdr-mod and herdr-layout topics."))))
       .child(body);
@@ -569,11 +608,9 @@ export default class Customize extends View {
     return v_flex().flex_1().min_h(0).gap(8)
       .child(h_flex().gap(6).items_center()
         .child(div().flex_1().child(this.input(this.marketSearch)))
-        .child(this.chip("topic-mods", "Mods", this.topic === "mods", (_e, cx) => { this.topic = "mods"; go(1, cx); }))
-        .child(this.chip("topic-layouts", "Layouts", this.topic === "layouts", (_e, cx) => { this.topic = "layouts"; go(1, cx); }))
+        .children(this.segment("topic", [["mods", "Mods"], ["layouts", "Layouts"]], this.topic, (topic, cx) => { this.topic = topic; go(1, cx); }))
         .child(div().w(8))
-        .child(this.chip("sort-stars", "Stars", this.sort === "stars", (_e, cx) => { this.sort = "stars"; go(1, cx); }))
-        .child(this.chip("sort-updated", "Updated", this.sort === "updated", (_e, cx) => { this.sort = "updated"; go(1, cx); })))
+        .children(this.segment("sort", [["stars", "Stars"], ["updated", "Updated"]], this.sort, (sort, cx) => { this.sort = sort; go(1, cx); })))
       .child(v_flex().id("market").flex_1().min_h(0).overflow_y_scrollbar().gap(6)
         .when(!m, el => el.child(this.empty(this.busy ? "Searching…" : "Press Enter to search.")))
         .when(Boolean(m) && !m.repos.length, el => el.child(this.empty("Nothing found.")))
@@ -596,8 +633,8 @@ export default class Customize extends View {
     const p = r.plans[r.at];
     const list = (title, items, color) => items.length ? v_flex().gap(3).child(this.heading(title))
       .children(items.map((item, i) => div().id(`${title}-${i}`).text_size(12).text_color(color ?? t.foreground).child(item))) : div();
-    const check = (id, on, text, flip) => h_flex().id(id).gap(8).items_center().cursor_pointer().on_click((_e, cx) => { flip(); cx.notify(); })
-      .child(div().size(14).rounded(3).border_1().border_color(t.border).bg(on ? t.accent : t.input))
+    const check = (id, field, text) => h_flex().id(id).gap(8).items_center().cursor_pointer().on_click((_e, cx) => { r[field] = !r[field]; cx.notify(); })
+      .child(div().size(14).rounded(3).border_1().border_color(t.border).bg(r[field] ? t.accent : t.input))
       .child(div().text_size(12).child(text));
     const blocked = p.taken.length > 0 || (p.edited.length > 0 && !r.replaceEdits);
     return v_flex().id("review").flex_1().min_h(0).overflow_y_scrollbar().gap(10)
@@ -614,11 +651,11 @@ export default class Customize extends View {
       .child(list("Its code", p.uses, t.working))
       .when(p.key_clashes.length > 0, el => el
         .child(list("Keys you already use", p.key_clashes.map(c => `${c.key} runs ${c.held} now; it wants ${c.action}`), t.working))
-        .child(check("take-keys", r.takeKeys, "Give these keys to the package", () => { r.takeKeys = !r.takeKeys; })))
+        .child(check("take-keys", "takeKeys", "Give these keys to the package")))
       .child(list("Already taken", p.taken.map(n => `${n} exists and is not from this package; remove it first`), t.blocked))
       .when(p.edited.length > 0, el => el
         .child(list("Files you changed", p.edited, t.working))
-        .child(check("replace-edits", r.replaceEdits, "Replace my changes", () => { r.replaceEdits = !r.replaceEdits; })))
+        .child(check("replace-edits", "replaceEdits", "Replace my changes")))
       .child(h_flex().gap(8).mt(4)
         .child(this.button("install", p.update ? "Update" : "Install", (_e, cx) => this.install(cx), { primary: true, enabled: !blocked }))
         .child(div().text_size(11).text_color(t.dim).child("Read what its code reaches before you install it; mods run with your permissions.")));
@@ -627,7 +664,7 @@ export default class Customize extends View {
   // Copied in by hand, the screen can't find the program it runs.
   missing() {
     const t = theme();
-    const windows = window()?.platform === "windows";
+    const windows = platform() === "windows";
     const step = (n, text) => h_flex().gap(10).items_start()
       .child(h_flex().size(22).rounded(11).bg(t.raised).flex_none().items_center().justify_center().text_size(11.5).font_semibold().child(String(n)))
       .child(div().flex_1().min_w(0).pt(2).text_size(12.5).child(text));
@@ -642,12 +679,12 @@ export default class Customize extends View {
       .child(div().text_size(11.5).text_color(t.dim).child("The script downloads the binary for this version, or builds it with cargo. Install rewrites this mod with the program's place and adds the themes; your keys stay as they are."))
       .child(h_flex().gap(8)
         .child(this.button("find-again", "Look again", (_e, cx) => { this.binFound = this.findBin(); this.bin = undefined; this.loadAll(cx); cx.notify(); }, { primary: true }))
-        .child(this.button("open-repo", "Open on GitHub", () => exec(windows ? "explorer" : window()?.platform === "macos" ? "open" : "xdg-open", [REPO]).catch(() => {}))));
+        .child(this.button("open-repo", "Open on GitHub", (_e, cx) => cx.open_url(REPO))));
   }
 
   render() {
     const t = theme();
-    const page = this.bin === null && window() ? this.missing()
+    const page = this.bin === null ? this.missing()
       : { themes: () => this.themesPage(), keys: () => this.keysPage(), mods: () => this.modsPage() }[this.tab]();
     return v_flex().size_full().min_h(0).bg(t.popover).text_color(t.foreground)
       .key_context("Customize")
