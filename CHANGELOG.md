@@ -4,6 +4,14 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.8.1](https://github.com/wapenshaw/herdr-customize/compare/v0.8.0...v0.8.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **app:** open the screen with ctrl+shift+y ([d103f99](https://github.com/wapenshaw/herdr-customize/commit/d103f9917e154c17f4d1eb520e75689c78d19704))
+* **app:** warn when a more specific section hides a key ([40bbe2f](https://github.com/wapenshaw/herdr-customize/commit/40bbe2ff676f715a144cd86f59c9c91253192281))
+
 ## [0.8.0](https://github.com/wapenshaw/herdr-customize/compare/v0.7.0...v0.8.0) (2026-11-01)
 
 
