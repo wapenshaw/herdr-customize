@@ -2,6 +2,7 @@
 //! files in its home and follows edits live, so this module writes those
 //! files and calls its CLI. See docs/app.md.
 
+pub mod api;
 pub mod keys;
 pub mod mods;
 pub mod themes;
@@ -102,20 +103,11 @@ pub fn run(name: &str, args: &[(&str, &str)]) -> Result<()> {
     output(&a, Duration::from_secs(10)).with_context(|| format!("is the Herdr app open? ({name})")).map(drop)
 }
 
-/// One app command and its arguments, as `herdr-app commands` lists them.
+/// One app command, as `herdr-app commands` lists them.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct AppCommand {
     pub name: String,
-    pub args: Vec<Arg>,
-    pub about: String,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub struct Arg {
-    pub name: String,
-    pub required: bool,
 }
 
 /// Every app command. It needs no open window.

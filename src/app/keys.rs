@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn actions() {
-        let commands = vec![AppCommand { name: "tab.new".into(), ..Default::default() }, AppCommand { name: "space.select".into(), ..Default::default() }];
+        let commands = vec![AppCommand { name: "tab.new".into() }, AppCommand { name: "space.select".into() }];
         let mods = vec!["editor".to_string()];
         for ok in ["tab.new", "space.select:3", "send:\u{17}", "terminal", "editor.save"] {
             assert_eq!(action_problem(ok, &commands, &mods), None, "{ok}");
