@@ -11,6 +11,8 @@ const FILTERS = [["all", "All"], ["dark", "Dark"], ["light", "Light"], ["added",
 const MODIFIER_KEYS = ["shift", "control", "ctrl", "alt", "platform", "cmd", "super", "fn", "function", "meta"];
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const reason = e => String(e?.message ?? e).replace(/^Error: /, "");
+// The app's keymap outlives this screen, so the keys are bound once.
+let keysBound = false;
 const looksLikeRepo = text => /^[\w.-]+\/[\w.-]+(\/.*)?$/.test(text.trim());
 
 export default class Customize extends View {
@@ -55,6 +57,16 @@ export default class Customize extends View {
       else { this.page = 1; this.loadMarket(cx); }
     });
     this.reviewed = null;
+
+    if (!keysBound) {
+      try {
+        cx.bind_keys([
+          { keystroke: "tab", action: "customize.next_screen", context: "Customize" },
+          { keystroke: "shift-tab", action: "customize.prev_screen", context: "Customize" },
+        ]);
+      } catch {}
+      keysBound = true;
+    }
 
     // The app's checker has no window, and a binary started there keeps the
     // checker's output open after it ends, which stalls `app install`.
@@ -105,13 +117,30 @@ export default class Customize extends View {
     if (props()?.overlay) closeOverlay(props().overlay);
   }
 
+  stepTab(by, cx) {
+    const at = TABS.findIndex(([id]) => id === this.tab);
+    this.showTab(TABS[(at + by + TABS.length) % TABS.length][0], cx);
+  }
+
   showTab(tab, cx) {
     this.tab = tab;
     this.error = "";
     this.notice = "";
     this.recording = false;
-    ({ themes: this.themeSearch, keys: this.keySearch, mods: this.marketSearch })[tab].focus();
+    this.focusPage();
     if (tab === "mods" && this.modView === "browse" && !this.market) this.loadMarket(cx);
+    cx.notify();
+  }
+
+  // A box that isn't drawn takes keys and gives none back, Tab included.
+  focusPage() {
+    const box = { themes: this.themeSearch, keys: this.keySearch, mods: this.modView === "browse" && !this.reviewed ? this.marketSearch : null }[this.tab];
+    if (box) box.focus(); else this.handle.focus();
+  }
+
+  closeReview(cx) {
+    this.reviewed = null;
+    this.focusPage();
     cx.notify();
   }
 
@@ -129,7 +158,12 @@ export default class Customize extends View {
       return;
     }
     if (e.key === "escape") {
-      if (this.reviewed) { this.reviewed = null; cx.notify(); } else this.close();
+      if (this.reviewed) this.closeReview(cx); else this.close();
+      return;
+    }
+    if (e.key === "tab" && !e.modifiers?.control && !e.modifiers?.alt && !e.modifiers?.platform) {
+      this.stepTab(e.modifiers?.shift ? -1 : 1, cx);
+      cx.stop_propagation?.();
       return;
     }
     if (this.tab !== "themes" || e.modifiers?.control || e.modifiers?.alt || e.modifiers?.platform) return;
@@ -424,6 +458,7 @@ export default class Customize extends View {
     this.task(cx, `Reading ${spec}`, ["review", spec], data => {
       if (!data.plans.length) throw new Error(`${spec} has no mods, layouts or themes`);
       this.reviewed = { plans: data.plans, at: 0, takeKeys: false, replaceEdits: false };
+      this.focusPage();
     });
   }
 
@@ -438,6 +473,7 @@ export default class Customize extends View {
       if (failed.length) this.error = failed.map(c => `${c.name}: ${c.error}`).join("\n");
       this.reviewed = null;
       this.modView = "installed";
+      this.focusPage();
       this.packages = await this.call(["packages"]);
     });
   }
@@ -462,8 +498,8 @@ export default class Customize extends View {
     const body = this.reviewed ? this.reviewPanel() : this.modView === "browse" ? this.browse() : this.installed();
     return v_flex().flex_1().min_h(0).gap(10)
       .when(!this.reviewed, el => el.child(h_flex().gap(5)
-        .child(this.chip("mods-installed", "Installed", this.modView === "installed", (_e, cx) => { this.modView = "installed"; cx.notify(); }))
-        .child(this.chip("mods-browse", "Browse GitHub", this.modView === "browse", (_e, cx) => { this.modView = "browse"; if (!this.market) this.loadMarket(cx); cx.notify(); }))
+        .child(this.chip("mods-installed", "Installed", this.modView === "installed", (_e, cx) => { this.modView = "installed"; this.focusPage(); cx.notify(); }))
+        .child(this.chip("mods-browse", "Browse GitHub", this.modView === "browse", (_e, cx) => { this.modView = "browse"; this.focusPage(); if (!this.market) this.loadMarket(cx); cx.notify(); }))
         .child(div().flex_1())
         .child(div().text_size(11).text_color(t.dim).child("Mods and layouts from the herdr-mod and herdr-layout topics."))))
       .child(body);
@@ -536,7 +572,7 @@ export default class Customize extends View {
     const blocked = p.taken.length > 0 || (p.edited.length > 0 && !r.replaceEdits);
     return v_flex().id("review").flex_1().min_h(0).overflow_y_scrollbar().gap(10)
       .child(h_flex().gap(8).items_center()
-        .child(this.button("review-back", "Back", (_e, cx) => { this.reviewed = null; cx.notify(); }))
+        .child(this.button("review-back", "Back", (_e, cx) => this.closeReview(cx)))
         .child(div().text_size(18).font_semibold().child(p.label))
         .child(this.badge(p.update ? "update" : "new", p.update ? t.working : t.done))
         .child(div().text_size(11).text_color(t.dim).child(p.commit.slice(0, 7))))
@@ -562,6 +598,9 @@ export default class Customize extends View {
     const t = theme();
     const page = { themes: () => this.themesPage(), keys: () => this.keysPage(), mods: () => this.modsPage() }[this.tab]();
     return v_flex().size_full().min_h(0).bg(t.popover).text_color(t.foreground)
+      .key_context("Customize")
+      .on_action("customize.next_screen", (_e, cx) => this.stepTab(1, cx))
+      .on_action("customize.prev_screen", (_e, cx) => this.stepTab(-1, cx))
       .track_focus(this.handle).on_key_down((e, cx) => this.onKey(e, cx))
       .child(h_flex().px(20).h(52).gap(14).items_center().border_b(1).border_color(t.border).flex_none()
         .child(div().text_size(14).font_semibold().child("Customize"))
