@@ -3,10 +3,9 @@
 The Herdr app (`herdr-app`) is a desktop window over terminals that
 herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
-files live. herdr-customize opens a popup inside the app with three pages,
-Themes, Keys and Mods, and never touches Herdr's `config.toml` from there.
-
-![The popup in the Herdr app, on the Themes page](screenshots/app-themes.png)
+files live. herdr-customize writes its palettes as the app's themes and
+opens a popup inside the app with two pages, Keys and Mods. It never
+touches Herdr's `config.toml` from there.
 
 ## Set it up
 
@@ -22,9 +21,11 @@ Otherwise clone this repository and run `scripts/fetch-or-build.sh` (or
 `.ps1` on Windows), which puts the binary in `target/release`, then run
 `target/release/herdr-customize app install`.
 
-`app install` writes a small mod, `mods/herdr-customize`, that opens the
-popup in a floating terminal, and binds **ctrl+shift+m** (**cmd+shift+m** on
-macOS) to it. A key already in use is never taken: pass another one, as in
+`app install` writes 26 well-known palettes, and the ones you added in
+Herdr, to the app's `themes` folder. It also writes a small mod,
+`mods/herdr-customize`, that opens the popup in a floating terminal, and
+binds **ctrl+shift+m** (**cmd+shift+m** on macOS) to it. A key already in
+use is never taken: pass another one, as in
 `herdr-customize app install alt-shift-c`. Run it again after moving the
 binary; it updates the mod and keeps the key.
 
@@ -35,20 +36,22 @@ installers put it, or at `HERDR_APP_BIN`.
 
 ## Themes
 
-The list holds the app's own themes (graphite, ink, moss and paper), the
-theme files in its `themes` folder, and every palette herdr-customize has.
-**Enter** applies one and leaves the popup open, so you can try the next:
-the app shows it for its lightness, as its dark theme or its light one, and
-remembers the choice for the shown layout. A palette is written to
-`themes/<name>.json` the first time it is picked.
+Pick themes in the app's own **Settings > Look**, which lists every file in
+its `themes` folder, dark and light apart. The app keeps a dark and a light
+theme for each layout and shows the one that matches **Appearance**: a light
+theme picked while the system is dark shows only once Appearance is Light.
 
-**↩ Herdr app default** goes back to graphite and paper. **ctrl+a** and
-**ctrl+v** add a palette, as on the Themes page in Herdr, and **ctrl+d**
-deletes a theme file. **ctrl+s** writes every palette to the app at once, so
-the app's own theme picker lists them too.
+A theme recolors the terminals; the app derives its panel colors from the
+theme's background, so a change between two dark themes is a change of
+tint.
 
-herdr-customize records what it wrote in `data/herdr-customize/themes.json`.
-A theme file you edited, or one it did not write, is left alone.
+Settings draws every theme file each time it opens, and with all 112
+palettes it fails with "This view could not be rendered", so
+herdr-customize writes only some. `app apply <name>` writes any other one and
+shows it, and `app themes` writes the set again after you add a palette in
+Herdr. A theme file you edited, or one herdr-customize did not write, is
+left alone; `--force` replaces it. The record is
+`data/herdr-customize/themes.json`.
 
 ## Keys
 
@@ -84,9 +87,9 @@ is `data/herdr-customize/packages.json`. Downloads use `git`.
 ## Commands
 
 ```sh
-herdr-customize app ui [themes|keys|mods]  # the popup, in any terminal
-herdr-customize app install [key]          # the mod and its key
-herdr-customize app themes [--force]       # every palette to the app
+herdr-customize app ui [keys|mods]         # the popup, in any terminal
+herdr-customize app install [key]          # the themes, the mod and its key
+herdr-customize app themes [--force]       # the palettes to the app again
 herdr-customize app apply dracula-default  # show a theme in the app
 herdr-customize app reset                  # back to graphite and paper
 ```

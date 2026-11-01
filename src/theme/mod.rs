@@ -158,7 +158,7 @@ pub fn is_hex(color: &str, require_hash: bool) -> bool {
     hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-pub fn normalize_color(color: &str) -> Result<String> {
+fn normalize_color(color: &str) -> Result<String> {
     if !is_hex(color, false) {
         bail!("invalid color {color:?}: expected #rrggbb");
     }
