@@ -1,11 +1,13 @@
-// herdr-customize's screen in the Herdr app: themes, keys and mods. Written by
-// `herdr-customize app install`, which fills in BIN; every read and write goes
-// through `BIN app api`, so this file keeps nothing worth saving.
+// herdr-customize's screen in the Herdr app: themes, keys and mods. Every read
+// and write goes through the herdr-customize program (`app api`), so this file
+// keeps nothing worth saving.
 import { View, div, uniform_list } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input, VirtualListScrollHandle, v_virtual_list } from "gpui-base";
-import { exec, appHome, theme, themes, settings, keys, commands, run, props, closeOverlay, window } from "herdr";
+import { exec, home, appHome, theme, themes, settings, keys, commands, run, props, closeOverlay, window } from "herdr";
 
+// `herdr-customize app install` fills this in; a copy added by hand looks.
 const BIN = "@BIN@";
+const REPO = "https://github.com/wapenshaw/herdr-customize";
 const TABS = [["themes", "Themes"], ["keys", "Keys"], ["mods", "Mods"]];
 const FILTERS = [["all", "All"], ["dark", "Dark"], ["light", "Light"], ["added", "In Settings"]];
 const MODIFIER_KEYS = ["shift", "control", "ctrl", "alt", "platform", "cmd", "super", "fn", "function", "meta"];
@@ -70,10 +72,9 @@ export default class Customize extends View {
 
     // The app's checker has no window, and a binary started there keeps the
     // checker's output open after it ends, which stalls `app install`.
-    if (window()) {
-      this.load(cx, ["palettes"], data => { this.palettes = data.palettes; });
-      this.load(cx, ["packages"], data => { this.packages = data; });
-    }
+    this.bin = window() ? undefined : null;
+    this.binFound = window() ? this.findBin() : Promise.resolve(null);
+    if (window()) this.loadAll(cx);
     this.themeSearch.focus();
     cx.timer.after(300, cx => {
       this.themeSearch.focus();
@@ -83,8 +84,37 @@ export default class Customize extends View {
     });
   }
 
+  // The first program that answers: BIN, else the one in a checkout at
+  // ~/.local/share/herdr-customize, which keeps the palettes beside it, else
+  // one on PATH. The app's PATH can be shorter than a shell's.
+  async findBin() {
+    if (!BIN.startsWith("@")) return BIN;
+    const name = `herdr-customize${window()?.platform === "windows" ? ".exe" : ""}`;
+    this.stale = "";
+    for (const bin of [`${home()}/.local/share/herdr-customize/target/release/${name}`, name]) {
+      try {
+        if ((await exec(bin, ["app", "--home", appHome(), "api", "packages"])).code === 0) return bin;
+        this.stale = bin;
+      } catch {}
+    }
+    return null;
+  }
+
+  loadAll(cx) {
+    cx.spawn(async cx => {
+      this.bin = await this.binFound;
+      if (this.bin) {
+        this.load(cx, ["palettes"], data => { this.palettes = data.palettes; });
+        this.load(cx, ["packages"], data => { this.packages = data; });
+      }
+      cx.notify();
+    });
+  }
+
   async call(args) {
-    const r = await exec(BIN, ["app", "--home", appHome(), "api", ...args]);
+    const bin = await this.binFound;
+    if (!bin) throw new Error("herdr-customize is not installed");
+    const r = await exec(bin, ["app", "--home", appHome(), "api", ...args]);
     let data;
     try { data = JSON.parse(r.stdout); } catch { throw new Error(r.stderr.trim() || `herdr-customize exited with ${r.code}`); }
     if (data.error) throw new Error(data.error);
@@ -594,9 +624,31 @@ export default class Customize extends View {
         .child(div().text_size(11).text_color(t.dim).child("Read what its code reaches before you install it; mods run with your permissions.")));
   }
 
+  // Copied in by hand, the screen can't find the program it runs.
+  missing() {
+    const t = theme();
+    const windows = window()?.platform === "windows";
+    const step = (n, text) => h_flex().gap(10).items_start()
+      .child(h_flex().size(22).rounded(11).bg(t.raised).flex_none().items_center().justify_center().text_size(11.5).font_semibold().child(String(n)))
+      .child(div().flex_1().min_w(0).pt(2).text_size(12.5).child(text));
+    return v_flex().max_w(640).gap(14).pt(12)
+      .child(div().text_size(18).font_semibold().child("This screen needs the herdr-customize program"))
+      .child(div().text_size(12.5).text_color(t.muted).child(this.stale
+        ? `It found ${this.stale}, which is older than this screen.`
+        : "It looked in ~/.local/share/herdr-customize and on your PATH and found nothing."))
+      .child(step(1, `git clone ${REPO} ~/.local/share/herdr-customize`))
+      .child(step(2, windows ? "In that folder: powershell -File scripts/fetch-or-build.ps1" : "In that folder: sh scripts/fetch-or-build.sh"))
+      .child(step(3, "Then: target/release/herdr-customize app install"))
+      .child(div().text_size(11.5).text_color(t.dim).child("The script downloads the binary for this version, or builds it with cargo. Install rewrites this mod with the program's place and adds the themes; your keys stay as they are."))
+      .child(h_flex().gap(8)
+        .child(this.button("find-again", "Look again", (_e, cx) => { this.binFound = this.findBin(); this.bin = undefined; this.loadAll(cx); cx.notify(); }, { primary: true }))
+        .child(this.button("open-repo", "Open on GitHub", () => exec(windows ? "explorer" : window()?.platform === "macos" ? "open" : "xdg-open", [REPO]).catch(() => {}))));
+  }
+
   render() {
     const t = theme();
-    const page = { themes: () => this.themesPage(), keys: () => this.keysPage(), mods: () => this.modsPage() }[this.tab]();
+    const page = this.bin === null && window() ? this.missing()
+      : { themes: () => this.themesPage(), keys: () => this.keysPage(), mods: () => this.modsPage() }[this.tab]();
     return v_flex().size_full().min_h(0).bg(t.popover).text_color(t.foreground)
       .key_context("Customize")
       .on_action("customize.next_screen", (_e, cx) => this.stepTab(1, cx))
