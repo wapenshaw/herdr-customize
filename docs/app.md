@@ -7,27 +7,42 @@ files live. herdr-customize writes its palettes as the app's themes and
 adds a screen to the app with three pages: Themes, Keys and Mods. It never
 touches Herdr's `config.toml` from there.
 
+| Themes | Keys | Mods |
+| --- | --- | --- |
+| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](screenshots/app-keys.png) | ![Mods: the review of a mod that wants a key already in use](screenshots/app-mods.png) |
+
 ## Set it up
 
-herdr-customize needs its folder, not just the binary, because the palettes
-live beside it. If Herdr in the terminal already has the plugin, use that
-binary:
+The easiest way is to ask an agent running in the app, as for any mod on
+herdr.dev:
 
-```sh
-herdr-customize app install
+```text
+Read ~/.config/herdr-app/AGENTS.md, then add this mod: github.com/wapenshaw/herdr-customize/tree/main/app
 ```
 
-Otherwise clone this repository and run `scripts/fetch-or-build.sh` (or
+Its [recipe](../app/RECIPE.md) has the agent set up the program rather
+than copy the mod's files, since the screen does nothing without it.
+
+By hand: herdr-customize needs its folder, not just the binary, because the
+palettes live beside it. Clone this repository to
+`~/.local/share/herdr-customize`, run `scripts/fetch-or-build.sh` there (or
 `.ps1` on Windows), which puts the binary in `target/release`, then run
-`target/release/herdr-customize app install`.
+`target/release/herdr-customize app install`. If Herdr in the terminal
+already has the plugin, its binary works too.
 
 `app install` writes 26 well-known palettes, and the ones you added in
 Herdr, to the app's `themes` folder. It also writes a mod,
 `mods/herdr-customize`, that draws the screen with the app's own controls
-and colors, and binds **ctrl+shift+m** (**cmd+shift+m** on macOS) to it. A key already in
+and colors, and binds **ctrl+shift+m** (**cmd+shift+m** on macOS) to it.
+There, **Tab** and **Shift+Tab** switch pages and **Esc** closes it. A key already in
 use is never taken: pass another one, as in
 `herdr-customize app install alt-shift-c`. Run it again after moving the
 binary; it updates the mod and keeps the key.
+
+The mod is also published on its own in [app/](../app), so it can be added
+like any other. A copy that `app install` did not write looks for the
+binary in `~/.local/share/herdr-customize`, then on `PATH`, and shows the
+steps above when there is none.
 
 The app's folder is `HERDR_APP_HOME`, else `$XDG_CONFIG_HOME/herdr-app`,
 else `~/.config/herdr-app` (on Windows, under your user profile). The app

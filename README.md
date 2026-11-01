@@ -25,7 +25,7 @@ popup for my convenience. Use it if it helps you too.
   plugins, read their logs, and browse the marketplace.
 - **The Herdr app**: a screen in the new desktop app, drawn with its own
   controls, for every palette as a theme, its keys, and mods from GitHub.
-  See [The Herdr app](docs/app.md).
+  Add it like any mod; see [The Herdr app](docs/app.md).
 - **Safe edits**: your comments and layout stay put. Herdr checks every change
   before it is written, the original is backed up daily, and Herdr reloads
   by itself.
