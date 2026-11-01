@@ -8,7 +8,7 @@ use std::io;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{digest, home, read_record, state_dir, write_record};
 use crate::fsutil;
@@ -66,8 +66,64 @@ pub fn to_json(pal: &Palette) -> String {
         "selection": pick(&pal.selection_background, &pal.colors[8]),
         "cursor": pick(&pal.cursor_color, &pal.foreground),
         "ansi": pal.colors,
+        "colors": panel_colors(pal),
     });
     serde_json::to_string_pretty(&value).unwrap_or_default() + "\n"
+}
+
+/// The app's panel colors that it does not take from a palette by itself:
+/// its text is a fixed neutral grey, so the palette's text and its tints go
+/// here, plus the colors set for this palette in Herdr.
+fn panel_colors(pal: &Palette) -> serde_json::Map<String, Value> {
+    let tokens = pal.tokens();
+    let (bg, text) = (&pal.background, &tokens["text"]);
+    // Shares of the way to the background, as the app's own greys sit;
+    // muted keeps body-text contrast and dim that of large text.
+    let muted = toward(text, bg, 0.38, 4.5);
+    let dim = toward(text, bg, 0.58, 3.0);
+    let mut colors = serde_json::Map::new();
+    for (key, value) in [("foreground", text), ("muted", &muted), ("dim", &dim), ("idle", &dim), ("unknown", &dim), ("solid", text), ("solid_foreground", bg)] {
+        colors.insert(key.into(), value.as_str().into());
+    }
+    for (token, key) in [("accent", "accent"), ("sidebar_bg", "chrome")] {
+        if let Some(value) = pal.overrides.get(token) {
+            colors.insert(key.into(), value.as_str().into());
+        }
+    }
+    colors
+}
+
+/// Moves from share of the way to to, or less where needed to keep a
+/// contrast of at least min against to.
+fn toward(from: &str, to: &str, share: f64, min: f64) -> String {
+    let (a, b) = (rgb(from), rgb(to));
+    let mut share = share;
+    loop {
+        let mixed = [0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * share);
+        if share <= 0.0 || contrast(mixed, b) >= min {
+            let [r, g, b] = mixed.map(|c| c.round() as u8);
+            return format!("#{r:02x}{g:02x}{b:02x}");
+        }
+        share = (share - 0.02).max(0.0);
+    }
+}
+
+fn rgb(hex: &str) -> [f64; 3] {
+    let (r, g, b) = theme::parse_rgb(hex);
+    [r, g, b].map(f64::from)
+}
+
+/// The WCAG contrast ratio of two colors.
+fn contrast(a: [f64; 3], b: [f64; 3]) -> f64 {
+    let luminance = |c: [f64; 3]| {
+        let [r, g, b] = c.map(|v| {
+            let v = v / 255.0;
+            if v <= 0.039_28 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        });
+        0.2126 * r + 0.7152 * g + 0.0722 * b
+    };
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
 }
 
 /// What install did with one palette.
@@ -122,13 +178,15 @@ pub struct Summary {
     pub kept: Vec<String>,
 }
 
-/// Writes the FEATURED palettes and the person's own to the app.
+/// Writes the FEATURED palettes, the person's own and any written before
+/// to the app.
 pub fn install_featured(force: bool) -> Result<Summary> {
     let (library, _) = theme::library()?;
     let _lock = lock()?;
-    let mut record = read_record(RECORD)?;
+    let mut record: BTreeMap<String, String> = read_record(RECORD)?;
     let mut summary = Summary::default();
-    for item in library.into_iter().filter(|i| i.user || FEATURED.contains(&i.slug.as_str())) {
+    let wanted: Vec<_> = library.into_iter().filter(|i| i.user || FEATURED.contains(&i.slug.as_str()) || record.contains_key(&i.slug)).collect();
+    for item in wanted {
         match install_locked(&item.slug, force, &mut record) {
             Ok(Wrote::Written) => summary.written += 1,
             Ok(Wrote::Same) => summary.same += 1,
@@ -167,8 +225,25 @@ mod tests {
     fn json_has_only_known_keys() {
         let text = to_json(&theme::parse_palette(BODY).unwrap());
         let value: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text).unwrap();
-        assert_eq!(value.keys().collect::<Vec<_>>(), ["background", "foreground", "selection", "cursor", "ansi"]);
+        assert_eq!(value.keys().collect::<Vec<_>>(), ["background", "foreground", "selection", "cursor", "ansi", "colors"]);
         assert_eq!(value["cursor"], "#cdd6f4", "no cursor-color falls back to the foreground");
+    }
+
+    // The panels' text takes the palette's tint yet stays readable, even
+    // when the palette's text is already faint; Herdr's own overrides carry.
+    #[test]
+    fn panel_colors_keep_contrast() {
+        let mut pal = theme::parse_palette(BODY).unwrap();
+        let colors = panel_colors(&pal);
+        assert_eq!(colors["foreground"], "#cdd6f4");
+        let muted = colors["muted"].as_str().unwrap();
+        assert!(contrast(rgb(muted), rgb(&pal.background)) >= 4.5 && muted != "#cdd6f4", "{muted}");
+        assert!(!colors.contains_key("accent"));
+        pal.foreground = "#45475a".into();
+        pal.overrides.insert("accent", "#ff8800".into());
+        let colors = panel_colors(&pal);
+        assert_eq!(colors["dim"], "#45475a", "too faint to dim further");
+        assert_eq!(colors["accent"], "#ff8800");
     }
     // A palette edited in the app's folder stays; one herdr-customize wrote
     // and nobody touched is brought up to date.
@@ -187,8 +262,13 @@ mod tests {
         fs::write(&path, "old").unwrap();
         write_record(RECORD, &BTreeMap::from([("dracula-default".to_string(), digest(b"old"))])).unwrap();
         assert_eq!(install("dracula-default", false).unwrap(), Wrote::Written);
+        install("moonfly-default", false).unwrap();
+        fs::write(theme_file("moonfly-default"), "old").unwrap();
+        let mut record: BTreeMap<String, String> = read_record(RECORD).unwrap();
+        record.insert("moonfly-default".into(), digest(b"old"));
+        write_record(RECORD, &record).unwrap();
         let all = install_featured(false).unwrap();
-        assert_eq!((all.written, all.same, all.kept.len()), (FEATURED.len() - 1, 1, 0));
+        assert_eq!((all.written, all.same, all.kept.len()), (FEATURED.len(), 1, 0), "the featured ones, and one written before");
         let _ = fs::remove_dir_all(home());
     }
 }

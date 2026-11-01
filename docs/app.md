@@ -41,9 +41,12 @@ its `themes` folder, dark and light apart. The app keeps a dark and a light
 theme for each layout and shows the one that matches **Appearance**: a light
 theme picked while the system is dark shows only once Appearance is Light.
 
-A theme recolors the terminals; the app derives its panel colors from the
-theme's background, so a change between two dark themes is a change of
-tint.
+A theme from herdr-customize recolors the whole window. The app derives its
+backgrounds, accent and agent colors from any theme, but draws panel text
+in neutral grey; these themes give the sidebar, tabs and menus the
+palette's own text color, with muted and dim shades of it that stay
+readable. An accent or sidebar color you set for a palette on Herdr's Themes
+page comes along.
 
 Settings draws every theme file each time it opens, and with all 112
 palettes it fails with "This view could not be rendered", so
