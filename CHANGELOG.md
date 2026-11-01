@@ -4,6 +4,29 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.8.0](https://github.com/wapenshaw/herdr-customize/compare/v0.7.0...v0.8.0) (2026-11-01)
+
+
+### Features
+
+* **app:** color the app's panels from the palette ([697d793](https://github.com/wapenshaw/herdr-customize/commit/697d79319ed7d8c53f985ec73c18073fb18e0160))
+* **app:** customize the herdr desktop app's themes, keys and mods ([ece3326](https://github.com/wapenshaw/herdr-customize/commit/ece3326d21ba62db643b53aeeebc0371bda15395))
+* **app:** draw the app's screen with its own controls ([5c75e0b](https://github.com/wapenshaw/herdr-customize/commit/5c75e0b36674fb8b3e0b0b314bbaf95f345bbd77))
+* **app:** find the binary when the screen was copied in ([ca43d78](https://github.com/wapenshaw/herdr-customize/commit/ca43d784927af974594b99f8b3701f52cc78f7d5))
+
+
+### Bug Fixes
+
+* **app:** size the screen to the window ([de8d51c](https://github.com/wapenshaw/herdr-customize/commit/de8d51c1658e410fbabd43a4f28ebd9232986745))
+* **app:** switch the screen's pages with tab ([7e8ae72](https://github.com/wapenshaw/herdr-customize/commit/7e8ae722ec6d6d1ecbac3fea402a9a426be45e2b))
+
+
+### Refactoring
+
+* **app:** keep the app's screen as a mod package ([1fb0b05](https://github.com/wapenshaw/herdr-customize/commit/1fb0b050c0403d1074d73e2c5e00d6eb75fc40a0))
+* **app:** pick themes in the app's own settings ([f792d0f](https://github.com/wapenshaw/herdr-customize/commit/f792d0f0c38dba8e11290418e6521d35562ddcf5))
+* **plugins:** search the marketplace by topic ([e95252c](https://github.com/wapenshaw/herdr-customize/commit/e95252cd2252440b4beae2ab7e0b61108bd38fb5))
+
 ## [0.7.0](https://github.com/wapenshaw/herdr-customize/compare/v0.6.1...v0.7.0) (2026-10-30)
 
 
