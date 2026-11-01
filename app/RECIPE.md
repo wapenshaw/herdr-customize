@@ -30,7 +30,7 @@ taken (`app install alt-shift-c` picks another), writes 26 palettes to
 
 ## What you see
 
-An overlay of 980×680 in the theme's `popover` color.
+An overlay of 86% of the window each way, in the theme's `popover` color.
 
 - **Header**, 52px: "Customize", the three pages as a segmented control, the
   running task's name while one runs, and **Close**.
@@ -72,7 +72,8 @@ An overlay of 980×680 in the theme's `popover` color.
 
 - `mods/herdr-customize/main.js`: one gpui-kit `View`; `h_flex`, `v_flex`,
   `Input` and `v_virtual_list` from gpui-base, `uniform_list` for the keys.
-- `mod.json`: `"place": "none"`, an overlay of 980×680.
+- `mod.json`: `"place": "none"`, an overlay of `0.86` by `0.86`: sizes up
+  to 1 are shares of the window.
 - `herdr`: `exec`, `home`, `appHome`, `theme`, `themes`, `settings`, `keys`,
   `commands`, `run`, `props`, `closeOverlay`, `window`.
 - Commands: `app.theme`, `app.settings`, `mod.open`, `layout.switch`.
@@ -91,6 +92,8 @@ An overlay of 980×680 in the theme's `popover` color.
   `v_virtual_list` so it can scroll to the selection.
 - Settings > Look draws every theme file and fails at about 118, so only 26
   are written up front.
+- A fixed overlay size is not shrunk to a small window, whose header then
+  falls outside it.
 - The app's `PATH` can be shorter than a shell's.
 
 ## Done when
