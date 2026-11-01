@@ -99,7 +99,12 @@ export default class Customize extends View {
     this.stale = "";
     for (const bin of [`${home()}/.local/share/herdr-customize/target/release/${name}`, name]) {
       try {
-        if ((await exec(bin, ["app", "--home", appHome(), "api", "packages"])).code === 0) return bin;
+        // The probe is the packages read, so its answer is kept.
+        const r = await exec(bin, ["app", "--home", appHome(), "api", "packages"]);
+        if (r.code === 0) {
+          try { const data = JSON.parse(r.stdout); if (!data.error) this.packages = data; } catch {}
+          return bin;
+        }
         this.stale = bin;
       } catch {}
     }
@@ -111,7 +116,7 @@ export default class Customize extends View {
       this.bin = await this.binFound;
       if (this.bin) {
         this.load(cx, ["palettes"], data => { this.palettes = data.palettes; });
-        this.refreshPackages(cx);
+        if (!this.packages) this.refreshPackages(cx);
       }
       cx.notify();
     });
@@ -441,10 +446,14 @@ export default class Customize extends View {
   checkKey(cx) {
     const seq = ++this.checkSeq;
     if (!value(this.keyInput)) { this.check = null; cx.notify(); return; }
-    cx.spawn(async cx => {
-      let check;
-      try { check = await this.call(["key-check", ...this.keyArgs()]); } catch (e) { check = { errors: [reason(e)], warnings: [] }; }
-      if (seq === this.checkSeq) { this.check = check; cx.notify(); }
+    // Each check starts the program, so it waits for typing to pause.
+    cx.timer.after(200, cx => {
+      if (seq !== this.checkSeq) return;
+      cx.spawn(async cx => {
+        let check;
+        try { check = await this.call(["key-check", ...this.keyArgs()]); } catch (e) { check = { errors: [reason(e)], warnings: [] }; }
+        if (seq === this.checkSeq) { this.check = check; cx.notify(); }
+      });
     });
   }
 
