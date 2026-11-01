@@ -9,10 +9,10 @@ use serde_json::{Value, json};
 
 use super::keys::{self, Binding};
 use super::mods::{self, Kind, Plan};
-use super::themes;
-use crate::{plugins, theme};
+use super::{crawl, themes};
+use crate::theme;
 
-/// How many marketplace results one page holds.
+/// How many repositories one page of Browse reads.
 const MARKET_PAGE: usize = 20;
 
 /// Runs one command and prints its reply; the exit code says whether it
@@ -82,7 +82,7 @@ fn run(args: &[String]) -> Result<Value> {
         }
         "packages" => packages(),
         "market" => market(&a),
-        "review" => Ok(json!({ "plans": mods::fetch(a.word(0, "owner/repo")?)?.iter().map(plan_json).collect::<Vec<_>>() })),
+        "review" => review(&a),
         "install" => install(&a),
         "remove" => Ok(json!({ "kept": mods::remove(a.need("repo")?, a.flag("subdir"))? })),
         other => bail!("unknown command {other:?}"),
@@ -163,12 +163,26 @@ fn packages() -> Result<Value> {
 }
 
 fn market(a: &Args) -> Result<Value> {
-    let topic = if a.flag("topic") == "layouts" { mods::LAYOUT_TOPIC } else { mods::MOD_TOPIC };
     let sort = if a.flag("sort") == "updated" { "updated" } else { "stars" };
     let page = a.flag("page").parse().unwrap_or(1).max(1);
-    let results = plugins::search(topic, a.flag("query"), sort, page, MARKET_PAGE)?;
-    let repos: Vec<Value> = results.repos.iter().map(|r| json!({ "name": r.full_name, "stars": r.stars, "description": r.description })).collect();
-    Ok(json!({ "total": results.total, "per_page": MARKET_PAGE, "repos": repos }))
+    let (total, rows) = crawl::page(a.flag("topic") == "layouts", a.flag("query"), sort, page, MARKET_PAGE)?;
+    let repos: Vec<Value> = rows
+        .iter()
+        .map(|r| json!({ "name": r.found.name, "spec": r.spec(), "owner": r.repo.full_name.split('/').next(), "stars": r.repo.stars, "blurb": if r.found.blurb.is_empty() { &r.repo.description } else { &r.found.blurb }, "preview": r.found.preview }))
+        .collect();
+    Ok(json!({ "total": total, "per_page": MARKET_PAGE, "repos": repos }))
+}
+
+/// Each package at the spec, with its recipe and a preview the app can show.
+fn review(a: &Args) -> Result<Value> {
+    let plans = mods::fetch(a.word(0, "owner/repo")?)?;
+    let mut out = Vec::new();
+    for p in &plans {
+        let mut v = plan_json(p);
+        v["preview"] = json!(mods::keep_preview(p)?);
+        out.push(v);
+    }
+    Ok(json!({ "plans": out }))
 }
 
 fn binding_json(b: &Binding) -> Value {
@@ -182,6 +196,9 @@ fn plan_json(p: &Plan) -> Value {
         "label": p.label(),
         "commit": p.commit,
         "summary": p.summary,
+        "title": p.title,
+        "recipe": p.recipe,
+        "branch": p.branch,
         "update": p.update,
         "mods": p.mods,
         "layouts": p.layouts,
@@ -251,11 +268,17 @@ mod tests {
         let _ = fs::remove_dir_all(home());
         fs::create_dir_all(home()).unwrap();
         let base = std::path::PathBuf::from(crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
-        mods::tests::repo(&base, "o/board", &[("mods/board/main.js", "fetch(x)"), ("README.md", "# Board\n\nA board.\n")]);
+        mods::tests::repo(&base, "o/board", &[("mods/board/main.js", "fetch(x)"), ("README.md", "# Board\n\nA board.\n"), ("preview.png", "png")]);
         let reply = call(&["review", "o/board"]).unwrap();
         let plan = &reply["plans"][0];
         assert_eq!((plan["summary"].as_str(), plan["uses"][0].as_str()), (Some("A board."), Some("reaches the network")));
-        assert!(!home().join("mods/board").exists(), "a review writes nothing");
+        // The review shows the recipe whole, under its own name, beside its
+        // picture, which the app can only load from its own folder.
+        assert_eq!((plan["title"].as_str(), plan["recipe"].as_str()), (Some("Board"), Some("# Board\n\nA board.\n")));
+        assert!(!plan["branch"].as_str().unwrap().is_empty());
+        let preview = plan["preview"].as_str().unwrap();
+        assert!(preview.starts_with("data/herdr-customize/previews/") && fs::read(home().join(preview)).unwrap() == b"png");
+        assert!(!home().join("mods/board").exists(), "a review installs nothing");
         assert!(call(&["install", "--repo", "o/board", "--subdir", "", "--commit", "0000"]).unwrap_err().to_string().contains("review it again"));
         let reply = call(&["install", "--repo", "o/board", "--subdir", "", "--commit", plan["commit"].as_str().unwrap()]).unwrap();
         assert_eq!(reply["checks"][0]["name"], "board");

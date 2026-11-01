@@ -15,11 +15,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use super::keys::{self, Binding};
-use super::{digest, home, read_object, read_record, write_record};
+use super::{digest, home, read_object, read_record, state_dir, write_record};
 use crate::{fsutil, proc};
-
-pub const MOD_TOPIC: &str = "herdr-mod";
-pub const LAYOUT_TOPIC: &str = "herdr-layout";
 
 /// The installed packages.
 const RECORD: &str = "packages.json";
@@ -110,7 +107,7 @@ pub fn others(packages: &[Package]) -> Vec<(Kind, String)> {
 
 /// A cloned repository, removed when the last plan using it goes.
 #[derive(Debug)]
-pub struct Checkout(PathBuf);
+pub struct Checkout(pub(super) PathBuf);
 
 impl Drop for Checkout {
     fn drop(&mut self) {
@@ -173,6 +170,14 @@ pub struct Plan {
     pub uses: Vec<&'static str>,
     /// The first paragraph of its RECIPE.md or README.md.
     pub summary: String,
+    /// The heading of that file, else the package's folder.
+    pub title: String,
+    /// That whole file, as written.
+    pub recipe: String,
+    /// The repository's default branch, which install reads.
+    pub branch: String,
+    /// Its preview.png (or .jpg and the like), in the clone.
+    pub preview: Option<PathBuf>,
     /// It is installed already, so this updates it.
     pub update: bool,
     /// Source file → path relative to the home.
@@ -187,18 +192,23 @@ impl Plan {
 }
 
 /// Where git clone finds owner/repo; replaced in tests.
-fn git_base() -> String {
+pub(super) fn git_base() -> String {
     crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap_or_else(|| "https://github.com".into())
 }
 
-fn git(args: &[&str], timeout: Duration) -> Result<String> {
+pub(super) fn git(args: &[&str], timeout: Duration) -> Result<String> {
+    Ok(String::from_utf8_lossy(&git_bytes(args, timeout)?).trim().to_string())
+}
+
+/// What git printed, as bytes: a file `git show` read can be an image.
+pub(super) fn git_bytes(args: &[&str], timeout: Duration) -> Result<Vec<u8>> {
     let mut cmd = Command::new("git");
     cmd.args(args).env("GIT_TERMINAL_PROMPT", "0").env("GIT_HTTP_LOW_SPEED_LIMIT", "1000").env("GIT_HTTP_LOW_SPEED_TIME", "10");
     let out = proc::output_within(&mut cmd, timeout).context("git")?;
     if !out.status.success() {
         bail!("git {}: {}", args[0], String::from_utf8_lossy(&out.stderr).trim());
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    Ok(out.stdout)
 }
 
 /// Clones spec (owner/repo, owner/repo/folder, or a GitHub link to either,
@@ -218,13 +228,13 @@ pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
     let checkout = Arc::new(Checkout(dir.clone()));
     let dir_text = dir.to_string_lossy();
     git(&["clone", "--depth", "1", "--quiet", "--no-tags", &format!("{}/{repo}", git_base()), &dir_text], Duration::from_secs(120)).with_context(|| format!("download {repo}"))?;
+    let head = git(&["-C", &dir_text, "rev-parse", "--abbrev-ref", "HEAD"], Duration::from_secs(10))?;
     // Install and updates read the default branch, so a link to another one
     // would review files that never get installed.
-    if let Some((b, _)) = &branch {
-        let head = git(&["-C", &dir_text, "rev-parse", "--abbrev-ref", "HEAD"], Duration::from_secs(10))?;
-        if *b != head {
-            bail!("{repo}: only its default branch, {head}, can be installed, not {b}");
-        }
+    if let Some((b, _)) = branch
+        && b != head
+    {
+        bail!("{repo}: only its default branch, {head}, can be installed, not {b}");
     }
     let commit = git(&["-C", &dir_text, "rev-parse", "HEAD"], Duration::from_secs(10))?;
     let installed = packages()?;
@@ -235,7 +245,9 @@ pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
             continue;
         }
         let previous = installed.iter().find(|p| p.repo.eq_ignore_ascii_case(&repo) && p.subdir == subdir);
-        plans.push(plan(&root, &repo, &subdir, &commit, previous, checkout.clone())?);
+        let mut p = plan(&root, &repo, &subdir, &commit, previous, checkout.clone())?;
+        p.branch.clone_from(&head);
+        plans.push(p);
     }
     if plans.is_empty() {
         bail!("{} has no mods/ or layouts/ folder{}", repo, if want.is_empty() { String::new() } else { format!(" at {want}") });
@@ -300,6 +312,7 @@ fn plan(root: &Path, repo: &str, subdir: &str, commit: &str, previous: Option<&P
     let edited = previous.map(|p| p.files.iter().filter(|(rel, d)| fs::read(home.join(rel)).is_ok_and(|b| digest(&b) != **d)).map(|(rel, _)| rel.clone()).collect()).unwrap_or_default();
     let keys = package_keys(&root.join("keys.json"))?;
     let current = keys::load()?;
+    let recipe = ["RECIPE.md", "README.md"].iter().find_map(|f| fs::read_to_string(root.join(f)).ok()).unwrap_or_default().replace("\r\n", "\n");
     let added_before = |b: &Binding| previous.is_some_and(|p| p.keys.iter().any(|k| k[0] == b.section && k[1] == b.key));
     let key_clashes = keys
         .iter()
@@ -313,7 +326,11 @@ fn plan(root: &Path, repo: &str, subdir: &str, commit: &str, previous: Option<&P
         subdir: subdir.into(),
         commit: commit.into(),
         uses: uses(&files),
-        summary: summary(root),
+        summary: summary(&recipe),
+        title: title(&recipe, &label(repo, subdir)),
+        recipe,
+        branch: String::new(),
+        preview: PREVIEWS.iter().map(|n| root.join(n)).find(|p| p.is_file()),
         update: previous.is_some(),
         mods,
         layouts,
@@ -354,9 +371,37 @@ fn uses(files: &[(PathBuf, String)]) -> Vec<&'static str> {
     out
 }
 
+/// The names a package's picture goes by, as herdr.dev looks for it.
+pub(super) const PREVIEWS: [&str; 4] = ["preview.png", "preview.jpg", "preview.jpeg", "preview.webp"];
+
+/// Copies a plan's preview where the app's image() finds it, and returns that
+/// path relative to the home.
+pub fn keep_preview(plan: &Plan) -> Result<Option<String>> {
+    let Some(src) = &plan.preview else { return Ok(None) };
+    let ext = src.extension().map_or_else(|| "png".into(), |e| e.to_string_lossy().to_lowercase());
+    save_preview(&fs::read(src)?, &ext).map(Some)
+}
+
+/// Writes a picture where the app's image() finds it, named by its bytes so
+/// the app never shows a cached older one, and returns that path relative to
+/// the home.
+pub(super) fn save_preview(bytes: &[u8], ext: &str) -> Result<String> {
+    let path = state_dir().join("previews").join(format!("{}.{ext}", digest(bytes)));
+    if !path.is_file() {
+        fs::create_dir_all(path.parent().unwrap_or(&path))?;
+        fsutil::atomic_write(&path, bytes, 0o644)?;
+    }
+    Ok(super::home_relative(&path))
+}
+
+/// A package's name, as herdr.dev shows it: the recipe's heading, else the
+/// last part of its label.
+pub(super) fn title(recipe: &str, label: &str) -> String {
+    recipe.lines().find_map(|l| l.strip_prefix("# ")).map_or_else(|| label.rsplit('/').next().unwrap_or_default().to_string(), |t| t.trim().to_string())
+}
+
 /// The first paragraph of the package's recipe or readme, in plain words.
-fn summary(root: &Path) -> String {
-    let text = ["RECIPE.md", "README.md"].iter().find_map(|f| fs::read_to_string(root.join(f)).ok()).unwrap_or_default().replace("\r\n", "\n");
+pub(super) fn summary(text: &str) -> String {
     let para = text.split("\n\n").map(str::trim).find(|p| !p.is_empty() && !p.starts_with('#') && !p.starts_with('!') && !p.starts_with('<')).unwrap_or("");
     let plain: String = para.split_whitespace().collect::<Vec<_>>().join(" ").replace(['*', '`'], "");
     plain.chars().take(400).collect()

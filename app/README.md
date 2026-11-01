@@ -7,7 +7,7 @@ with a review before anything is installed.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |
-| ![Themes: the palettes with a terminal drawn in the selected one's colors](../docs/screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](../docs/screenshots/app-keys.png) | ![Mods: herdr-mod repositories on GitHub by stars, each with Review](../docs/screenshots/app-mods.png) |
+| ![Themes: the palettes with a terminal drawn in the selected one's colors](../docs/screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](../docs/screenshots/app-keys.png) | ![Mods: packages from herdr-mod repositories, each with its picture, name, stars and Review](../docs/screenshots/app-mods.png) |
 
 ## Add it
 
