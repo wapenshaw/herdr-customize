@@ -30,7 +30,7 @@ const USAGE: &str = "Usage: herdr-customize [command]
 
 The Herdr app (herdr-app) keeps its own themes, keys and mods:
 
-  app install [key]                  add the app screen, on ctrl-shift-m, and themes
+  app install [key]                  add the app screen, on ctrl-shift-y, and themes
   app themes [--force]               write the featured palettes to the app
   app apply <name>                   show a theme in the app
   app reset                          back to the app's own themes

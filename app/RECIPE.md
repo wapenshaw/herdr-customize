@@ -1,6 +1,6 @@
 # Customize
 
-A screen over the Herdr app, on **ctrl+shift+m** (**cmd+shift+m** on macOS),
+A screen over the Herdr app, on **ctrl+shift+y** (**cmd+shift+y** on macOS),
 with three pages: every palette as a theme with a preview, the app's keys
 with a form to change them, and mods and layouts from GitHub with a review
 before anything is installed.
