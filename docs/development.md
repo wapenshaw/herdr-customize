@@ -42,8 +42,24 @@ herdr server reload-config
   client's console.
 - `src/herdr.rs`, `src/fsutil.rs`, `src/proc.rs`: the Herdr CLI, atomic
   writes and locks, and detached helpers.
+- `src/app/`: the Herdr desktop app's theme files, `keys.json`, mods and
+  the mod that opens the popup there; its pages are `src/ui/app_keys.rs` and
+  `src/ui/mods.rs`.
 - `scripts/fetch-or-build.*`: the install step that downloads a release
   binary or builds from source.
+
+## One binary for Herdr and the app
+
+Herdr in the terminal and the Herdr desktop app share one executable; the
+app's commands sit under `herdr-customize app`. Both use the same palettes,
+popup, key rules and marketplace code, and one binary keeps a single release,
+one set of assets for `scripts/fetch-or-build.*` and one version. The
+palettes ship beside the binary, which both sides need.
+
+The two sides stay apart in the code: `src/app/` and its pages never write
+Herdr's `config.toml`, and nothing outside them touches the app's folder.
+The UI tests drive both popups. Splitting the binary is worth it only if the
+app gets an install channel that cannot run a command and keep a folder.
 
 ## Tests
 
