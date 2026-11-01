@@ -30,9 +30,9 @@ const USAGE: &str = "Usage: herdr-customize [command]
 
 The Herdr app (herdr-app) keeps its own themes, keys and mods:
 
-  app [--home DIR] ui [themes|keys|mods]  open the popup for the app
-  app install [key]                  add the popup to the app, on ctrl-shift-m
-  app themes [--force]               write every palette to the app's themes
+  app [--home DIR] ui [keys|mods]    open the popup for the app
+  app install [key]                  add the popup, on ctrl-shift-m, and themes
+  app themes [--force]               write the featured palettes to the app
   app apply <name>                   show a theme in the app
   app reset                          back to the app's own themes
 
@@ -118,24 +118,27 @@ fn run_app(mut args: &[String]) -> Result<()> {
         [] | ["ui"] => ui::run_herdr_app(ui::APP_PAGES[0])?,
         ["ui", page] if ui::APP_PAGES.contains(page) => ui::run_herdr_app(page)?,
         ["ui", page] => bail!("unknown page {page:?} (want one of {})", ui::APP_PAGES.join(", ")),
-        ["install", key @ ..] if key.len() < 2 => match app::install_popup(key.first().copied())? {
-            app::Bound::Added(key) => println!("Added the popup to the Herdr app; press {key} there."),
-            app::Bound::Already(key) => println!("Updated the popup in the Herdr app; {key} opens it."),
-        },
-        ["themes", force @ ..] if force.is_empty() || force == ["--force"] => {
-            let s = app::themes::install_all(!force.is_empty())?;
-            println!("{} written, {} already there, in {}", s.written, s.same, app::themes::themes_dir().display());
-            if !s.kept.is_empty() {
-                println!("Kept your edits to {} (--force replaces them)", s.kept.join(", "));
+        ["install", key @ ..] if key.len() < 2 => {
+            match app::install_popup(key.first().copied())? {
+                app::Bound::Added(key) => println!("Added the popup to the Herdr app; press {key} there."),
+                app::Bound::Already(key) => println!("Updated the popup in the Herdr app; {key} opens it."),
             }
+            write_app_themes(false)?;
+            println!("Pick a theme in the app's Settings > Look.");
         }
-        ["apply", name] => {
-            let (themes, _) = app::themes::list()?;
-            let t = themes.iter().find(|t| t.name == *name).with_context(|| format!("no theme {name:?}"))?;
-            app::themes::apply(&t.name, t.origin)?;
-        }
+        ["themes", force @ ..] if force.is_empty() || force == ["--force"] => write_app_themes(!force.is_empty())?,
+        ["apply", name] => app::themes::apply(name)?,
         ["reset"] => app::themes::reset()?,
         _ => bail!("wrong arguments (see herdr-customize help)"),
+    }
+    Ok(())
+}
+
+fn write_app_themes(force: bool) -> Result<()> {
+    let s = app::themes::install_featured(force)?;
+    println!("{} themes written, {} already there, in {}", s.written, s.same, app::themes::themes_dir().display());
+    if !s.kept.is_empty() {
+        println!("Kept your edits to {} (--force replaces them)", s.kept.join(", "));
     }
     Ok(())
 }

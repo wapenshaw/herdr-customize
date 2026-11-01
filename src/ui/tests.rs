@@ -763,29 +763,13 @@ fn themes_mark_only_what_the_config_holds() {
     assert!(screen.contains("● dracula-default") && screen.contains("↩ Herdr default (catppuccin)"), "{screen}");
 }
 
-// Picking a palette in the app's popup writes it as the app's theme file
-// and asks the app to show it; Herdr's own config is never touched.
-#[test]
-fn app_themes_write_then_apply() {
-    let mut d = Driver::herdr_app("themes", &[("shared.json", r#"{"layout":"main"}"#)]);
-    fs::write(sandbox().join("config.toml"), "").unwrap();
-    let screen = d.screen();
-    assert!(screen.contains("1 Themes") && screen.contains("3 Mods") && !screen.contains("Settings"), "{screen}");
-    assert!(screen.contains("IN USE") && screen.contains("● graphite") && screen.contains("HERDR APP"), "{screen}");
-    d.typ("dracula-default");
-    d.press(&["enter"]);
-    assert!(crate::app::home().join("themes/dracula-default.json").is_file());
-    assert_eq!(d.app_calls("app.theme"), 1);
-    assert!(!d.app.quit, "the popup stays open to try another");
-    assert_eq!(d.config(), "");
-}
-
 // An unbound command can be bound from the list; a key the app cannot read
 // is refused before anything is written.
 #[test]
 fn app_keys_bind_an_unbound_command() {
     let mut d = Driver::herdr_app("keys", &[("keys.json", r#"{"global":{"ctrl-shift-t":"tab.new"}}"#)]);
     let screen = d.screen();
+    assert!(screen.contains("1 Keys") && screen.contains("2 Mods") && !screen.contains("Themes"), "{screen}");
     assert!(screen.contains("GLOBAL") && screen.contains("ctrl-shift-t") && screen.contains("UNBOUND COMMANDS") && screen.contains("app.theme"), "{screen}");
     assert_eq!(screen.matches("Open a tab").count(), 1, "a bound command is not listed as unbound");
     d.press(&["/"]);

@@ -3,7 +3,6 @@
 //! do (status, work, timers, an editor, closing) goes through Ctx.
 
 mod app_keys;
-mod app_themes;
 mod keys;
 mod mods;
 mod pluginconfig;
@@ -37,7 +36,7 @@ use widgets::*;
 pub const PAGES: [&str; 4] = ["settings", "keys", "themes", "plugins"];
 
 /// The pages of the popup that customizes the Herdr app.
-pub const APP_PAGES: [&str; 3] = ["themes", "keys", "mods"];
+pub const APP_PAGES: [&str; 2] = ["keys", "mods"];
 
 /// Pages hidden until turned on in Settings, in PAGES order.
 pub const OPTIONAL: [&str; 2] = ["themes", "plugins"];
@@ -169,7 +168,6 @@ pub enum Msg {
     Themes(themes::Msg),
     Plugins(plugins::Msg),
     Settings(settings::Msg),
-    AppThemes(app_themes::Msg),
     AppKeys(app_keys::Msg),
     Mods(mods::Msg),
 }
@@ -386,7 +384,7 @@ impl App {
     pub fn for_herdr_app(tab: &str) -> App {
         let sh = Shared { store: Arc::new(Store::default_store()), reference: Reference::default(), pages: Vec::new(), names: &APP_PAGES };
         // In APP_PAGES order.
-        let pages: Vec<Box<dyn Page>> = vec![Box::new(app_themes::AppThemesPage::new()), Box::new(app_keys::AppKeysPage::new()), Box::new(mods::ModsPage::new())];
+        let pages: Vec<Box<dyn Page>> = vec![Box::new(app_keys::AppKeysPage::new()), Box::new(mods::ModsPage::new())];
         App::with(sh, pages, vec![true; APP_PAGES.len()], tab)
     }
 

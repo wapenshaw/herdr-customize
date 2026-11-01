@@ -511,14 +511,14 @@ fn default_card(b: &Builtin) -> Vec<Line<'static>> {
 }
 
 /// A palette's 16 colors in 8 cells: normal over bright.
-pub(super) fn swatch(look: Option<&Look>) -> Vec<Span<'static>> {
+fn swatch(look: Option<&Look>) -> Vec<Span<'static>> {
     match look {
         Some(look) => (0..8).map(|i| paint(&look.ansi[i + 8], &look.ansi[i], "▀")).collect(),
         None => vec![dim("unreadable")],
     }
 }
 
-pub(super) fn framed(title: Line<'static>, look: &Look, tokens: bool) -> Vec<Line<'static>> {
+fn framed(title: Line<'static>, look: &Look, tokens: bool) -> Vec<Line<'static>> {
     let t = &look.tokens;
     let get = |k: &str| t.get(k).cloned().unwrap_or_default();
     let mut lines = vec![title, Line::default()];
