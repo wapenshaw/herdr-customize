@@ -180,8 +180,9 @@ pub fn install_popup(key: Option<&str>) -> Result<Bound> {
     let dir = home().join("mods").join(MOD_NAME);
     fs::create_dir_all(&dir)?;
     let bin = serde_json::to_string(&exe.to_string_lossy())?;
-    fsutil::atomic_write(&dir.join("main.js"), include_str!("popup.js").replace("\"@BIN@\"", &bin).as_bytes(), 0o644)?;
-    fsutil::atomic_write(&dir.join("mod.json"), include_str!("popup.json").as_bytes(), 0o644)?;
+    let js = include_str!("../../app/mods/herdr-customize/main.js");
+    fsutil::atomic_write(&dir.join("main.js"), js.replace("\"@BIN@\"", &bin).as_bytes(), 0o644)?;
+    fsutil::atomic_write(&dir.join("mod.json"), include_str!("../../app/mods/herdr-customize/mod.json").as_bytes(), 0o644)?;
     check_mod(&dir)?;
     let action = format!("mod.open:{MOD_NAME}");
     let bindings = keys::load()?;
