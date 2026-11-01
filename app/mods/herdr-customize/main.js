@@ -21,7 +21,8 @@ const platform = () => window()?.platform;
 const chord = m => m.control || m.alt || m.platform;
 // The app's keymap outlives this screen, so the keys are bound once.
 let keysBound = false;
-const looksLikeRepo = text => /^[\w.-]+\/[\w.-]+(\/.*)?$/.test(text.trim());
+// The forms the program reviews: owner/repo[/folder], or a GitHub link to either.
+const looksLikeRepo = text => /^(https?:\/\/)?(github\.com\/)?[\w.-]+\/[\w.-]+(\/.*)?$/.test(text.trim());
 
 export default class Customize extends View {
   init(_props, cx) {

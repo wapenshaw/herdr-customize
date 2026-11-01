@@ -201,16 +201,31 @@ fn git(args: &[&str], timeout: Duration) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Clones spec (owner/repo, or owner/repo/folder) and plans each package in
+/// Clones spec (owner/repo, owner/repo/folder, or a GitHub link to either,
+/// such as github.com/owner/repo/tree/main/folder) and plans each package in
 /// it. Nothing is written to the home yet.
 pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
-    let spec = spec.trim().trim_start_matches("https://github.com/").trim_end_matches('/');
+    let spec = spec.trim();
+    let spec = spec.strip_prefix("https://").or_else(|| spec.strip_prefix("http://")).unwrap_or(spec);
+    let spec = spec.strip_prefix("github.com/").unwrap_or(spec).trim_end_matches('/');
     let m = SPEC.captures(spec).ok_or_else(|| anyhow!("{spec:?} is not owner/repo or owner/repo/folder"))?;
-    let (repo, want) = (m[1].trim_end_matches(".git").to_string(), m[2].trim_start_matches('/').to_string());
+    let (repo, mut want) = (m[1].trim_end_matches(".git").to_string(), m[2].trim_start_matches('/').to_string());
+    let branch = want.strip_prefix("tree/").map(|rest| rest.split_once('/').unwrap_or((rest, ""))).map(|(b, folder)| (b.to_string(), folder.to_string()));
+    if let Some((_, folder)) = &branch {
+        want = folder.clone();
+    }
     let dir = fsutil::temp_path(&std::env::temp_dir(), "herdr-customize-mod-");
     let checkout = Arc::new(Checkout(dir.clone()));
     let dir_text = dir.to_string_lossy();
     git(&["clone", "--depth", "1", "--quiet", "--no-tags", &format!("{}/{repo}", git_base()), &dir_text], Duration::from_secs(120)).with_context(|| format!("download {repo}"))?;
+    // Install and updates read the default branch, so a link to another one
+    // would review files that never get installed.
+    if let Some((b, _)) = &branch {
+        let head = git(&["-C", &dir_text, "rev-parse", "--abbrev-ref", "HEAD"], Duration::from_secs(10))?;
+        if *b != head {
+            bail!("{repo}: only its default branch, {head}, can be installed, not {b}");
+        }
+    }
     let commit = git(&["-C", &dir_text, "rev-parse", "HEAD"], Duration::from_secs(10))?;
     let installed = packages()?;
     let mut plans = Vec::new();
@@ -545,6 +560,13 @@ pub(crate) mod tests {
         let labels: Vec<String> = fetch("o/many").unwrap().iter().map(Plan::label).collect();
         assert_eq!(labels, ["o/many/a", "o/many/b"]);
         assert_eq!(fetch("https://github.com/o/many/b").unwrap().len(), 1);
+        // The link herdr.dev gives reviews; one to another branch would review
+        // files that install never takes.
+        let dir = base.join("o/many").to_string_lossy().to_string();
+        let head = String::from_utf8(Command::new("git").args(["-C", &dir, "rev-parse", "--abbrev-ref", "HEAD"]).output().unwrap().stdout).unwrap();
+        let plans = fetch(&format!("github.com/o/many/tree/{}/b", head.trim())).unwrap();
+        assert_eq!(plans.iter().map(Plan::label).collect::<Vec<_>>(), ["o/many/b"]);
+        assert!(fetch("https://github.com/o/many/tree/other/b").unwrap_err().to_string().contains("default branch"));
         assert!(fetch("o/many/c").is_err());
         assert!(fetch("not a repo").is_err());
     }

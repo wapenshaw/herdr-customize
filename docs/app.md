@@ -95,8 +95,10 @@ save. `app install` refuses a key a section that wins already takes.
 added by hand, and the ones the app ships; a layout opens on click.
 **Browse GitHub** searches repositories tagged `herdr-mod` or
 `herdr-layout`, by stars or by last update. Type `owner/repo`, or
-`owner/repo/folder` for one package of a repository that holds several, and
-press **Enter** to review it directly.
+`owner/repo/folder` for one package of a repository that holds several, or
+paste its GitHub link, such as the one herdr.dev gives, and press **Enter**
+to review it directly. A link to a branch other than the default one is
+refused, since installs and updates read the default branch.
 
 Nothing is written before a review, which shows what the package adds: its
 mods, layouts, themes and keys, and whether its code runs programs, reaches
