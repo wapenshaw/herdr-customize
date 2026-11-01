@@ -1,8 +1,8 @@
 // herdr-customize's screen in the Herdr app: themes, keys and mods. Every read
 // and write goes through the herdr-customize program (`app api`), so this file
 // keeps nothing worth saving.
-import { View, div, uniform_list } from "gpui-kit";
-import { h_flex, v_flex, InputState, Input, VirtualListScrollHandle, v_virtual_list } from "gpui-base";
+import { View, div, image, uniform_list } from "gpui-kit";
+import { h_flex, v_flex, InputState, Input, TextView, VirtualListScrollHandle, v_virtual_list } from "gpui-base";
 import { exec, home, appHome, theme, themes, settings, keys, commands, run, props, closeOverlay, window } from "herdr";
 
 // `herdr-customize app install` fills this in; a copy added by hand looks.
@@ -530,13 +530,14 @@ export default class Customize extends View {
 
   loadMarket(cx) {
     const args = ["market", "--topic", this.topic, "--sort", this.sort, "--page", String(this.page), "--query", value(this.marketSearch)];
-    this.task(cx, "Searching GitHub", args, data => { this.market = data; });
+    this.task(cx, "Reading GitHub", args, data => { this.market = data; });
   }
 
-  review(spec, cx) {
+  // from is the Browse row it came from, for the repository's stars.
+  review(spec, cx, from = null) {
     this.task(cx, `Reading ${spec}`, ["review", spec], data => {
       if (!data.plans.length) throw new Error(`${spec} has no mods, layouts or themes`);
-      this.reviewed = { plans: data.plans, at: 0, takeKeys: false, replaceEdits: false };
+      this.reviewed = { plans: data.plans, at: 0, takeKeys: false, replaceEdits: false, from };
       this.focusPage();
     });
   }
@@ -625,15 +626,21 @@ export default class Customize extends View {
         .child(div().w(8))
         .children(this.segment("sort", [["stars", "Stars"], ["updated", "Updated"]], this.sort, (sort, cx) => { this.sort = sort; go(1, cx); })))
       .child(v_flex().id("market").flex_1().min_h(0).overflow_y_scrollbar().gap(6)
-        .when(!m, el => el.child(this.empty(this.busy ? "Searching…" : "Press Enter to search.")))
+        .when(!m, el => el.child(this.empty(this.busy ? "Reading GitHub…" : "Press Enter to search.")))
         .when(Boolean(m) && !m.repos.length, el => el.child(this.empty("Nothing found.")))
-        .children((m?.repos ?? []).map((r, i) => h_flex().id(`repo-${i}`).p(11).gap(10).items_center().rounded(9).bg(t.surface)
-          .child(v_flex().flex_1().min_w(0).gap(3)
-            .child(h_flex().gap(8).items_center()
-              .child(div().text_size(12.5).font_semibold().child(r.name))
-              .child(div().text_size(11).text_color(t.dim).child(`★ ${r.stars}`)))
-            .when(Boolean(r.description), el => el.child(div().text_size(11.5).text_color(t.muted).text_ellipsis().whitespace_nowrap().child(r.description))))
-          .child(this.button(`review-${i}`, "Review", (_e, cx) => this.review(r.name, cx))))))
+        .children((m?.repos ?? []).map((r, i) => {
+          return h_flex().id(`repo-${i}`).p(10).gap(12).items_center().rounded(9).bg(t.surface).cursor_pointer().hover(s => s.bg(t.hover))
+            .on_click((_e, cx) => this.review(r.spec, cx, r))
+            .child(div().w(128).h(80).flex_none().rounded(6).overflow_hidden().bg(t.raised)
+              .when(Boolean(r.preview), el => el.child(image(r.preview).size_full())))
+            .child(v_flex().flex_1().min_w(0).gap(3)
+              .child(h_flex().gap(8).items_center()
+                .child(div().text_size(13.5).font_semibold().child(r.name))
+                .when(r.stars > 0, el => el.child(div().text_size(11).text_color(t.dim).child(`★ ${r.stars}`))))
+              .child(div().text_size(11).text_color(t.dim).child(`${r.owner} · ${r.spec}`))
+              .when(Boolean(r.blurb), el => el.child(div().text_size(11.5).text_color(t.muted).max_h(34).overflow_hidden().child(r.blurb))))
+            .child(this.button(`review-${i}`, "Review", (_e, cx) => this.review(r.spec, cx, r)));
+        })))
       .when(Boolean(m) && pages > 1, el => el.child(h_flex().gap(8).items_center().justify_center()
         .child(this.button("page-prev", "Previous", (_e, cx) => go(this.page - 1, cx), { enabled: this.page > 1 }))
         .child(div().text_size(11.5).text_color(t.muted).child(`Page ${this.page} of ${pages}`))
@@ -650,28 +657,49 @@ export default class Customize extends View {
       .child(div().size(14).rounded(3).border_1().border_color(t.border).bg(r[field] ? t.accent : t.input))
       .child(div().text_size(12).child(text));
     const blocked = p.taken.length > 0 || (p.edited.length > 0 && !r.replaceEdits);
-    return v_flex().id("review").flex_1().min_h(0).overflow_y_scrollbar().gap(10)
-      .child(h_flex().gap(8).items_center()
+    const folder = `https://github.com/${p.repo}${p.subdir ? `/tree/${p.branch}/${p.subdir}` : ""}`;
+    const line = `Read ~/.config/herdr-app/AGENTS.md, then add this ${p.mods.length || !p.layouts.length ? "mod" : "layout"}: ${folder}`;
+    // The title is in the header, and pictures beside the recipe can't load here.
+    const recipe = p.recipe.replace(/^# .*\n+/, "").replace(/!\[[^\]]*\]\((?![a-z]+:)[^)]*\)\s*/gi, "");
+    const blob = `https://github.com/${p.repo}/blob/${p.commit}/${p.subdir ? `${p.subdir}/` : ""}`;
+    const stars = r.from?.stars ?? 0;
+    return v_flex().flex_1().min_h(0).gap(12)
+      .child(h_flex().gap(10).items_center()
         .child(this.button("review-back", "Back", (_e, cx) => this.closeReview(cx)))
-        .child(div().text_size(18).font_semibold().child(p.label))
+        .child(div().text_size(20).font_semibold().child(p.title))
         .child(this.badge(p.update ? "update" : "new", p.update ? t.working : t.done))
-        .child(div().text_size(11).text_color(t.dim).child(p.commit.slice(0, 7))))
-      .when(r.plans.length > 1, el => el.child(h_flex().flex_wrap().gap(5).children(r.plans.map((q, i) => this.chip(`plan-${i}`, q.label, i === r.at, (_e, cx) => { r.at = i; cx.notify(); })))))
-      .when(Boolean(p.summary), el => el.child(div().text_size(12.5).text_color(t.muted).child(p.summary)))
-      .child(h_flex().gap(24).items_start()
-        .child(list("Mods", p.mods)).child(list("Layouts", p.layouts)).child(list("Themes", p.themes))
-        .child(list("Keys", p.keys.map(k => `${k.key} → ${k.action}`))))
-      .child(list("Its code", p.uses, t.working))
-      .when(p.key_clashes.length > 0, el => el
-        .child(list("Keys you already use", p.key_clashes.map(c => `${c.key} runs ${c.held} now; it wants ${c.action}`), t.working))
-        .child(check("take-keys", "takeKeys", "Give these keys to the package")))
-      .child(list("Already taken", p.taken.map(n => `${n} exists and is not from this package; remove it first`), t.blocked))
-      .when(p.edited.length > 0, el => el
-        .child(list("Files you changed", p.edited, t.working))
-        .child(check("replace-edits", "replaceEdits", "Replace my changes")))
-      .child(h_flex().gap(8).mt(4)
-        .child(this.button("install", p.update ? "Update" : "Install", (_e, cx) => this.install(cx), { primary: true, enabled: !blocked }))
-        .child(div().text_size(11).text_color(t.dim).child("Read what its code reaches before you install it; mods run with your permissions.")));
+        .child(div().text_size(11.5).text_color(t.dim).child(`${p.label} · ${p.commit.slice(0, 7)}`))
+        .when(stars > 0, el => el.child(div().text_size(11.5).text_color(t.dim).child(`★ ${stars}`)))
+        .child(div().flex_1())
+        .child(this.button("open-github", "View on GitHub", (_e, cx) => cx.open_url(folder))))
+      .when(r.plans.length > 1, el => el.child(h_flex().flex_wrap().gap(5).children(r.plans.map((q, i) => this.chip(`plan-${i}`, q.title, i === r.at, (_e, cx) => { r.at = i; cx.notify(); })))))
+      .child(h_flex().flex_1().min_h(0).gap(18).items_start()
+        .child(v_flex().id("review-doc").flex_1().min_w(0).h_full().overflow_y_scrollbar().gap(14).pr(8)
+          .when(Boolean(p.summary), el => el.child(div().text_size(13).text_color(t.muted).child(p.summary)))
+          .when(Boolean(p.preview), el => el.child(div().w_full().h(340).flex_none().rounded(10).overflow_hidden().bg(t.surface)
+            .child(image(p.preview).size_full())))
+          .when(Boolean(recipe.trim()), el => el.child(this.heading("Recipe"))
+            .child(div().text_size(13).text_color(t.foreground)
+              .child(TextView.markdown(`recipe-${p.label}`, recipe).selectable()
+                .on_link_click((url, cx) => cx.open_url(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : blob + url))))))
+        .child(v_flex().id("review-side").w(340).flex_none().h_full().overflow_y_scrollbar().gap(12).pr(10)
+          .child(list("Mods", p.mods)).child(list("Layouts", p.layouts)).child(list("Themes", p.themes))
+          .child(list("Keys", p.keys.map(k => `${k.key} → ${k.action}`)))
+          .child(list("Its code", p.uses, t.working))
+          .when(p.key_clashes.length > 0, el => el
+            .child(list("Keys you already use", p.key_clashes.map(c => `${c.key} runs ${c.held} now; it wants ${c.action}`), t.working))
+            .child(check("take-keys", "takeKeys", "Give these keys to the package")))
+          .child(list("Already taken", p.taken.map(n => `${n} exists and is not from this package; remove it first`), t.blocked))
+          .when(p.edited.length > 0, el => el
+            .child(list("Files you changed", p.edited, t.working))
+            .child(check("replace-edits", "replaceEdits", "Replace my changes")))
+          .child(this.button("install", p.update ? "Update" : "Install", (_e, cx) => this.install(cx), { primary: true, enabled: !blocked }))
+          .child(div().text_size(11).text_color(t.dim).child("Read what its code reaches before you install it; mods run with your permissions."))
+          .child(div().h(1).bg(t.border))
+          .child(this.heading("Or tell your agent"))
+          .child(div().text_size(11).text_color(t.dim).child("For a package whose recipe sets something up first, an agent in the app follows it."))
+          .child(div().p(10).rounded(7).bg(t.surface).font_family(String(settings().font_family ?? "monospace")).text_size(11.5).child(line))
+          .child(this.button("copy-line", "Copy", (_e, cx) => { cx.write_to_clipboard(line); this.notice = "Copied: paste it to an agent in the app."; cx.notify(); }))));
   }
 
   // Copied in by hand, the screen can't find the program it runs.

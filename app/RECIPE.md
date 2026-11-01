@@ -47,9 +47,11 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   key) and **Unbind**.
 - **Mods**: Installed (packages with **Check for update** and **Remove**,
   mods added by hand, the app's own) and Browse GitHub (a search box, Mods
-  or Layouts, Stars or Updated, pages of 20, **Review** on each). A review
-  lists what the package adds, what its code reaches, the keys it would
-  take, and **Install**.
+  or Layouts, Stars or Updated, 20 repositories a page, one card per
+  package: its picture, recipe title, stars, first paragraph and
+  **Review**). A review shows, on the left, the summary, picture and recipe;
+  on the right, what the package adds, what its code reaches, the keys it
+  would take, **Install**, and the agent line with **Copy**.
 - A strip at the bottom for the last notice, green, or error, red.
 
 ## How it behaves

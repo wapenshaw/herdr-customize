@@ -29,6 +29,8 @@ pub struct Repo {
     pub full_name: String,
     pub stars: u64,
     pub description: String,
+    /// When it last changed, to tell a fresh copy of it from a stale one.
+    pub pushed_at: String,
 }
 
 /// One page of a marketplace search.
@@ -77,6 +79,7 @@ fn search_at(base: &str, token: Option<String>, topic: &str, query: &str, sort: 
         full_name: String,
         stargazers_count: u64,
         description: Option<String>,
+        pushed_at: String,
     }
     // Error statuses come back as responses so the API's message can be shown.
     let mut resp = match req.config().timeout_global(Some(Duration::from_secs(20))).http_status_as_error(false).build().call() {
@@ -101,7 +104,7 @@ fn search_at(base: &str, token: Option<String>, topic: &str, query: &str, sort: 
             .items
             .into_iter()
             .filter(|i| SLUG.is_match(&i.full_name))
-            .map(|i| Repo { full_name: i.full_name, stars: i.stargazers_count, description: sanitize(&i.description.unwrap_or_default()) })
+            .map(|i| Repo { full_name: i.full_name, stars: i.stargazers_count, description: sanitize(&i.description.unwrap_or_default()), pushed_at: i.pushed_at })
             .collect(),
     })
 }

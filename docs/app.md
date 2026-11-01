@@ -9,7 +9,7 @@ touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |
-| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](screenshots/app-keys.png) | ![Mods: herdr-mod repositories on GitHub by stars, each with Review](screenshots/app-mods.png) |
+| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](screenshots/app-keys.png) | ![Mods: packages from herdr-mod repositories, each with its picture, name, stars and Review](screenshots/app-mods.png) |
 
 ## Set it up
 
@@ -94,19 +94,32 @@ save. `app install` refuses a key a section that wins already takes.
 **Installed** lists the packages installed from here, the mods and layouts
 added by hand, and the ones the app ships; a layout opens on click.
 **Browse GitHub** searches repositories tagged `herdr-mod` or
-`herdr-layout`, by stars or by last update. Type `owner/repo`, or
+`herdr-layout`, by stars or by last update, and lists each package in them
+the way herdr.dev's Mods page does: by its recipe's title, with its first
+paragraph and its `preview.png`. A package with a layout is listed under
+Layouts only, even when it brings mods for it. To find the packages, it
+clones each repository's file list alone (`git clone --filter=blob:none`)
+and reads only the recipes and pictures; that takes a few seconds per page
+the first time, and `data/herdr-customize/browse.json` keeps the result
+until the repository is pushed to. Type `owner/repo`, or
 `owner/repo/folder` for one package of a repository that holds several, or
 paste its GitHub link, such as the one herdr.dev gives, and press **Enter**
 to review it directly. A link to a branch other than the default one is
 refused, since installs and updates read the default branch.
 
-Nothing is written before a review, which shows what the package adds: its
+Nothing is installed before a review, which shows the package as herdr.dev
+does: its title, picture and recipe, **View on GitHub**, and the line to give
+an agent in the app instead, with **Copy**. Beside them, what it adds: its
 mods, layouts, themes and keys, and whether its code runs programs, reaches
-the network or reads and writes files. A name another package or you already
-use stops the install. A key you already use stays yours unless you tick
-**Give these keys to the package**. The install takes the commit you
-reviewed, or refuses if the repository moved on since, and each mod then
-goes through the app's own check.
+the network or reads and writes files. Pictures are kept in
+`data/herdr-customize/previews/`.
+
+![A review: the package's picture, summary and recipe on the left; what it adds, Install and the agent line on the right](screenshots/app-review.png)
+
+A name another package or you already use stops the install. A key you
+already use stays yours unless you tick **Give these keys to the package**.
+The install takes the commit you reviewed, or refuses if the repository
+moved on since, and each mod then goes through the app's own check.
 
 **Check for update** reviews a package again; one with files you changed
 asks first. **Remove** takes it away with the keys it added; files you

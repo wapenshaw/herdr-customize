@@ -3,6 +3,7 @@
 //! files and calls its CLI. See docs/app.md.
 
 pub mod api;
+pub mod crawl;
 pub mod keys;
 pub mod mods;
 pub mod themes;
@@ -41,6 +42,12 @@ pub fn home() -> PathBuf {
 /// each mod's data.
 pub fn state_dir() -> PathBuf {
     home().join("data").join(MOD_NAME)
+}
+
+/// A path in the app's home as the app's image() takes it: relative, with
+/// forward slashes.
+pub fn home_relative(path: &Path) -> String {
+    path.strip_prefix(home()).unwrap_or(path).to_string_lossy().replace('\\', "/")
 }
 
 /// The herdr-app executable: HERDR_APP_BIN, PATH, then where the app's
