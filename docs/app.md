@@ -4,7 +4,7 @@ The Herdr app (`herdr-app`) is a desktop window over terminals that
 herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
-opens a popup inside the app with two pages, Keys and Mods. It never
+adds a screen to the app with three pages: Themes, Keys and Mods. It never
 touches Herdr's `config.toml` from there.
 
 ## Set it up
@@ -22,9 +22,9 @@ Otherwise clone this repository and run `scripts/fetch-or-build.sh` (or
 `target/release/herdr-customize app install`.
 
 `app install` writes 26 well-known palettes, and the ones you added in
-Herdr, to the app's `themes` folder. It also writes a small mod,
-`mods/herdr-customize`, that opens the popup in a floating terminal, and
-binds **ctrl+shift+m** (**cmd+shift+m** on macOS) to it. A key already in
+Herdr, to the app's `themes` folder. It also writes a mod,
+`mods/herdr-customize`, that draws the screen with the app's own controls
+and colors, and binds **ctrl+shift+m** (**cmd+shift+m** on macOS) to it. A key already in
 use is never taken: pass another one, as in
 `herdr-customize app install alt-shift-c`. Run it again after moving the
 binary; it updates the mod and keeps the key.
@@ -36,10 +36,16 @@ installers put it, or at `HERDR_APP_BIN`.
 
 ## Themes
 
-Pick themes in the app's own **Settings > Look**, which lists every file in
-its `themes` folder, dark and light apart. The app keeps a dark and a light
-theme for each layout and shows the one that matches **Appearance**: a light
-theme picked while the system is dark shows only once Appearance is Light.
+Every palette, with a preview of a terminal in its colors. Type to filter,
+**↑**/**↓** to browse and **Enter** to use one. The app keeps a dark and a
+light theme for each layout and shows the one that matches **Appearance**,
+so a light theme picked while the system is dark shows only once it turns
+light; the page says so.
+
+The app's own **Settings > Look** lists the files in its `themes` folder.
+Settings draws every one each time it opens, and with all 112 palettes it
+fails with "This view could not be rendered", so herdr-customize writes only
+some there; using any other palette writes its file first.
 
 A theme from herdr-customize recolors the whole window. The app derives its
 backgrounds, accent and agent colors from any theme, but draws panel text
@@ -48,54 +54,56 @@ palette's own text color, with muted and dim shades of it that stay
 readable. An accent or sidebar color you set for a palette on Herdr's Themes
 page comes along.
 
-Settings draws every theme file each time it opens, and with all 112
-palettes it fails with "This view could not be rendered", so
-herdr-customize writes only some. `app apply <name>` writes any other one and
-shows it, and `app themes` writes the set again after you add a palette in
-Herdr. A theme file you edited, or one herdr-customize did not write, is
-left alone; `--force` replaces it. The record is
-`data/herdr-customize/themes.json`.
+`app themes` writes the set again after you add a palette in Herdr. A theme
+file you edited, or one herdr-customize did not write, is left alone;
+`--force` replaces it. The record is `data/herdr-customize/themes.json`.
 
 ## Keys
 
-`keys.json` by section, then the app's commands that no key runs yet.
-**Enter** changes a binding or binds a command, **n** adds one, **d**
-unbinds, and **o** opens the file in your editor.
+`keys.json` by section, then the app's commands that no key runs yet. Pick
+a binding to change or unbind it, or a command to give it a key; **Record**
+takes the next key you press. **New binding** starts an empty one.
 
 A section decides where a key counts: `terminal` wins over `layout:<name>`,
 which wins over `global`, and `mod:<name>` counts while that mod has focus.
 **◆** marks a key another section also binds. The form refuses a key the app
 cannot read and an action it does not know, and warns about a key that
 types text, one programs rely on (ctrl+c, d, l, r, w, a, e, u, k, z and [),
-and ctrl+alt, which is AltGr on Windows.
+and ctrl+alt, which is AltGr on Windows. Saving a key another binding holds
+replaces that binding, and the form says which before you save.
 
 ## Mods
 
-Mods and layouts installed from here, the ones added by hand, and the ones
-the app ships. **m** opens a marketplace of GitHub repositories tagged
-`herdr-mod` or `herdr-layout` (←/→ switches), and **i** installs from
-`owner/repo`, or `owner/repo/folder` for one package of a repository that
-holds several.
+**Installed** lists the packages installed from here, the mods and layouts
+added by hand, and the ones the app ships; a layout opens on click.
+**Browse GitHub** searches repositories tagged `herdr-mod` or
+`herdr-layout`, by stars or by last update. Type `owner/repo`, or
+`owner/repo/folder` for one package of a repository that holds several, and
+press **Enter** to review it directly.
 
 Nothing is written before a review, which shows what the package adds: its
 mods, layouts, themes and keys, and whether its code runs programs, reaches
 the network or reads and writes files. A name another package or you already
-use stops the install. A key you already use stays yours unless you press
-**k**. Each mod then goes through the app's own check.
+use stops the install. A key you already use stays yours unless you tick
+**Give these keys to the package**. The install takes the commit you
+reviewed, or refuses if the repository moved on since, and each mod then
+goes through the app's own check.
 
-**u** updates a package, asking first when you changed one of its files.
-**x** removes it with the keys it added; files you changed stay. The record
-is `data/herdr-customize/packages.json`. Downloads use `git`.
+**Check for update** reviews a package again; one with files you changed
+asks first. **Remove** takes it away with the keys it added; files you
+changed stay. The record is `data/herdr-customize/packages.json`. Downloads
+use `git`.
 
 ## Commands
 
 ```sh
-herdr-customize app ui [keys|mods]         # the popup, in any terminal
 herdr-customize app install [key]          # the themes, the mod and its key
 herdr-customize app themes [--force]       # the palettes to the app again
 herdr-customize app apply dracula-default  # show a theme in the app
 herdr-customize app reset                  # back to graphite and paper
 ```
 
-`--home DIR` before the command picks another app folder; the mod passes
-the app's own. `apply` and `reset` need the app open.
+`--home DIR` before the command picks another app folder; the screen passes
+the app's own. `apply` and `reset` need the app open. The screen reads and
+writes through `herdr-customize app api`, which prints JSON and is not meant
+to be typed.
