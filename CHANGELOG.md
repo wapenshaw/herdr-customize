@@ -4,6 +4,24 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.8.2](https://github.com/wapenshaw/herdr-customize/compare/v0.8.1...v0.8.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **app:** review a pasted github link ([87bc227](https://github.com/wapenshaw/herdr-customize/commit/87bc2270ff7bb9f3f2b85375f843543a430edbf6))
+* **app:** save a key on enter only when save would ([d445024](https://github.com/wapenshaw/herdr-customize/commit/d4450240e76f6d927935c76b4fc2f0c24fff719d))
+
+
+### Performance
+
+* **app:** start the program less from the screen ([b338f82](https://github.com/wapenshaw/herdr-customize/commit/b338f829af126955ebc084b047876c2cd090535c))
+
+
+### Refactoring
+
+* **app:** share the screen's repeated pieces ([02ec04a](https://github.com/wapenshaw/herdr-customize/commit/02ec04a957ff079d666a0ba4fe65cb9fb1bb9d3b))
+
 ## [0.8.1](https://github.com/wapenshaw/herdr-customize/compare/v0.8.0...v0.8.1) (2026-11-01)
 
 
