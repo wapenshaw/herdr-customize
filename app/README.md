@@ -1,13 +1,13 @@
 # Customize for the Herdr app
 
-Customize Herdr from one screen on **ctrl+shift+y** (**cmd+shift+y** on
-macOS): pick a theme with a live preview, change your keybindings, and find,
-review and install mods and layouts from GitHub, and set the shell and
-scrollback of the terminals. No config files to edit.
+Customize Herdr from one screen: pick a theme with a live preview, change
+your keybindings and get the new ones app updates leave out, find, review and
+install mods and layouts from GitHub, and set herdr-core's shell, scrollback
+and timeouts. No config files to edit.
 
-| Themes | Keys | Mods |
-| --- | --- | --- |
-| ![Themes: the palettes with a terminal drawn in the selected one's colors](../docs/screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](../docs/screenshots/app-keys.png) | ![Mods: packages from herdr-mod repositories, each with its picture, name, stars and Review](../docs/screenshots/app-mods.png) |
+| Themes | Keys | Mods | Core |
+| --- | --- | --- | --- |
+| ![Themes: the palettes with a terminal drawn in the selected one's colors](../docs/screenshots/app-themes.png) | ![Keys: the bindings, and a card offering the key the app's version ships that keys.json lacks](../docs/screenshots/app-keys.png) | ![Mods: packages from herdr-mod repositories, each with its picture, name, stars and Review](../docs/screenshots/app-mods.png) | ![Core: herdr-core's settings, with the shell open and its hints](../docs/screenshots/app-core.png) |
 
 ## Add it
 

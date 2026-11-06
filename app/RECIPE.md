@@ -1,11 +1,11 @@
 # Customize
 
-Customize Herdr from one screen on **ctrl+shift+y** (**cmd+shift+y** on
-macOS): pick a theme with a live preview, change your keybindings, and find,
-review and install mods and layouts from GitHub, and set the shell and
-scrollback of the terminals. No config files to edit.
+Customize Herdr from one screen: pick a theme with a live preview, change
+your keybindings and get the new ones app updates leave out, find, review and
+install mods and layouts from GitHub, and set herdr-core's shell, scrollback
+and timeouts. No config files to edit.
 
-![Customize: the Themes, Keys and Mods pages](preview.png)
+![Customize: the Themes, Keys, Mods and Core pages](preview.png)
 
 ## Before you add it
 
