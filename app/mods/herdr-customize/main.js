@@ -1,5 +1,5 @@
-// herdr-customize's screen in the Herdr app: themes, keys and mods. Every read
-// and write goes through the herdr-customize program (`app api`), so this file
+// herdr-customize's screen in the Herdr app: themes, keys, mods and the core's
+// settings. Every read and write goes through the herdr-customize program (`app api`), so this file
 // keeps nothing worth saving.
 import { View, div, image, uniform_list } from "gpui-kit";
 import { h_flex, v_flex, InputState, Input, TextView, VirtualListScrollHandle, v_virtual_list } from "gpui-base";
@@ -8,7 +8,7 @@ import { exec, home, appHome, theme, themes, settings, keys, commands, run, prop
 // `herdr-customize app install` fills this in; a copy added by hand looks.
 const BIN = "@BIN@";
 const REPO = "https://github.com/wapenshaw/herdr-customize";
-const TABS = [["themes", "Themes"], ["keys", "Keys"], ["mods", "Mods"]];
+const TABS = [["themes", "Themes"], ["keys", "Keys"], ["mods", "Mods"], ["core", "Core"]];
 const FILTERS = [["all", "All", () => true], ["dark", "Dark", r => !r.light], ["light", "Light", r => r.light], ["added", "In Settings", r => r.added]];
 const MODIFIER_KEYS = ["shift", "control", "ctrl", "alt", "platform", "cmd", "super", "fn", "function", "meta"];
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -71,6 +71,16 @@ export default class Customize extends View {
       else { this.page = 1; this.loadMarket(cx); }
     });
     this.reviewed = null;
+
+    this.core = null;
+    this.coreSel = "shell";
+    this.coreProblem = "";
+    this.coreInput = InputState.new({ placeholder: "" });
+    this.shellArgs = InputState.new({ placeholder: "" });
+    for (const input of [this.coreInput, this.shellArgs]) {
+      input.on("change", (_e, cx) => { this.coreProblem = ""; cx.notify(); });
+      input.on("submit", (_e, cx) => this.saveCore(cx));
+    }
 
     if (!keysBound) {
       try {
@@ -180,12 +190,13 @@ export default class Customize extends View {
     this.recording = false;
     this.focusPage();
     if (tab === "mods" && this.modView === "browse" && !this.market) this.loadMarket(cx);
+    if (tab === "core" && !this.core) this.load(cx, ["core"], (data, cx) => { this.core = data; this.pickCore(this.coreSel, cx); });
     cx.notify();
   }
 
   // A box that isn't drawn takes keys and gives none back, Tab included.
   focusPage() {
-    const box = { themes: this.themeSearch, keys: this.keySearch, mods: this.modView === "browse" && !this.reviewed ? this.marketSearch : null }[this.tab];
+    const box = { themes: this.themeSearch, keys: this.keySearch, mods: this.modView === "browse" && !this.reviewed ? this.marketSearch : null, core: this.core && this.coreSel !== "notes" ? this.coreInput : null }[this.tab];
     if (box) box.focus(); else this.handle.focus();
   }
 
@@ -714,6 +725,96 @@ export default class Customize extends View {
   }
 
   // Copied in by hand, the screen can't find the program it runs.
+  coreSetting() {
+    return this.core?.settings.find(s => s.key === this.coreSel);
+  }
+
+  // The inputs start from the saved value; a shell splits into its program
+  // and the arguments after it.
+  pickCore(key, cx) {
+    this.coreSel = key;
+    this.coreProblem = "";
+    const s = this.coreSetting();
+    if (s?.key === "shell") {
+      const argv = s.value ? JSON.parse(s.value) : [];
+      this.coreInput.set_value(argv[0] ?? "");
+      this.shellArgs.set_value(argv.slice(1).join(" "));
+    } else this.coreInput.set_value(s?.value ?? "");
+    this.focusPage();
+    cx.notify();
+  }
+
+  // Arguments split at spaces: a shell's own flags have none in them.
+  coreText() {
+    if (this.coreSel !== "shell") return value(this.coreInput);
+    const program = value(this.coreInput);
+    return program ? JSON.stringify([program, ...value(this.shellArgs).split(/\s+/).filter(Boolean)]) : "";
+  }
+
+  saveCore(cx, text = this.coreText()) {
+    const s = this.coreSetting();
+    if (!s) return;
+    if (!text) {
+      this.coreProblem = "Type a value, or use the default.";
+      cx.notify();
+      return;
+    }
+    this.task(cx, `Saving ${s.title.toLowerCase()}`, ["core-set", "--key", s.key, "--value", text], (data, cx) => {
+      this.core = data;
+      this.notice = `${s.title} saved; the core uses it the next time it needs it.`;
+      this.pickCore(s.key, cx);
+    });
+  }
+
+  resetCore(cx) {
+    const s = this.coreSetting();
+    this.task(cx, `Resetting ${s.title.toLowerCase()}`, ["core-set", "--key", s.key, "--default"], (data, cx) => {
+      this.core = data;
+      this.notice = `${s.title} is back to the default.`;
+      this.pickCore(s.key, cx);
+    });
+  }
+
+  corePage() {
+    const t = theme();
+    if (!this.core) return this.empty("Reading the core's settings…");
+    const s = this.coreSetting();
+    const hint = text => div().text_size(11).text_color(t.dim).child(text);
+    const shown = x => x.key === "shell" ? JSON.parse(x.value).join(" ") : x.key === "notes" ? (x.value === "false" ? "off" : "on") : x.value;
+    const rows = this.core.settings.map(x => h_flex().id(`core-${x.key}`).h(36).px(10).gap(10).items_center().rounded(6).cursor_pointer()
+      .bg(x.key === this.coreSel ? t.selected : t.popover).hover(st => st.bg(t.hover))
+      .on_click((_e, cx) => this.pickCore(x.key, cx))
+      .child(div().w(130).flex_none().text_size(12.5).text_color(t.foreground).child(x.title))
+      .child(div().flex_1().min_w(0).text_size(12).whitespace_nowrap().text_ellipsis().text_color(x.value ? t.muted : t.dim).child(x.value ? shown(x) : `default: ${x.default}`)));
+    const detail = v_flex().flex_1().min_w(0).gap(10)
+      .child(div().text_size(18).font_semibold().child(s.title))
+      .child(div().text_size(12).text_color(t.muted).child(s.about));
+    if (s.key === "notes") {
+      const on = s.value === "false" ? "false" : "true";
+      detail.child(h_flex().gap(6).children(this.segment("notes", [["true", "On"], ["false", "Off"]], on, (v, cx) => this.saveCore(cx, v))));
+    } else if (s.key === "shell") {
+      // PowerShell is the core's default on Windows, with a hook that follows the
+      // shell's folder, so picking it clears the setting rather than naming it.
+      const powershell = platform() === "windows" ? [this.chip("shell-default", "PowerShell", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
+      detail.child(h_flex().gap(6).flex_wrap().children([...powershell, ...this.core.shells.map((sh, i) =>
+        this.chip(`shell-${i}`, sh.name, s.value === JSON.stringify(sh.argv), (_e, cx) => this.saveCore(cx, JSON.stringify(sh.argv))))]))
+        .child(v_flex().gap(5).child(this.label("Program")).child(this.input(this.coreInput)).child(hint(s.hint)))
+        .child(v_flex().gap(5).child(this.label("Arguments")).child(this.input(this.shellArgs))
+          .child(hint("Split at spaces, like --login -i for Git Bash, or -l for a login shell. Leave empty for none.")));
+    } else {
+      detail.child(v_flex().gap(5).child(this.input(this.coreInput)).child(hint(s.hint)).child(hint(`Default: ${s.default}`)));
+    }
+    return this.split(420, [
+      v_flex().gap(4).children(rows),
+      div().text_size(11).text_color(t.dim).child(`Saved to ${this.core.path}. The core reads it each time it needs a setting, so nothing restarts.`),
+    ], detail
+      .when(Boolean(this.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.core.error)))
+      .when(Boolean(this.coreProblem), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.coreProblem)))
+      .child(h_flex().gap(8).mt(4)
+        .when(s.key !== "notes", el => el.child(this.button("core-save", "Save", (_e, cx) => this.saveCore(cx), { primary: true })))
+        .when(Boolean(s.value), el => el.child(this.button("core-default", `Use the default (${s.default})`, (_e, cx) => this.resetCore(cx))))));
+  }
+
   missing() {
     const t = theme();
     const windows = platform() === "windows";
@@ -737,7 +838,7 @@ export default class Customize extends View {
   render() {
     const t = theme();
     const page = this.bin === null ? this.missing()
-      : { themes: () => this.themesPage(), keys: () => this.keysPage(), mods: () => this.modsPage() }[this.tab]();
+      : { themes: () => this.themesPage(), keys: () => this.keysPage(), mods: () => this.modsPage(), core: () => this.corePage() }[this.tab]();
     return v_flex().size_full().min_h(0).bg(t.popover).text_color(t.foreground)
       .key_context("Customize")
       .on_action("customize.next_screen", (_e, cx) => this.stepTab(1, cx))

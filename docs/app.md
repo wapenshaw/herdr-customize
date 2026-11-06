@@ -4,8 +4,8 @@ The Herdr app (`herdr-app`) is a desktop window over terminals that
 herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
-adds a screen to the app with three pages: Themes, Keys and Mods. It never
-touches Herdr's `config.toml` from there.
+adds a screen to the app with four pages: Themes, Keys, Mods and Core. It
+never touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |
@@ -56,6 +56,9 @@ Every palette, with a preview of a terminal in its colors. Type to filter,
 light theme for each layout and shows the one that matches **Appearance**,
 so a light theme picked while the system is dark shows only once it turns
 light; the page says so.
+
+The core hands the new colors to the programs in the app's terminals, and
+ones that follow the terminal's colors, such as Neovim, change with it.
 
 The app's own **Settings > Look** lists the files in its `themes` folder.
 Settings draws every one each time it opens, and with all 112 palettes it
@@ -129,6 +132,28 @@ reviews a package again; one with files you changed
 asks first. **Remove** takes it away with the keys it added; files you
 changed stay. The record is `data/herdr-customize/packages.json`. Downloads
 use `git`.
+
+## Core
+
+The terminals live in herdr-core, which keeps its own settings in
+`config.toml` beside its other files: `%APPDATA%\herdr-core` on Windows,
+`~/.config/herdr-core` elsewhere, or under `XDG_CONFIG_HOME` when it is set.
+The Core page edits that file: the shell new terminals start, scrollback,
+agent notes and their delay, how long `hc wait` and other machines get, the
+key that leaves `hc attach`, and the size of a terminal nobody is watching.
+
+![Core: the core's settings, with the shells found on this machine](screenshots/app-core.png)
+
+The core reads the file each time it needs a setting, so a change takes
+effect without a restart, and running terminals keep their shell. A file it
+cannot read means all its defaults, so the page checks each value as the
+core would and refuses one it would not take; a file that is already broken
+is shown and left alone. **Shell** offers the shells found on this machine:
+PowerShell, Git Bash, Nushell and WSL on Windows, or those in `/etc/shells`.
+PowerShell is the core's default there, with a hook that lets the core follow
+the shell's folder, so picking it clears the setting rather than naming it. `socket` is left out: moving it leaves
+clients looking for the core in the old place. The page edits this machine's
+file only; the others keep theirs.
 
 ## Commands
 

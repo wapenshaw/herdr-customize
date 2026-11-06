@@ -2,7 +2,8 @@
 
 Customize Herdr from one screen on **ctrl+shift+y** (**cmd+shift+y** on
 macOS): pick a theme with a live preview, change your keybindings, and find,
-review and install mods and layouts from GitHub. No config files to edit.
+review and install mods and layouts from GitHub, and set the shell and
+scrollback of the terminals. No config files to edit.
 
 ![Customize: the Themes, Keys and Mods pages](preview.png)
 
@@ -12,7 +13,7 @@ This mod is the screen of the herdr-customize program and does nothing
 without it, so set up the program instead of copying the files. Tell the
 person first: the mod runs that program, which searches GitHub, clones the
 repositories they review, and writes the app's `themes/`, `keys.json`,
-`mods/` and `layouts/`.
+`mods/` and `layouts/`, and herdr-core's `config.toml`.
 
 ```sh
 git clone --depth 1 https://github.com/wapenshaw/herdr-customize ~/.local/share/herdr-customize
@@ -31,7 +32,7 @@ taken (`app install alt-shift-c` picks another), writes 26 palettes to
 
 An overlay of 86% of the window each way, in the theme's `popover` color.
 
-- **Header**, 52px: "Customize", the three pages as a segmented control, the
+- **Header**, 52px: "Customize", the four pages as a segmented control, the
   running task's name while one runs, and **Close**.
 - **Themes**: on the left, 300px wide, a search box, the filters All, Dark,
   Light and In Settings, and a list of 34px rows with a swatch of the
@@ -51,6 +52,11 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   **Review**). A review shows, on the left, the summary, picture and recipe;
   on the right, what the package adds, what its code reaches, the keys it
   would take, **Install**, and the agent line with **Copy**.
+- **Core**: on the left, 420px wide, herdr-core's settings, each with its
+  value or its default, and the file's path. On the right, the setting's
+  title and description, then chips of the shells found here with Program
+  and Arguments for Shell, On and Off for Agent notes, or one input, then
+  **Save** and **Use the default** when it is set.
 - A strip at the bottom for the last notice, green, or error, red.
 
 ## How it behaves
@@ -81,7 +87,7 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - Every read and write is `herdr-customize app --home <appHome()> api
   <command>`, which prints JSON: `palettes`, `theme-write`, `key-check`,
   `key-set`, `key-remove`, `packages`, `market`, `review`, `install`,
-  `remove`. `src/app/api.rs` in this repository is the reference.
+  `remove`, `core`, `core-set`. `src/app/api.rs` in this repository is the reference.
 
 ## Watch out
 
@@ -96,11 +102,13 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - A fixed overlay size is not shrunk to a small window, whose header then
   falls outside it.
 - The app's `PATH` can be shorter than a shell's.
+- herdr-core treats a `config.toml` it cannot read as no file, so check each
+  value before writing it.
 
 ## Done when
 
 - The key opens it and typing filters the themes at once.
-- Tab goes Themes, Keys, Mods and back to Themes from every page, and
+- Tab goes Themes, Keys, Mods, Core and back to Themes from every page, and
   Shift+Tab the other way.
 - Enter on a theme changes the app's theme for that slot.
 - Picking `alt-1` shows "Show a space (by position or id)." under Action.
