@@ -123,7 +123,9 @@ already use stays yours unless you tick **Give these keys to the package**.
 The install takes the commit you reviewed, or refuses if the repository
 moved on since, and each mod then goes through the app's own check.
 
-**Check for update** reviews a package again; one with files you changed
+This screen is listed first, as Customize with the program's version; it
+updates with herdr-customize rather than as a package. **Check for update**
+reviews a package again; one with files you changed
 asks first. **Remove** takes it away with the keys it added; files you
 changed stay. The record is `data/herdr-customize/packages.json`. Downloads
 use `git`.

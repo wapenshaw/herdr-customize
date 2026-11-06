@@ -606,7 +606,13 @@ export default class Customize extends View {
     const shipped = p.shipped.map(s => s.startsWith("layout:") ? ["layout", s.slice(7)] : ["mod", s]);
     return v_flex().id("installed").flex_1().min_h(0).overflow_y_scrollbar().gap(8)
       .child(this.heading("Installed here"))
-      .when(!p.installed.length, el => el.child(this.empty("Nothing yet. Browse GitHub to find mods and layouts.")))
+      // This screen updates with the program, not as a package, so it has no buttons of its own.
+      .child(h_flex().id("pkg-self").p(12).gap(10).items_center().rounded(9).bg(t.surface)
+        .child(v_flex().flex_1().min_w(0).gap(4)
+          .child(div().text_size(13).font_semibold().child("Customize"))
+          .child(div().text_size(11.5).text_color(t.muted).child(`This screen · herdr-customize ${p.version ?? ""} · updates with the program`)))
+        .child(this.button("self-releases", "What's new", (_e, cx) => cx.open_url(`${REPO}/releases`), { always: true })))
+      .when(!p.installed.length, el => el.child(this.empty("No packages from GitHub yet. Browse GitHub to find mods and layouts.")))
       .children(p.installed.map((pkg, i) => h_flex().id(`pkg-${i}`).p(12).gap(10).items_center().rounded(9).bg(t.surface)
         .child(v_flex().flex_1().min_w(0).gap(4)
           .child(div().text_size(13).font_semibold().child(pkg.label))

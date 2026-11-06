@@ -159,7 +159,7 @@ fn packages() -> Result<Value> {
         .map(|p| json!({ "repo": p.repo, "subdir": p.subdir, "label": p.label(), "commit": p.commit, "mods": p.mods, "layouts": p.layouts, "themes": p.themes, "keys": p.keys }))
         .collect();
     let added: Vec<Value> = mods::others(&packages).into_iter().map(|(kind, name)| json!({ "kind": if kind == Kind::Mod { "mod" } else { "layout" }, "name": name })).collect();
-    Ok(json!({ "installed": installed, "added": added, "shipped": super::shipped() }))
+    Ok(json!({ "installed": installed, "added": added, "shipped": super::shipped(), "version": env!("CARGO_PKG_VERSION") }))
 }
 
 fn market(a: &Args) -> Result<Value> {
@@ -283,6 +283,7 @@ mod tests {
         let reply = call(&["install", "--repo", "o/board", "--subdir", "", "--commit", plan["commit"].as_str().unwrap()]).unwrap();
         assert_eq!(reply["checks"][0]["name"], "board");
         assert_eq!(call(&["packages"]).unwrap()["installed"][0]["label"], "o/board");
+        assert_eq!(call(&["packages"]).unwrap()["version"], env!("CARGO_PKG_VERSION"), "the screen lists itself with it");
         call(&["remove", "--repo", "o/board"]).unwrap();
         assert!(!home().join("mods/board/main.js").exists());
         let _ = fs::remove_dir_all(home());
