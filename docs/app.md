@@ -85,7 +85,9 @@ which wins over `global`, and `mod:<name>` counts while that mod has focus.
 cannot read and an action it does not know, and warns about a key that
 types text, one programs rely on (ctrl+c, d, l, r, w, a, e, u, k, z and [),
 ctrl+alt, which is AltGr on Windows, and a key a section that wins already
-takes, as `terminal` takes ctrl+shift+c to copy. Saving a key another
+takes, as `terminal` takes ctrl+shift+c to copy. A binding with typed arguments, such as
+`{"command": "layout.resize", "args": {"id": "sidebar", "px": 240}}`, shows
+and is edited as that JSON. Saving a key another
 binding holds replaces that binding, and the form says which before you
 save. `app install` refuses a key a section that wins already takes.
 

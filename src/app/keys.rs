@@ -24,16 +24,34 @@ pub struct Binding {
 
 /// Every binding, in the file's order.
 pub fn load() -> Result<Vec<Binding>> {
+    Ok(bindings(read_object(&path())?))
+}
+
+/// The bindings in a keys.json's sections. An object binding's action is its
+/// JSON text, as the app's keys() reports it.
+pub fn bindings(sections: Map<String, Value>) -> Vec<Binding> {
     let mut out = Vec::new();
-    for (section, keys) in read_object(&path())? {
+    for (section, keys) in sections {
         let Value::Object(keys) = keys else { continue };
         for (key, action) in keys {
-            if let Value::String(action) = action {
-                out.push(Binding { section: section.clone(), key, action });
-            }
+            let action = match action {
+                Value::String(action) => action,
+                Value::Object(_) => action.to_string(),
+                _ => continue,
+            };
+            out.push(Binding { section: section.clone(), key, action });
         }
     }
-    Ok(out)
+    out
+}
+
+/// An action as keys.json holds it: an object binding's JSON text goes back
+/// as the object.
+fn action_value(action: &str) -> Value {
+    match serde_json::from_str(action) {
+        Ok(Value::Object(o)) => Value::Object(o),
+        _ => Value::String(action.into()),
+    }
 }
 
 /// Applies edit to keys.json under a lock, keeping a daily backup. The app
@@ -64,7 +82,7 @@ pub fn set(section: &str, old: Option<&str>, key: &str, action: &str) -> Result<
         for (k, v) in std::mem::take(keys) {
             if Some(k.as_str()) == old || k == key {
                 if !placed {
-                    out.insert(key.into(), Value::String(action.into()));
+                    out.insert(key.into(), action_value(action));
                     placed = true;
                 }
                 continue;
@@ -72,7 +90,7 @@ pub fn set(section: &str, old: Option<&str>, key: &str, action: &str) -> Result<
             out.insert(k, v);
         }
         if !placed {
-            out.insert(key.into(), Value::String(action.into()));
+            out.insert(key.into(), action_value(action));
         }
         *keys = out;
         Ok(())
@@ -177,10 +195,26 @@ pub fn action_problem(action: &str, commands: &[AppCommand], mods: &[String]) ->
     if action.is_empty() {
         return Some("an action is required".into());
     }
-    if action == "terminal" || action.starts_with("send:") || commands.is_empty() {
+    let name = if action.starts_with('{') {
+        let Ok(Value::Object(o)) = serde_json::from_str::<Value>(action) else { return Some("not a JSON object".into()) };
+        if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "command" | "args")) {
+            return Some(format!("unknown field {k:?}; an object binding has command and args"));
+        }
+        if o.get("args").is_some_and(|a| !a.is_object()) {
+            return Some("args must be an object".into());
+        }
+        match o.get("command") {
+            Some(Value::String(c)) => c.clone(),
+            _ => return Some("command must name a command".into()),
+        }
+    } else if action == "terminal" || action.starts_with("send:") {
+        return None;
+    } else {
+        action.split_once(':').map_or(action, |(n, _)| n).to_string()
+    };
+    if commands.is_empty() {
         return None;
     }
-    let name = action.split_once(':').map_or(action, |(n, _)| n);
     if commands.iter().any(|c| c.name == name) {
         return None;
     }
@@ -236,6 +270,27 @@ mod tests {
         assert!(action_problem("tab.nope", &commands, &mods).is_some());
         assert!(action_problem("", &commands, &mods).is_some());
         assert_eq!(action_problem("anything", &[], &mods), None, "unknown without the list");
+        assert_eq!(action_problem(r#"{"command":"tab.new","args":{"name":"x"}}"#, &commands, &mods), None);
+        assert!(action_problem(r#"{"command":"tab.nope"}"#, &commands, &mods).unwrap().contains("tab.nope"));
+        for bad in [r#"{"command":"tab.new","extra":1}"#, r#"{"command":"tab.new","args":[]}"#, r#"{"args":{}}"#, "{nope"] {
+            assert!(action_problem(bad, &[], &mods).is_some(), "{bad}");
+        }
+    }
+
+    // A binding with typed arguments is listed, and moving its key keeps it an
+    // object; written back as a string, the app would refuse it.
+    #[test]
+    fn object_bindings_stay_objects() {
+        let _guard = crate::ui::tests::isolated();
+        let _ = std::fs::remove_dir_all(home());
+        std::fs::create_dir_all(home()).unwrap();
+        std::fs::write(path(), r#"{"global":{"ctrl-shift-r":{"command":"layout.resize","args":{"id":"sidebar","px":240}}}}"#).unwrap();
+        let action = load().unwrap()[0].action.clone();
+        assert_eq!(action, r#"{"command":"layout.resize","args":{"id":"sidebar","px":240}}"#);
+        set("global", Some("ctrl-shift-r"), "alt-r", &action).unwrap();
+        let file: Value = serde_json::from_str(&std::fs::read_to_string(path()).unwrap()).unwrap();
+        assert_eq!(file["global"]["alt-r"]["args"]["px"], 240);
+        let _ = std::fs::remove_dir_all(home());
     }
 
     // Edits keep every other binding where it was, and a renamed key keeps
