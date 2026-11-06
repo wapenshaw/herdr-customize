@@ -9,7 +9,7 @@ never touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |
-| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: a binding open in the form, with its command's description](screenshots/app-keys.png) | ![Mods: packages from herdr-mod repositories, each with its picture, name, stars and Review](screenshots/app-mods.png) |
+| ![Themes: the palettes with a terminal drawn in the selected one's colors](screenshots/app-themes.png) | ![Keys: the bindings, and a card offering the key the app's version ships that keys.json lacks](screenshots/app-keys.png) | ![Mods: packages from herdr-mod repositories, each with its picture, name, stars and Review](screenshots/app-mods.png) |
 
 ## Set it up
 
