@@ -44,7 +44,9 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   commands that no key runs. On the right, a form: Key with **Record**,
   Action with the command's description, Section, then errors in red,
   warnings in amber, and **Save** (**Replace** when another binding holds the
-  key) and **Unbind**.
+  key) and **Unbind**. With no binding picked, a card lists the keys the
+  app's version ships that `keys.json` lacks, with **Add them** and
+  **Dismiss**.
 - **Mods**: Installed (packages with **Check for update** and **Remove**,
   mods added by hand, the app's own) and Browse GitHub (a search box, Mods
   or Layouts, Stars or Updated, 20 repositories a page, one card per
@@ -86,7 +88,8 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - Commands: `app.theme`, `app.settings`, `mod.open`, `layout.switch`.
 - Every read and write is `herdr-customize app --home <appHome()> api
   <command>`, which prints JSON: `palettes`, `theme-write`, `key-check`,
-  `key-set`, `key-remove`, `packages`, `market`, `review`, `install`,
+  `key-set`, `key-remove`, `key-shipped`, `key-shipped-add`,
+  `key-shipped-dismiss`, `packages`, `market`, `review`, `install`,
   `remove`, `core`, `core-set`. `src/app/api.rs` in this repository is the reference.
 
 ## Watch out
@@ -104,6 +107,8 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - The app's `PATH` can be shorter than a shell's.
 - herdr-core treats a `config.toml` it cannot read as no file, so check each
   value before writing it.
+- The app upgrades only a `keys.json` that is byte for byte one it shipped;
+  any edit, this mod's own key included, stops its new keys arriving.
 
 ## Done when
 

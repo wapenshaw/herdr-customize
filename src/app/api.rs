@@ -85,6 +85,9 @@ fn run(args: &[String]) -> Result<Value> {
             super::core_config::set(a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
             Ok(super::core_config::describe())
         }
+        "key-shipped" => key_shipped(""),
+        "key-shipped-add" => key_shipped("add"),
+        "key-shipped-dismiss" => key_shipped("dismiss"),
         "packages" => packages(),
         "market" => market(&a),
         "review" => review(&a),
@@ -188,6 +191,18 @@ fn review(a: &Args) -> Result<Value> {
         out.push(v);
     }
     Ok(json!({ "plans": out }))
+}
+
+/// The app's version and its shipped keys keys.json lacks, after change.
+fn key_shipped(change: &str) -> Result<Value> {
+    let version = super::version()?;
+    match change {
+        "add" => keys::add_shipped(&version)?,
+        "dismiss" => keys::dismiss_shipped(&version)?,
+        _ => {}
+    }
+    let fresh = keys::new_shipped(&version)?;
+    Ok(json!({ "version": version, "keys": fresh.iter().map(binding_json).collect::<Vec<_>>() }))
 }
 
 fn binding_json(b: &Binding) -> Value {
