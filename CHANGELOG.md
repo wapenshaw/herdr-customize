@@ -4,6 +4,14 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.8.4](https://github.com/wapenshaw/herdr-customize/compare/v0.8.3...v0.8.4) (2026-11-06)
+
+
+### Bug Fixes
+
+* **app:** give the screen's calls up to ten minutes ([1793eda](https://github.com/wapenshaw/herdr-customize/commit/1793edadcaab74cd0e6ae02f794a2580173007f3))
+* **app:** list and keep key bindings that take arguments ([fb483f6](https://github.com/wapenshaw/herdr-customize/commit/fb483f67e6e09680a1e046467933197cff54bdd8))
+
 ## [0.8.3](https://github.com/wapenshaw/herdr-customize/compare/v0.8.2...v0.8.3) (2026-11-01)
 
 
