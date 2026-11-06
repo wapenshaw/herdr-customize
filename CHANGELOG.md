@@ -4,6 +4,19 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.9.0](https://github.com/wapenshaw/herdr-customize/compare/v0.8.4...v0.9.0) (2026-11-06)
+
+
+### Features
+
+* **app:** set herdr-core's settings on a Core page ([2f2079c](https://github.com/wapenshaw/herdr-customize/commit/2f2079c9fac0951984c27f686ec435e32cf4de98))
+
+
+### Bug Fixes
+
+* **app:** list this screen among the installed mods ([5ceb8e7](https://github.com/wapenshaw/herdr-customize/commit/5ceb8e784fcec5872e55bcfa9110d795446bf50e))
+* **app:** offer the keys a new app version ships ([4c53f20](https://github.com/wapenshaw/herdr-customize/commit/4c53f2043b0bc68059e79595378ffd59803c32ef))
+
 ## [0.8.4](https://github.com/wapenshaw/herdr-customize/compare/v0.8.3...v0.8.4) (2026-11-06)
 
 
