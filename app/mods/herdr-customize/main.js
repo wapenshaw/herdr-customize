@@ -57,6 +57,7 @@ export default class Customize extends View {
     this.check = null;
     this.checkSeq = 0;
     this.recording = false;
+    this.shipped = null;
 
     this.modView = "installed";
     this.packages = null;
@@ -191,6 +192,7 @@ export default class Customize extends View {
     this.focusPage();
     if (tab === "mods" && this.modView === "browse" && !this.market) this.loadMarket(cx);
     if (tab === "core" && !this.core) this.load(cx, ["core"], (data, cx) => { this.core = data; this.pickCore(this.coreSel, cx); });
+    if (tab === "keys" && !this.shipped) this.loadShipped(cx);
     cx.notify();
   }
 
@@ -497,6 +499,39 @@ export default class Customize extends View {
     });
   }
 
+  // The app stops adding its new keys once keys.json is edited, so this offers
+  // them. Offline, or with an app the program can't ask, it offers nothing.
+  loadShipped(cx) {
+    this.shipped = { keys: [] };
+    cx.spawn(async cx => {
+      try { this.shipped = await this.call(["key-shipped"]); } catch { return; }
+      cx.notify();
+    });
+  }
+
+  changeShipped(cx, change) {
+    const n = this.shipped.keys.length;
+    this.task(cx, change === "add" ? "Adding the keys" : "Dismissing", [`key-shipped-${change}`], data => {
+      this.shipped = data;
+      this.notice = change === "add" ? `${n === 1 ? "The key is" : `${n} keys are`} in keys.json.` : "Those keys won't be offered again.";
+    });
+  }
+
+  shippedCard() {
+    const t = theme();
+    const s = this.shipped;
+    const n = s.keys.length;
+    return v_flex().id("shipped-keys").p(12).gap(8).rounded(9).bg(t.surface)
+      .child(div().text_size(13).font_semibold().child(`Herdr app ${s.version} has ${n === 1 ? "a key" : `${n} keys`} you don't have`))
+      .child(div().text_size(11.5).text_color(t.muted).child("The app adds its new keys only to a keys.json nobody has changed."))
+      .children(s.keys.map((k, i) => h_flex().id(`shipped-${i}`).gap(10).text_size(12)
+        .child(div().w(150).flex_none().child(k.key))
+        .child(div().flex_1().min_w(0).text_color(t.muted).whitespace_nowrap().text_ellipsis().child(k.section === "global" ? k.action : `${k.action} · ${k.section}`))))
+      .child(h_flex().gap(8)
+        .child(this.button("shipped-add", n === 1 ? "Add it" : "Add them", (_e, cx) => this.changeShipped(cx, "add"), { primary: true }))
+        .child(this.button("shipped-dismiss", "Dismiss", (_e, cx) => this.changeShipped(cx, "dismiss"))));
+  }
+
   keysPage() {
     const t = theme();
     const rows = this.keyRows();
@@ -517,6 +552,7 @@ export default class Customize extends View {
       h_flex().gap(8).child(div().flex_1().child(this.input(this.keySearch))).child(this.button("new-key", "New binding", (_e, cx) => this.newKey(cx))),
       v_flex().flex_1().min_h(0).child(list),
     ], this.form ? this.keyForm() : v_flex().flex_1().gap(10)
+      .when(this.shipped?.keys.length > 0, el => el.child(this.shippedCard()))
       .child(this.empty("Pick a binding to change it, or a command without a key to give it one."))
       .child(div().text_size(11).text_color(t.dim).child("Keys are saved to keys.json, and the app picks them up at once.")));
   }

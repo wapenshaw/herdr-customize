@@ -124,6 +124,12 @@ pub fn commands() -> Result<Vec<AppCommand>> {
     serde_json::from_str(&text).context("herdr-app commands")
 }
 
+/// The app's version, such as "0.1.13". It needs no open window.
+pub fn version() -> Result<String> {
+    let text = output(&["--version".into()], Duration::from_secs(10))?;
+    text.split_whitespace().last().map(str::to_owned).ok_or_else(|| anyhow!("herdr-app --version printed nothing"))
+}
+
 /// Loads a mod once in the app's checker and reports what is wrong with it.
 pub fn check_mod(dir: &Path) -> Result<()> {
     output(&["check".into(), dir.to_string_lossy().into_owned()], Duration::from_secs(30)).map(drop)

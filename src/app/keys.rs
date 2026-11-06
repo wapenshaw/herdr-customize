@@ -3,11 +3,13 @@
 //! mod has focus.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Map, Value};
 
-use super::{AppCommand, home, read_object, state_dir};
+use super::{AppCommand, home, read_object, read_record, state_dir, write_record};
+use crate::config::env;
 use crate::fsutil;
 
 pub fn path() -> PathBuf {
@@ -103,6 +105,67 @@ pub fn remove(section: &str, key: &str) -> Result<()> {
         section_mut(map, section)?.retain(|k, _| k != key);
         Ok(())
     })
+}
+
+/// The shipped keys file for this OS in the app's repository.
+const SHIPPED_FILE: &str = if cfg!(target_os = "macos") { "keys.macos.json" } else { "keys.json" };
+
+/// Shipped keys the person turned down, as section, key and action.
+const DISMISSED: &str = "keys-dismissed.json";
+
+/// The keys the app at version ships. A tag never changes, so the file is
+/// fetched once and kept with the other records.
+fn shipped(version: &str) -> Result<Vec<Binding>> {
+    let cache = state_dir().join(format!("shipped-{version}-{SHIPPED_FILE}"));
+    if let Ok(Value::Object(map)) = std::fs::read_to_string(&cache).map_err(anyhow::Error::from).and_then(|t| Ok(serde_json::from_str(&t)?)) {
+        return Ok(bindings(map));
+    }
+    let base = env("HERDR_CUSTOMIZE_RAW_BASE").unwrap_or_else(|| "https://raw.githubusercontent.com".into());
+    let url = format!("{base}/herdrdev/herdr-app/v{version}/defaults/{SHIPPED_FILE}");
+    let text = ureq::get(&url).config().timeout_global(Some(Duration::from_secs(5))).build().call().with_context(|| url.clone())?.body_mut().read_to_string()?;
+    let Value::Object(map) = serde_json::from_str(&text).with_context(|| url.clone())? else { bail!("{url} is not a JSON object") };
+    std::fs::create_dir_all(state_dir())?;
+    fsutil::atomic_write(&cache, text.as_bytes(), 0o644)?;
+    Ok(bindings(map))
+}
+
+/// The shipped keys the person's file lacks. One whose key or action the file
+/// already uses is left out, so a key moved or removed on purpose stays so.
+fn missing(shipped: &[Binding], current: &[Binding]) -> Vec<Binding> {
+    let taken = |s: &Binding| current.iter().any(|c| c.action == s.action || (c.section == s.section && normalize(&c.key) == normalize(&s.key)));
+    shipped.iter().filter(|s| !taken(s)).cloned().collect()
+}
+
+fn triple(b: &Binding) -> [String; 3] {
+    [b.section.clone(), b.key.clone(), b.action.clone()]
+}
+
+/// The keys the app at version ships that keys.json lacks and the person has
+/// not turned down. The app stops adding its new keys once keys.json is edited.
+pub fn new_shipped(version: &str) -> Result<Vec<Binding>> {
+    let dismissed: Vec<[String; 3]> = read_record(DISMISSED)?;
+    Ok(missing(&shipped(version)?, &load()?).into_iter().filter(|b| !dismissed.contains(&triple(b))).collect())
+}
+
+/// Adds every key new_shipped finds.
+pub fn add_shipped(version: &str) -> Result<()> {
+    let fresh = new_shipped(version)?;
+    if fresh.is_empty() {
+        return Ok(());
+    }
+    edit(|map| {
+        for b in &fresh {
+            section_mut(map, &b.section)?.insert(b.key.clone(), action_value(&b.action));
+        }
+        Ok(())
+    })
+}
+
+/// Stops offering every key new_shipped finds.
+pub fn dismiss_shipped(version: &str) -> Result<()> {
+    let mut dismissed: Vec<[String; 3]> = read_record(DISMISSED)?;
+    dismissed.extend(new_shipped(version)?.iter().map(triple));
+    write_record(DISMISSED, &dismissed)
 }
 
 /// Modifiers in the order the app writes them.
@@ -311,6 +374,29 @@ mod tests {
         let keys: Vec<String> = load().unwrap().into_iter().map(|b| b.key).collect();
         assert_eq!(keys, ["alt-1", "ctrl-shift-y", "f2"]);
         assert_eq!(load().unwrap()[2].action, "space.select:2");
+        let _ = std::fs::remove_dir_all(home());
+    }
+
+    // An edited keys.json gets the app's new keys only from here, and a key
+    // the person moved, removed or turned down is never offered back.
+    #[test]
+    fn new_shipped_keys_are_offered_once() {
+        let _guard = crate::ui::tests::isolated();
+        let _ = std::fs::remove_dir_all(home());
+        std::fs::create_dir_all(state_dir()).unwrap();
+        let shipped = r#"{"global":{"ctrl-shift-t":"tab.new","ctrl-shift-w":"tab.close","ctrl-?":"app.help"},"terminal":{"ctrl-shift-f":"terminal.search"}}"#;
+        std::fs::write(state_dir().join(format!("shipped-9.9.9-{SHIPPED_FILE}")), shipped).unwrap();
+        // tab.new moved to alt-t, tab.close's key now opens a mod.
+        std::fs::write(path(), r#"{"global":{"alt-t":"tab.new","shift-ctrl-w":"mod.open:x"}}"#).unwrap();
+        let keys = |v: Vec<Binding>| v.into_iter().map(|b| b.key).collect::<Vec<_>>();
+        assert_eq!(keys(new_shipped("9.9.9").unwrap()), ["ctrl-?", "ctrl-shift-f"]);
+        add_shipped("9.9.9").unwrap();
+        assert!(new_shipped("9.9.9").unwrap().is_empty());
+        assert_eq!(load().unwrap().iter().find(|b| b.key == "ctrl-shift-f").unwrap().section, "terminal");
+        remove("global", "ctrl-?").unwrap();
+        assert_eq!(keys(new_shipped("9.9.9").unwrap()), ["ctrl-?"]);
+        dismiss_shipped("9.9.9").unwrap();
+        assert!(new_shipped("9.9.9").unwrap().is_empty());
         let _ = std::fs::remove_dir_all(home());
     }
 }

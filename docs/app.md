@@ -94,6 +94,14 @@ and is edited as that JSON. Saving a key another
 binding holds replaces that binding, and the form says which before you
 save. `app install` refuses a key a section that wins already takes.
 
+The app adds the keys a new version brings only to a `keys.json` nobody has
+changed, and `app install` changes it to add its own key. So the page reads
+the keys file the installed app version shipped with from the app's
+repository, and offers the keys that yours lacks, under **Add them** and
+**Dismiss**. A shipped key isn't offered if your file already uses its key in
+that section or binds its action to another key, so a key you moved or
+removed stays as you left it. Offline, it offers nothing.
+
 ## Mods
 
 **Installed** lists the packages installed from here, the mods and layouts
