@@ -14,7 +14,11 @@ const MODIFIER_KEYS = ["shift", "control", "ctrl", "alt", "platform", "cmd", "su
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const reason = e => String(e?.message ?? e).replace(/^Error: /, "");
 const value = input => input.value().trim();
-const commandOf = action => action.split(":")[0];
+// keys() gives an object binding as its JSON text.
+const commandOf = action => {
+  if (action.startsWith("{")) try { return JSON.parse(action).command ?? ""; } catch { return ""; }
+  return action.split(":")[0];
+};
 const keyRowId = (section, key) => `k:${section}:${key}`;
 const platform = () => window()?.platform;
 // Ctrl, Alt or Cmd held: the key is a shortcut, not Tab or list navigation.

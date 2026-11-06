@@ -345,16 +345,7 @@ fn plan(root: &Path, repo: &str, subdir: &str, commit: &str, previous: Option<&P
 }
 
 fn package_keys(path: &Path) -> Result<Vec<Binding>> {
-    let mut out = Vec::new();
-    for (section, keys) in read_object(path).context("the package's keys.json")? {
-        let serde_json::Value::Object(keys) = keys else { continue };
-        for (key, action) in keys {
-            if let Some(action) = action.as_str() {
-                out.push(Binding { section: section.clone(), key, action: action.into() });
-            }
-        }
-    }
-    Ok(out)
+    Ok(keys::bindings(read_object(path).context("the package's keys.json")?))
 }
 
 /// What a package's code reaches, as the app's guide asks to say before
