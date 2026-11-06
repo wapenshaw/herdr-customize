@@ -80,6 +80,11 @@ fn run(args: &[String]) -> Result<Value> {
             keys::remove(a.need("section")?, a.need("key")?)?;
             Ok(json!({}))
         }
+        "core" => Ok(super::core_config::describe()),
+        "core-set" => {
+            super::core_config::set(a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
+            Ok(super::core_config::describe())
+        }
         "packages" => packages(),
         "market" => market(&a),
         "review" => review(&a),

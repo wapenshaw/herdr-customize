@@ -24,7 +24,8 @@ popup for my convenience. Use it if it helps you too.
 - **Plugins** (optional): update, install, enable, remove and configure your
   plugins, read their logs, and browse the marketplace.
 - **The Herdr app**: a screen in the new desktop app, drawn with its own
-  controls, for every palette as a theme, its keys, and mods from GitHub.
+  controls, for every palette as a theme, its keys, mods from GitHub, and
+  the core's settings, such as the shell new terminals start.
   Add it like any mod; see [The Herdr app](docs/app.md).
 - **Safe edits**: your comments and layout stay put. Herdr checks every change
   before it is written, the original is backed up daily, and Herdr reloads
@@ -70,8 +71,8 @@ Coming from herdr-theme-picker or Plugin Manager? This plugin replaces both;
   `herdr --remote` and adding palettes.
 - [Configuration and state](docs/configuration.md): how edits, checks,
   backups and locks work.
-- [The Herdr app](docs/app.md): the desktop app's screen for themes, keys and
-  mods.
+- [The Herdr app](docs/app.md): the desktop app's screen for themes, keys,
+  mods and the core's settings.
 - [For plugin authors](docs/plugin-authors.md): describe your settings with
   `config-schema.json`.
 - [Development](docs/development.md) and [Contributing](CONTRIBUTING.md).

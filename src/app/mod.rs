@@ -3,6 +3,7 @@
 //! files and calls its CLI. See docs/app.md.
 
 pub mod api;
+pub mod core_config;
 pub mod crawl;
 pub mod keys;
 pub mod mods;
