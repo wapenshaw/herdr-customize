@@ -134,7 +134,8 @@ export default class Customize extends View {
   async call(args) {
     const bin = await this.binFound;
     if (!bin) throw new Error("herdr-customize is not installed");
-    const r = await exec(bin, ["app", "--home", appHome(), "api", ...args]);
+    // exec's default 30 s is shorter than a download or a first Browse may take.
+    const r = await exec(bin, ["app", "--home", appHome(), "api", ...args], { timeout: 600000 });
     let data;
     try { data = JSON.parse(r.stdout); } catch { throw new Error(r.stderr.trim() || `herdr-customize exited with ${r.code}`); }
     if (data.error) throw new Error(data.error);
