@@ -7,6 +7,7 @@ pub mod core_config;
 pub mod crawl;
 pub mod extras;
 pub mod keys;
+pub mod layouts;
 pub mod mods;
 pub mod popups;
 pub mod presets;
@@ -256,6 +257,7 @@ const POPUP_FILES: &[(&str, &str)] = &[
     ("pages/core.js", include_str!("../../app/mods/herdr-customize/pages/core.js")),
     ("pages/app.js", include_str!("../../app/mods/herdr-customize/pages/app.js")),
     ("pages/extras.js", include_str!("../../app/mods/herdr-customize/pages/extras.js")),
+    ("pages/layouts.js", include_str!("../../app/mods/herdr-customize/pages/layouts.js")),
     ("pages/popups.js", include_str!("../../app/mods/herdr-customize/pages/popups.js")),
 ];
 

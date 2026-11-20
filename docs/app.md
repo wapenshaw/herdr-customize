@@ -171,6 +171,20 @@ order. An unreadable or invalid settings file is shown and never overwritten.
 Writes are atomic and serialize with other herdr-customize writers; the app
 and other programs do not necessarily share that lock.
 
+## Layouts
+
+The Layouts page lists the available layouts and marks the active one. Switch
+layouts or clone one with an optional new name; refresh the list after cloning.
+Shipped layouts are read-only and must be cloned before changing their look.
+Personal layouts expose root theme (including light and dark pairs), fonts,
+terminal spacing and opacity, title bar and blur, and installed mod pickers
+for menus, notifications and ordered link handlers.
+
+Use **Use the default** to remove a root field and let the app's settings or
+defaults apply. Child nodes and unknown fields are preserved. Invalid or
+unreadable layout files are shown but never overwritten. Writes are atomic,
+with daily backups, and serialize with other herdr-customize writers.
+
 ## Extras
 
 The Extras page offers optional mods bundled with herdr-customize: Copy mode

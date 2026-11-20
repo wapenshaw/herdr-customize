@@ -93,6 +93,11 @@ fn run(args: &[String]) -> Result<Value> {
             super::settings::set(a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
             Ok(super::settings::describe())
         }
+        "layouts" => Ok(super::layouts::describe()),
+        "layout-set" => {
+            super::layouts::set(a.need("name")?, a.need("field")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
+            Ok(super::layouts::describe())
+        }
         "key-shipped" => key_shipped(""),
         "key-shipped-add" => key_shipped("add"),
         "key-shipped-dismiss" => key_shipped("dismiss"),
