@@ -4,7 +4,8 @@ The Herdr app (`herdr-app`) is a desktop window over terminals that
 herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
-adds a screen to the app with four pages: Themes, Keys, Mods and Core. It
+adds a screen to the app with nine pages: Themes, Keys, Mods, Core, App,
+Extras, Popups, Layouts and Programs. It
 never touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |

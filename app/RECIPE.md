@@ -1,11 +1,13 @@
 # Customize
 
 Customize Herdr from one screen: pick a theme with a live preview, change
-your keybindings and get the new ones app updates leave out, find, review and
-install mods and layouts from GitHub, and set herdr-core's shell, scrollback
-and timeouts. No config files to edit.
+your keybindings, presets and the new keys app updates leave out, find,
+review and install mods and layouts from GitHub, set herdr-core's shell,
+scrollback and timeouts, edit the app's settings, switch and style layouts,
+add popups and programs, and install extras such as a keyboard copy mode.
+No config files to edit.
 
-![Customize: the Themes, Keys, Mods and Core pages](preview.png)
+![Customize: the Themes, Keys, Mods, Core, App, Extras, Popups, Layouts and Programs pages](preview.png)
 
 ## Before you add it
 
@@ -32,8 +34,9 @@ taken (`app install alt-shift-c` picks another), writes 26 palettes to
 
 An overlay of 86% of the window each way, in the theme's `popover` color.
 
-- **Header**, 52px: "Customize", the four pages as a segmented control, the
-  running task's name while one runs, and **Close**.
+- **Header**, 52px: "Customize", the nine pages as a strip that scrolls to
+  keep the active page in view, the running task's name while one runs, and
+  **Close**.
 - **Themes**: on the left, 300px wide, a search box, the filters All, Dark,
   Light and In Settings, and a list of 34px rows with a swatch of the
   palette, its name and a `dark` or `light` badge on the two in use. On the
@@ -59,6 +62,20 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   title and description, then chips of the shells found here with Program
   and Arguments for Shell, On and Off for Agent notes, or one input, then
   **Save** and **Use the default** when it is set.
+- **App**: the app's `settings.json` by group (Look, Terminal, Input and
+  clipboard, Behavior); each setting with its value or default, an input or
+  chips, **Save** and **Use the default**.
+- **Extras**: one card per bundled mod (copy mode, scrollback in an
+  editor) with its keys, **Install**, **Update** or **Remove**, and why it is
+  unavailable on an older app.
+- **Popups**: the popups made here, an add form (name, command, size, key,
+  keep running) with **Try** and **Remove**.
+- **Layouts**: the layouts with **Switch**, **Clone** and, for a personal
+  one, its root look fields.
+- **Programs**: the entries in `programs.json` with an add or edit form, and
+  the agents the + menu can start with their installed state.
+- A banner under the header lists the app's error files, red, after each
+  change.
 - A strip at the bottom for the last notice, green, or error, red.
 
 ## How it behaves

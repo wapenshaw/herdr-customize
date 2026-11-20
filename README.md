@@ -24,8 +24,9 @@ popup for my convenience. Use it if it helps you too.
 - **Plugins** (optional): update, install, enable, remove and configure your
   plugins, read their logs, and browse the marketplace.
 - **The Herdr app**: a screen in the new desktop app, drawn with its own
-  controls, for every palette as a theme, its keys, mods from GitHub, and
-  the core's settings, such as the shell new terminals start.
+  controls, for every palette as a theme, its keys and presets, mods from
+  GitHub, the app's and the core's settings, layouts, popups and programs,
+  and extras such as a keyboard copy mode.
   Add it like any mod; see [The Herdr app](docs/app.md).
 - **Safe edits**: your comments and layout stay put. Herdr checks every change
   before it is written, the original is backed up daily, and Herdr reloads
