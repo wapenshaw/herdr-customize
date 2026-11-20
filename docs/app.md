@@ -201,6 +201,7 @@ still bound to the original action. Install records are kept in
 with usage and limitations.
 
 ## Popups
+## Programs
 
 The Popups page creates floating terminals for local commands such as
 `lazygit` or `fzf`. Give each a lowercase name, a command, optional global
@@ -212,6 +213,12 @@ Close ends the terminal. Remote spaces are not supported.
 Switching layouts closes the window without ending its terminal. Reopening
 an already open nonpersistent popup replaces the window but leaves the old
 terminal running.
+The Programs page edits personal entries in `programs.json`, which add to or
+override the app's built-in program table field by field. Add or edit a key,
+name, launch command, process matches, tile and icon colors, icon path and tint.
+The command line accepts single or double quotes around arguments. Use programs
+or shell functions, never aliases: the launcher does not expand aliases.
+Icon paths are relative to the app home and must name an existing file there.
 
 Commands are split into arguments without a shell: single or double quotes
 group text, and a backslash escapes a quote. Other backslashes are preserved,
@@ -219,6 +226,12 @@ including Windows paths. Use a shell explicitly for pipes or shell syntax.
 The generated mod lives at `mods/popup-<name>` and its record at
 `data/herdr-customize/popups.json`. Removing a popup keeps its folder if edited
 and removes its shortcut only if it still runs that popup.
+The page also lists agents the + menu can start and their installed status,
+when the app supports checking them. Shell and interpreter lists and unknown
+fields are preserved; the built-in table is never edited. Invalid or unreadable
+files are shown and never overwritten. The app reports invalid files through
+`programs.error`; writes are atomic and use the same lock as other
+herdr-customize writers.
 
 ## Health
 

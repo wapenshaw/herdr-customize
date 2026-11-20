@@ -11,6 +11,7 @@ pub mod layouts;
 pub mod mods;
 pub mod popups;
 pub mod presets;
+pub mod programs;
 pub mod settings;
 pub mod themes;
 
@@ -258,6 +259,7 @@ const POPUP_FILES: &[(&str, &str)] = &[
     ("pages/app.js", include_str!("../../app/mods/herdr-customize/pages/app.js")),
     ("pages/extras.js", include_str!("../../app/mods/herdr-customize/pages/extras.js")),
     ("pages/layouts.js", include_str!("../../app/mods/herdr-customize/pages/layouts.js")),
+    ("pages/programs.js", include_str!("../../app/mods/herdr-customize/pages/programs.js")),
     ("pages/popups.js", include_str!("../../app/mods/herdr-customize/pages/popups.js")),
 ];
 
