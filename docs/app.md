@@ -200,6 +200,36 @@ still bound to the original action. Install records are kept in
 `data/herdr-customize/extras.json`. Each installed mod includes its recipe
 with usage and limitations.
 
+## Not possible yet
+
+A background Dock badge and automatic agent resume are not bundled. In app
+0.1.16, a newly added empty mod docked at the bottom with size 0 or 1 did not
+start its timer on hot-add. The app's guide says a newly discovered mod docks
+only in the shown layout, and a copy starts only when first shown.
+
+A manually opened, frameless 1-by-1 kept window did run: its counter reached
+10 after 11 seconds, and its screenshot showed no visible artifact. Switching
+layouts stopped the counter; returning to the original layout started a fresh
+copy. The app reports the mod name but not the overlay ID in `status`, and
+`overlay.close --id` with the mod name did not close it. Removing its mod
+folder left the kept window behind and caused missing-mod errors when the
+layout returned. The guide says kept windows reopen on app restart, but that
+was not tested. The Dock badge itself was not observable on Windows.
+
+Core 0.1.21 restarted a scratch kept terminal as a fresh shell after its holder
+was killed. Its PID and argv changed, but the resulting record had no persistent
+recovery marker. An ordinary core restart instead kept the original program
+running. The core's [event protocol](https://github.com/herdrdev/herdr-core/blob/master/schema/README.md#events)
+includes `lost` and `restarted`, but a subscriber can miss events while absent
+and sequence numbers restart with the core. These observations do not provide
+a reliable, exactly-once trigger for typing into a recovered shell.
+
+Any future resume feature must treat terminal labels as untrusted: a label
+would contain only an opaque ID, with the command taken from a local file the
+person explicitly configured. Whoever can edit that file can run commands.
+It must never type into remote terminals, active agents, or a terminal whose
+foreground is not the recovered shell.
+
 ## Popups
 ## Programs
 
