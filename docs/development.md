@@ -63,6 +63,25 @@ screen keeps no logic of its own beyond what it shows, so the tests in
 `api.rs` cover it. Splitting the binary is worth it only if the
 app gets an install channel that cannot run a command and keep a folder.
 
+## App screen pages
+
+`app/mods/herdr-customize/pages.js` is the page registry: add a page module
+and one numbered re-export there. Exports sort by name, determining tab order.
+Each factory receives the per-view `app` and returns an object with `id`,
+`title`, `init(cx)`, `render()` and `focus()`; `show(cx)` and `key(event, cx)`
+are optional. `init` runs once per view. Add the module to `POPUP_FILES` in
+`src/app/mod.rs` so `app install` embeds it.
+
+Pages created with `page(app, instance)` from `lib.js` keep their own state on
+the instance and inherit the shell's helpers, including `call`, `load`, `task`,
+the drawing helpers, `focusPage`, and `closeAndRun`. `busy`, `error` and
+`notice` are shared with the shell. Never retain `cx`; use the context passed
+to a callback. Keep shared constants and pure helpers in `lib.js`.
+
+For APIs absent from older app releases, use a namespace import and detect the
+export before calling it. In particular, `checking()` falls back to a missing
+window on older releases so the checker never starts the binary.
+
 ## Tests
 
 Tests must not recolor live terminals, reload a real Herdr session or touch

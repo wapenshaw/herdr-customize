@@ -69,6 +69,7 @@ fn run(args: &[String]) -> Result<Value> {
     let (command, rest) = args.split_first().ok_or_else(|| anyhow!("no command"))?;
     let a = Args::parse(rest);
     match command.as_str() {
+        "health" => Ok(super::health()),
         "palettes" => palettes(),
         "theme-write" => {
             let wrote = themes::install(a.word(0, "a palette")?, false)?;
@@ -76,6 +77,8 @@ fn run(args: &[String]) -> Result<Value> {
         }
         "key-check" => key_check(&a),
         "key-set" => key_set(&a),
+        "key-presets" => super::presets::list(&super::commands()?),
+        "key-presets-apply" => super::presets::apply(a.need("id")?, &super::commands()?),
         "key-remove" => {
             keys::remove(a.need("section")?, a.need("key")?)?;
             Ok(json!({}))
@@ -85,10 +88,18 @@ fn run(args: &[String]) -> Result<Value> {
             super::core_config::set(a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
             Ok(super::core_config::describe())
         }
+        "settings" => Ok(super::settings::describe()),
+        "settings-set" => {
+            super::settings::set(a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
+            Ok(super::settings::describe())
+        }
         "key-shipped" => key_shipped(""),
         "key-shipped-add" => key_shipped("add"),
         "key-shipped-dismiss" => key_shipped("dismiss"),
         "packages" => packages(),
+        "extras" => Ok(json!({ "extras": super::extras::describe(&super::commands()?)? })),
+        "extras-install" => Ok(serde_json::to_value(super::extras::install(a.need("name")?, &super::commands()?)?)?),
+        "extras-remove" => Ok(serde_json::to_value(super::extras::remove(a.need("name")?)?)?),
         "market" => market(&a),
         "review" => review(&a),
         "install" => install(&a),

@@ -33,7 +33,7 @@ struct Setting {
 
 /// The core's settings, less `socket`: moving it leaves every client looking
 /// for the core in the old place.
-const SETTINGS: [Setting; 8] = [
+const SETTINGS: [Setting; 10] = [
     Setting {
         key: "shell",
         title: "Shell",
@@ -65,6 +65,22 @@ const SETTINGS: [Setting; 8] = [
         hint: "Seconds, like 10 if notes land while you type. 0 sends them at once.",
         default: "3",
         kind: Kind::Number(true),
+    },
+    Setting {
+        key: "draft_wait",
+        title: "Draft wait",
+        about: "Seconds an unfinished draft holds sends and notes after the last key.",
+        hint: "Seconds, like 60. 0 keeps only the quiet pause.",
+        default: "60",
+        kind: Kind::Number(true),
+    },
+    Setting {
+        key: "restore_screen",
+        title: "Restore screen",
+        about: "After a reboot, show a kept terminal's last screen above its new shell. Applies at the next recovery.",
+        hint: "",
+        default: "off",
+        kind: Kind::Toggle,
     },
     Setting {
         key: "wait_timeout",
@@ -153,6 +169,9 @@ fn parse(s: &Setting, text: &str) -> Result<Item> {
         let n: f64 = text.parse().ok().filter(|n: &f64| n.is_finite()).with_context(|| format!("{} must be a number", s.title))?;
         if n < 0.0 || (n == 0.0 && !zero_ok) {
             bail!("{} must be {}", s.title, if zero_ok { "zero or more" } else { "more than zero" });
+        }
+        if matches!(s.key, "notes_quiet" | "draft_wait") && std::time::Duration::try_from_secs_f64(n).is_err() {
+            bail!("{} is too large", s.title);
         }
         Ok(if n.fract() == 0.0 && n < 1e15 { value(n as i64) } else { value(n) })
     };
@@ -251,6 +270,9 @@ mod tests {
     fn values_are_checked_as_the_core_reads_them() {
         assert_eq!(check("history_mb", "0").unwrap().to_string().trim(), "0");
         assert_eq!(check("notes_quiet", "1.5").unwrap().to_string().trim(), "1.5");
+        assert_eq!(check("draft_wait", "0").unwrap().to_string().trim(), "0");
+        assert_eq!(check("draft_wait", "1.5").unwrap().to_string().trim(), "1.5");
+        assert_eq!(check("restore_screen", "on").unwrap().as_bool(), Some(true));
         assert_eq!(check("detach_key", "ctrl+]").unwrap().as_str(), Some("ctrl+]"));
         assert_eq!(check("headless", "160 x 50").unwrap().as_str(), Some("160x50"));
         assert_eq!(check("notes", "off").unwrap().as_bool(), Some(false));
@@ -258,6 +280,11 @@ mod tests {
             ("wait_timeout", "0"),
             ("history_mb", "-1"),
             ("history_mb", "lots"),
+            ("draft_wait", "-1"),
+            ("draft_wait", "NaN"),
+            ("draft_wait", "1e30"),
+            ("notes_quiet", "1e30"),
+            ("restore_screen", "maybe"),
             ("detach_key", "alt+x"),
             ("detach_key", "ctrl+1"),
             ("headless", "0x10"),
@@ -278,6 +305,16 @@ mod tests {
         std::fs::write(&path, "# mine\nsocket = \"/tmp/x.sock\"\nhistory_mb = 5\n").unwrap();
         set("shell", Some(r#"["C:\\Program Files\\Git\\bin\\bash.exe", "--login", "-i"]"#)).unwrap();
         set("history_mb", None).unwrap();
+        set("draft_wait", Some("1.5")).unwrap();
+        set("restore_screen", Some("on")).unwrap();
+        let described = describe();
+        let settings = described["settings"].as_array().unwrap();
+        assert_eq!(settings.iter().find(|s| s["key"] == "draft_wait").unwrap()["value"], "1.5");
+        assert_eq!(settings.iter().find(|s| s["key"] == "restore_screen").unwrap()["value"], "true");
+        assert!(set("draft_wait", Some("-1")).is_err());
+        assert!(set("restore_screen", Some("maybe")).is_err());
+        set("draft_wait", None).unwrap();
+        set("restore_screen", None).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.starts_with("# mine\nsocket = \"/tmp/x.sock\"\n"), "{text}");
         assert!(!text.contains("history_mb"));

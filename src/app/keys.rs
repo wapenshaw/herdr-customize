@@ -99,12 +99,45 @@ pub fn set(section: &str, old: Option<&str>, key: &str, action: &str) -> Result<
     })
 }
 
+pub fn set_if_free(binding: &Binding) -> Result<Option<Binding>> {
+    std::fs::create_dir_all(state_dir())?;
+    let _lock = fsutil::lock(&state_dir().join("keys.lock")).context("lock keys.json")?;
+    let mut map = read_object(&path())?;
+    let current = bindings(map.clone());
+    let conflict = current.iter().find(|b| b.section == binding.section && normalize(&b.key) == normalize(&binding.key)).or_else(|| hidden_by(&current, &binding.section, &binding.key)).cloned();
+    if conflict.is_some() {
+        return Ok(conflict);
+    }
+    let section = section_mut(&mut map, &binding.section)?;
+    if let Some((key, value)) = section.iter().find(|(key, _)| normalize(key) == normalize(&binding.key)) {
+        return Ok(Some(Binding { section: binding.section.clone(), key: key.clone(), action: value.to_string() }));
+    }
+    section.insert(binding.key.clone(), action_value(&binding.action));
+    let text = serde_json::to_string_pretty(&Value::Object(map))? + "\n";
+    fsutil::write_backed_up(&path(), text.as_bytes(), 0o644)?;
+    Ok(None)
+}
+
 /// Unbinds key in section.
 pub fn remove(section: &str, key: &str) -> Result<()> {
     edit(|map| {
         section_mut(map, section)?.retain(|k, _| k != key);
         Ok(())
     })
+}
+
+pub fn remove_if_bound(section: &str, key: &str, action: &str) -> Result<bool> {
+    let mut removed = false;
+    edit(|map| {
+        if let Some(Value::Object(keys)) = map.get_mut(section)
+            && keys.get(key).is_some_and(|value| *value == action_value(action))
+        {
+            keys.remove(key);
+            removed = true;
+        }
+        Ok(())
+    })?;
+    Ok(removed)
 }
 
 /// The shipped keys file for this OS in the app's repository.
@@ -258,6 +291,8 @@ pub fn action_problem(action: &str, commands: &[AppCommand], mods: &[String]) ->
     if action.is_empty() {
         return Some("an action is required".into());
     }
+    let mut object = None;
+    let mut shorthand = false;
     let name = if action.starts_with('{') {
         let Ok(Value::Object(o)) = serde_json::from_str::<Value>(action) else { return Some("not a JSON object".into()) };
         if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "command" | "args")) {
@@ -266,25 +301,114 @@ pub fn action_problem(action: &str, commands: &[AppCommand], mods: &[String]) ->
         if o.get("args").is_some_and(|a| !a.is_object()) {
             return Some("args must be an object".into());
         }
-        match o.get("command") {
+        let name = match o.get("command") {
             Some(Value::String(c)) => c.clone(),
             _ => return Some("command must name a command".into()),
-        }
+        };
+        object = Some(o);
+        name
     } else if action == "terminal" || action.starts_with("send:") {
         return None;
     } else {
+        shorthand = action.contains(':');
         action.split_once(':').map_or(action, |(n, _)| n).to_string()
     };
     if commands.is_empty() {
         return None;
     }
-    if commands.iter().any(|c| c.name == name) {
+    if let Some(command) = commands.iter().find(|c| c.name == name) {
+        let args = object.as_ref().and_then(|o| o.get("args")).and_then(Value::as_object);
+        if let Some(arg) = args.and_then(|a| a.keys().find(|k| !command.args.iter().any(|known| known.name == **k))) {
+            let valid = command.args.iter().map(|a| a.name.as_str()).collect::<Vec<_>>().join(", ");
+            return Some(format!("unknown argument {arg:?} for {name}; valid arguments: {valid}"));
+        }
+        for (index, arg) in command.args.iter().enumerate() {
+            if arg.required && !args.is_some_and(|a| a.contains_key(&arg.name)) && !(shorthand && index == 0) {
+                return Some(format!("{name} requires argument {:?}", arg.name));
+            }
+        }
         return None;
     }
     match name.split_once('.') {
         Some((m, _)) if mods.iter().any(|x| x == m) => None,
         _ => Some(format!("no command {name:?} (see the list below)")),
     }
+}
+
+#[cfg(test)]
+pub fn app_defaults() -> Vec<Binding> {
+    let mut defaults = Vec::new();
+    for key in [
+        "alt-1",
+        "alt-2",
+        "alt-3",
+        "alt-4",
+        "alt-5",
+        "alt-6",
+        "alt-7",
+        "alt-8",
+        "alt-9",
+        "alt-[",
+        "alt-]",
+        "alt-down",
+        "alt-h",
+        "alt-j",
+        "alt-k",
+        "alt-l",
+        "alt-left",
+        "alt-right",
+        "alt-up",
+        "alt-shift-h",
+        "alt-shift-j",
+        "alt-shift-k",
+        "alt-shift-l",
+        "ctrl-+",
+        "ctrl-,",
+        "ctrl--",
+        "ctrl-0",
+        "ctrl-1",
+        "ctrl-2",
+        "ctrl-3",
+        "ctrl-4",
+        "ctrl-5",
+        "ctrl-6",
+        "ctrl-7",
+        "ctrl-8",
+        "ctrl-9",
+        "ctrl-=",
+        "ctrl-?",
+        "ctrl-pagedown",
+        "ctrl-pageup",
+        "ctrl-shift-/",
+        "ctrl-shift-?",
+        "ctrl-shift-b",
+        "ctrl-shift-e",
+        "ctrl-shift-k",
+        "ctrl-shift-l",
+        "ctrl-shift-n",
+        "ctrl-shift-o",
+        "ctrl-shift-p",
+        "ctrl-shift-t",
+        "ctrl-shift-w",
+        "ctrl-shift-x",
+        "ctrl-shift-y",
+        "ctrl-shift-z",
+        "ctrl-shift-pagedown",
+        "ctrl-shift-pageup",
+        "ctrl-shift-tab",
+        "ctrl-tab",
+        "f2",
+        "shift-f2",
+    ] {
+        defaults.push(Binding { section: "global".into(), key: key.into(), action: "other".into() });
+    }
+    for key in ["ctrl-backspace", "ctrl-insert", "ctrl-left", "ctrl-right", "ctrl-shift-c", "ctrl-shift-f", "ctrl-shift-v", "ctrl-v", "shift-insert"] {
+        defaults.push(Binding { section: "terminal".into(), key: key.into(), action: if key == "ctrl-shift-f" { "terminal.search" } else { "other" }.into() });
+    }
+    if cfg!(target_os = "macos") {
+        defaults.push(Binding { section: "terminal".into(), key: "cmd-f".into(), action: "terminal.search".into() });
+    }
+    defaults
 }
 
 #[cfg(test)]
@@ -325,7 +449,7 @@ mod tests {
 
     #[test]
     fn actions() {
-        let commands = vec![AppCommand { name: "tab.new".into() }, AppCommand { name: "space.select".into() }];
+        let commands: Vec<AppCommand> = serde_json::from_str(r#"[{"name":"tab.new","args":[{"name":"name"}]},{"name":"space.select","args":[{"name":"index","required":true}]}]"#).unwrap();
         let mods = vec!["editor".to_string()];
         for ok in ["tab.new", "space.select:3", "send:\u{17}", "terminal", "editor.save"] {
             assert_eq!(action_problem(ok, &commands, &mods), None, "{ok}");
@@ -338,6 +462,10 @@ mod tests {
         for bad in [r#"{"command":"tab.new","extra":1}"#, r#"{"command":"tab.new","args":[]}"#, r#"{"args":{}}"#, "{nope"] {
             assert!(action_problem(bad, &[], &mods).is_some(), "{bad}");
         }
+        assert!(action_problem("space.select", &commands, &mods).unwrap().contains("index"));
+        assert!(action_problem(r#"{"command":"space.select","args":{}}"#, &commands, &mods).unwrap().contains("index"));
+        assert!(action_problem(r#"{"command":"tab.new","args":{"bad":1}}"#, &commands, &mods).unwrap().contains("name"));
+        assert_eq!(action_problem(r#"{"command":"space.select","args":{"index":3}}"#, &commands, &mods), None);
     }
 
     // A binding with typed arguments is listed, and moving its key keeps it an

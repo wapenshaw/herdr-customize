@@ -94,6 +94,22 @@ and is edited as that JSON. Saving a key another
 binding holds replaces that binding, and the form says which before you
 save. `app install` refuses a key a section that wins already takes.
 
+Choosing an unbound command offers a field for each argument, marking required
+ones. Empty optional fields are omitted; numbers and `true` or `false` become
+typed values. The form checks required and unknown argument names against the
+installed app. String actions retain the app's literal first-argument shorthand.
+
+**Presets** offers pane resize, tab reordering, terminal select all and
+search, and naming a pane. A preset appears only when all its commands exist
+in the installed app and at least one binding is not already set; resize and
+naming require a newer app. Applying one skips keys already used for another
+action or hidden by a winning section and reports each outcome. Option-letter
+shortcuts on macOS can take characters from keyboard layouts that use Option
+for typing.
+
+For Neovim, an `nvim` mapping could call `herdr-app do pane.go:left` at a
+window edge; this integration has not been verified.
+
 The app adds the keys a new version brings only to a `keys.json` nobody has
 changed, and `app install` changes it to add its own key. So the page reads
 the keys file the installed app version shipped with from the app's
@@ -141,14 +157,53 @@ asks first. **Remove** takes it away with the keys it added; files you
 changed stay. The record is `data/herdr-customize/packages.json`. Downloads
 use `git`.
 
+## App settings
+
+The App page edits the app's `settings.json`: appearance and fonts, terminal
+spacing and contrast, clipboard and keyboard behavior, worktree location,
+telemetry and sounds. Option as Alt is shown on macOS only. Changes apply
+live except the core binary path, which the app reads at startup. A worktree
+path is absolute or starts with `~` and refers to the space's machine.
+
+Use **Use the default** to remove a setting. Other settings, including
+custom sound files and keys used by mods, are preserved in their original
+order. An unreadable or invalid settings file is shown and never overwritten.
+Writes are atomic and serialize with other herdr-customize writers; the app
+and other programs do not necessarily share that lock.
+
+## Extras
+
+The Extras page offers optional mods bundled with herdr-customize: Copy mode
+and Scrollback in an editor. It shows their required app commands and the
+default shortcut's status. Install and Update check the mod with the app;
+a failed check restores the previous installation. Only the platform's
+shortcut is added, and keys already taken or hidden by a more specific
+section are skipped rather than replaced.
+
+An unrelated mod with the same name is never overwritten. Updating refuses
+edited files; removing an edited extra keeps its folder and removes only keys
+still bound to the original action. Install records are kept in
+`data/herdr-customize/extras.json`. Each installed mod includes its recipe
+with usage and limitations.
+
+## Health
+
+The screen checks the app's error files and the open window's reported errors
+when it opens and after each change. Problems appear below the header with
+their source and first line. Dismiss the banner to hide it until the list
+changes. When no window can be reached, file errors are still shown.
+
 ## Core
 
 The terminals live in herdr-core, which keeps its own settings in
 `config.toml` beside its other files: `%APPDATA%\herdr-core` on Windows,
 `~/.config/herdr-core` elsewhere, or under `XDG_CONFIG_HOME` when it is set.
 The Core page edits that file: the shell new terminals start, scrollback,
-agent notes and their delay, how long `hc wait` and other machines get, the
-key that leaves `hc attach`, and the size of a terminal nobody is watching.
+agent notes and their delay, draft wait, screen recovery, how long `hc wait`
+and other machines get, the key that leaves `hc attach`, and the size of a
+terminal nobody is watching. Draft wait defaults to 60 seconds; 0 leaves only
+the quiet pause. Screen recovery is off by default; when enabled, a lost kept
+terminal's last saved screen appears above its new shell at the next recovery.
 
 ![Core: the core's settings, with the shells found on this machine](screenshots/app-core.png)
 
@@ -162,6 +217,15 @@ PowerShell is the core's default there, with a hook that lets the core follow
 the shell's folder, so picking it clears the setting rather than naming it. `socket` is left out: moving it leaves
 clients looking for the core in the old place. The page edits this machine's
 file only; the others keep theirs.
+
+The **Updates** card, when supported by the app, shows app and core versions,
+ready updates, the last successful check and core update errors. It offers
+the commands available in that app to check, update an unmanaged core, or
+restart the app into a downloaded update. Updating the core keeps terminals
+running; a package-managed core is updated through its package manager.
+The page also offers a command to copy and run in a terminal outside Herdr:
+`hc server restart --fresh` makes new terminals use that shell's environment
+without ending programs.
 
 ## Commands
 
