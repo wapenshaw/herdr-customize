@@ -6,3 +6,4 @@ export { default as p05 } from "./pages/app.js";
 export { default as p06 } from "./pages/extras.js";
 export { default as p07 } from "./pages/popups.js";
 export { default as p08 } from "./pages/layouts.js";
+export { default as p09 } from "./pages/programs.js";

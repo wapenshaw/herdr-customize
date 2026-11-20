@@ -98,6 +98,15 @@ fn run(args: &[String]) -> Result<Value> {
             super::layouts::set(a.need("name")?, a.need("field")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
             Ok(super::layouts::describe())
         }
+        "programs" => Ok(super::programs::describe()),
+        "program-set" => {
+            super::programs::set(a.need("key")?, a.need("json")?, a.flags.get("run-line").map(String::as_str))?;
+            Ok(super::programs::describe())
+        }
+        "program-remove" => {
+            super::programs::remove(a.need("key")?)?;
+            Ok(super::programs::describe())
+        }
         "key-shipped" => key_shipped(""),
         "key-shipped-add" => key_shipped("add"),
         "key-shipped-dismiss" => key_shipped("dismiss"),
