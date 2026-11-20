@@ -1,0 +1,6 @@
+{
+  "global": {
+    "ctrl-shift-m": "mod.open:copymode",
+    "cmd-shift-m": "mod.open:copymode"
+  }
+}
