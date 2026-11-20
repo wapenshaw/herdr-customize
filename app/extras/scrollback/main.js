@@ -11,7 +11,6 @@ async function editorFor(config, machine) {
   }
 
   const options = machine ? { on: machine } : undefined;
-  if (!machine && herdr.window()?.platform === "windows") return ["notepad"];
   try {
     const result = await herdr.exec("sh", ["-c", "printf '%s' \"${VISUAL:-${EDITOR:-}}\""], options);
     if (result.code !== 0) throw new Error(result.stderr || "Could not read the editor environment");
@@ -50,6 +49,11 @@ async function openScrollback(focus) {
   const space = herdr.spaces().find(item => item.id === focus.space);
   if (!space) throw new Error("The original space is no longer available");
   const machine = space.machine;
+  if (!machine && !config.editor && herdr.window()?.platform === "windows") {
+    // The app registered for .txt, as Explorer would; no terminal tab for a GUI editor.
+    await herdr.exec("rundll32.exe", ["url.dll,FileProtocolHandler", file.replaceAll("/", "\\")]);
+    return;
+  }
   const editor = await editorFor(config, machine);
   let editorFile = file;
   if (machine) {

@@ -1,11 +1,13 @@
 # Scrollback in an editor
 
-Open the focused terminal's retained text in an editor in a new tab.
+Open the focused terminal's retained text in a text editor.
 
 ## What you see
 
-Press Ctrl+Shift+S (Cmd+Shift+S on macOS). A small overlay says "Opening
-scrollback" until the editor tab opens. Errors appear as a notification.
+Press Ctrl+Shift+S (Cmd+Shift+S on macOS). On Windows the text opens in the
+app registered for `.txt` files. Elsewhere, or when an editor is configured,
+a small overlay says "Opening scrollback" until the editor tab opens. Errors
+appear as a notification.
 
 ## How it behaves
 
@@ -21,9 +23,11 @@ Optionally create `data/scrollback/config.json` under the app home:
 ```
 
 Both fields are optional. `editor` is a nonempty array of program and argument
-strings; use an array to preserve spaces in paths or arguments. `lines` is a
-nonnegative integer. Without an editor override, Unix uses `$VISUAL`, then
-`$EDITOR`, then `vi`; Windows uses `notepad`. Environment values are split on
+strings, run in a new terminal tab; use an array to preserve spaces in paths
+or arguments, and use it for terminal editors such as `nvim` on Windows.
+`lines` is a nonnegative integer. Without an editor override, Windows opens
+the file with the app registered for `.txt` (no terminal tab); Unix uses
+`$VISUAL`, then `$EDITOR`, then `vi`. Environment values are split on
 whitespace, not interpreted as shell commands; use `editor` for quoted paths
 or arguments. For a remote space the environment and editor are on that
 machine, and `hc put` copies the snapshot there before opening the tab.
@@ -54,6 +58,7 @@ machine, and `hc put` copies the snapshot there before opening the tab.
 
 ## Done when
 
-- The shortcut opens the focused terminal's text in a new editor tab.
+- The shortcut opens the focused terminal's text in the default `.txt` app on
+  Windows and in an editor tab elsewhere.
 - With no focused terminal, a notification explains why nothing opened.
 - `herdr-app check app/extras/scrollback` passes.
