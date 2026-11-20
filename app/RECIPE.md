@@ -79,8 +79,9 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 
 ## Built from
 
-- `mods/herdr-customize/main.js`: one gpui-kit `View`; `h_flex`, `v_flex`,
-  `Input` and `v_virtual_list` from gpui-base, `uniform_list` for the keys.
+- `mods/herdr-customize/`: a gpui-kit `View` in `main.js`, shared helpers in
+  `lib.js`, and page modules in `pages/`; `h_flex`, `v_flex`, `Input` and
+  `v_virtual_list` from gpui-base, `uniform_list` for the keys.
 - `mod.json`: `"place": "none"`, an overlay of `0.86` by `0.86`: sizes up
   to 1 are shares of the window.
 - `herdr`: `exec`, `home`, `appHome`, `theme`, `themes`, `settings`, `keys`,
@@ -94,8 +95,8 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 
 ## Watch out
 
-- `herdr-app check` has no window, and a program started there keeps the
-  checker's output open: start nothing while `window()` is null.
+- `herdr-app check` runs `init`; avoid starting a program there. Detect
+  `checking()` when available, falling back to the missing window on older apps.
 - Tab moves the app's focus unless bound: bind it to actions under the
   mod's own key context. Focus only an input that is drawn, else the root.
 - `track_scroll` does nothing on `uniform_list`; the theme list is a

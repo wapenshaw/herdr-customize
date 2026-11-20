@@ -5,8 +5,11 @@
 pub mod api;
 pub mod core_config;
 pub mod crawl;
+pub mod extras;
 pub mod keys;
 pub mod mods;
+pub mod presets;
+pub mod settings;
 pub mod themes;
 
 use std::collections::BTreeSet;
@@ -101,6 +104,52 @@ fn output(args: &[String], timeout: Duration) -> Result<String> {
     }
     Ok(stdout)
 }
+fn health_files(root: &Path) -> Vec<serde_json::Value> {
+    use std::io::Read;
+
+    let mut paths: Vec<PathBuf> = ["layout.error", "keys.error", "settings.error", "programs.error"].iter().map(|name| root.join(name)).collect();
+    if let Ok(mods) = fs::read_dir(root.join("mods")) {
+        for entry in mods.flatten() {
+            if let Ok(files) = fs::read_dir(entry.path()) {
+                paths.extend(files.flatten().map(|file| file.path()).filter(|path| path.extension().is_some_and(|ext| ext == "error")));
+            }
+        }
+    }
+    paths.sort();
+    paths
+        .into_iter()
+        .filter_map(|path| {
+            let mut bytes = Vec::new();
+            fs::File::open(&path).ok()?.take(4096).read_to_end(&mut bytes).ok()?;
+            let text = String::from_utf8_lossy(&bytes);
+            let message = text.lines().next().unwrap_or("").trim();
+            if message.is_empty() {
+                return None;
+            }
+            let source = path.strip_prefix(root).ok()?.to_string_lossy().replace('\\', "/");
+            Some(serde_json::json!({ "source": source, "message": message }))
+        })
+        .collect()
+}
+
+fn health_with_status(root: &Path, status: Option<&str>) -> serde_json::Value {
+    let mut problems = health_files(root);
+    if let Some(errors) = status.and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()).and_then(|s| s.get("errors").and_then(|e| e.as_array()).cloned()) {
+        for error in errors {
+            let Some(message) = error.as_str().and_then(|s| s.lines().next()).map(str::trim) else { continue };
+            if !message.is_empty() && !problems.iter().any(|p| p["message"] == message) {
+                problems.push(serde_json::json!({ "source": "status", "message": message }));
+            }
+        }
+    }
+    problems.sort_by(|a, b| a["source"].as_str().cmp(&b["source"].as_str()).then_with(|| a["message"].as_str().cmp(&b["message"].as_str())));
+    serde_json::json!({ "problems": problems })
+}
+
+pub fn health() -> serde_json::Value {
+    let status = output(&["status".into()], Duration::from_secs(3)).ok();
+    health_with_status(&home(), status.as_deref())
+}
 
 /// Runs an app command in the open window, as a key in keys.json would.
 pub fn run(name: &str, args: &[(&str, &str)]) -> Result<()> {
@@ -116,6 +165,14 @@ pub fn run(name: &str, args: &[(&str, &str)]) -> Result<()> {
 #[serde(default)]
 pub struct AppCommand {
     pub name: String,
+    pub args: Vec<AppCommandArg>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct AppCommandArg {
+    pub name: String,
+    pub required: bool,
 }
 
 /// Every app command. It needs no open window.
@@ -187,6 +244,19 @@ pub enum Bound {
     Already(String),
 }
 
+const POPUP_FILES: &[(&str, &str)] = &[
+    ("main.js", include_str!("../../app/mods/herdr-customize/main.js")),
+    ("mod.json", include_str!("../../app/mods/herdr-customize/mod.json")),
+    ("lib.js", include_str!("../../app/mods/herdr-customize/lib.js")),
+    ("pages.js", include_str!("../../app/mods/herdr-customize/pages.js")),
+    ("pages/themes.js", include_str!("../../app/mods/herdr-customize/pages/themes.js")),
+    ("pages/keys.js", include_str!("../../app/mods/herdr-customize/pages/keys.js")),
+    ("pages/mods.js", include_str!("../../app/mods/herdr-customize/pages/mods.js")),
+    ("pages/core.js", include_str!("../../app/mods/herdr-customize/pages/core.js")),
+    ("pages/app.js", include_str!("../../app/mods/herdr-customize/pages/app.js")),
+    ("pages/extras.js", include_str!("../../app/mods/herdr-customize/pages/extras.js")),
+];
+
 /// Writes the mod that opens this binary's popup in the app, checks it, and
 /// binds key (or DEFAULT_KEY) to it unless a key already opens it.
 pub fn install_popup(key: Option<&str>) -> Result<Bound> {
@@ -194,9 +264,17 @@ pub fn install_popup(key: Option<&str>) -> Result<Bound> {
     let dir = home().join("mods").join(MOD_NAME);
     fs::create_dir_all(&dir)?;
     let bin = serde_json::to_string(&exe.to_string_lossy())?;
-    let js = include_str!("../../app/mods/herdr-customize/main.js");
-    fsutil::atomic_write(&dir.join("main.js"), js.replace("\"@BIN@\"", &bin).as_bytes(), 0o644)?;
-    fsutil::atomic_write(&dir.join("mod.json"), include_str!("../../app/mods/herdr-customize/mod.json").as_bytes(), 0o644)?;
+    for &(name, contents) in POPUP_FILES {
+        let path = dir.join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if name == "main.js" {
+            fsutil::atomic_write(&path, contents.replace("\"@BIN@\"", &bin).as_bytes(), 0o644)?;
+        } else {
+            fsutil::atomic_write(&path, contents.as_bytes(), 0o644)?;
+        }
+    }
     check_mod(&dir)?;
     let action = format!("mod.open:{MOD_NAME}");
     let bindings = keys::load()?;
@@ -221,6 +299,39 @@ pub fn install_popup(key: Option<&str>) -> Result<Bound> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn health_combines_files_and_status_without_duplicates() {
+        let _guard = crate::ui::tests::isolated();
+        let root = home();
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("mods/example")).unwrap();
+        fs::write(root.join("keys.error"), " bad keys \nmore detail").unwrap();
+        fs::write(root.join("mods/example/main.error"), "mod failed\nstack").unwrap();
+        fs::write(root.join("mods/example/ignore.txt"), "ignored").unwrap();
+        let result = health_with_status(&root, Some(r#"{"errors":["bad keys"," runtime error\nmore"]}"#));
+        assert_eq!(
+            result,
+            serde_json::json!({"problems": [
+                {"source":"keys.error","message":"bad keys"},
+                {"source":"mods/example/main.error","message":"mod failed"},
+                {"source":"status","message":"runtime error"}
+            ]})
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn health_caps_files_and_ignores_unavailable_status() {
+        let _guard = crate::ui::tests::isolated();
+        let root = home();
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("settings.error"), "x".repeat(5000)).unwrap();
+        let result = health_with_status(&root, None);
+        assert_eq!(result["problems"][0]["message"].as_str().unwrap().len(), 4096);
+        let _ = fs::remove_dir_all(root);
+    }
+
     // The mod lands where the app loads it, aimed at this binary, and the
     // key is added once and never over another binding.
     #[test]
@@ -237,6 +348,11 @@ mod tests {
         let js = fs::read_to_string(home().join("mods").join(MOD_NAME).join("main.js")).unwrap();
         let exe = std::env::current_exe().unwrap();
         assert!(js.contains(&serde_json::to_string(&exe.to_string_lossy()).unwrap()) && !js.contains("@BIN@"));
+        for &(name, contents) in POPUP_FILES {
+            let actual = fs::read_to_string(home().join("mods").join(MOD_NAME).join(name)).unwrap();
+            let expected = if name == "main.js" { contents.replace("\"@BIN@\"", &serde_json::to_string(&exe.to_string_lossy()).unwrap()) } else { contents.to_owned() };
+            assert_eq!(actual, expected, "{name}");
+        }
         let _ = fs::remove_dir_all(home());
     }
 
