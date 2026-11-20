@@ -186,6 +186,26 @@ still bound to the original action. Install records are kept in
 `data/herdr-customize/extras.json`. Each installed mod includes its recipe
 with usage and limitations.
 
+## Popups
+
+The Popups page creates floating terminals for local commands such as
+`lazygit` or `fzf`. Give each a lowercase name, a command, optional global
+shortcut, and width and height as fractions of the window (0.2 to 1, default
+0.8). A shortcut already in use is never replaced. **Try** opens the popup;
+its title bar closes it, while Escape goes to the program. A persistent popup
+keeps its terminal running when closed and reuses it next time; otherwise
+Close ends the terminal. Remote spaces are not supported.
+Switching layouts closes the window without ending its terminal. Reopening
+an already open nonpersistent popup replaces the window but leaves the old
+terminal running.
+
+Commands are split into arguments without a shell: single or double quotes
+group text, and a backslash escapes a quote. Other backslashes are preserved,
+including Windows paths. Use a shell explicitly for pipes or shell syntax.
+The generated mod lives at `mods/popup-<name>` and its record at
+`data/herdr-customize/popups.json`. Removing a popup keeps its folder if edited
+and removes its shortcut only if it still runs that popup.
+
 ## Health
 
 The screen checks the app's error files and the open window's reported errors

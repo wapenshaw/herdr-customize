@@ -8,6 +8,7 @@ pub mod crawl;
 pub mod extras;
 pub mod keys;
 pub mod mods;
+pub mod popups;
 pub mod presets;
 pub mod settings;
 pub mod themes;
@@ -255,6 +256,7 @@ const POPUP_FILES: &[(&str, &str)] = &[
     ("pages/core.js", include_str!("../../app/mods/herdr-customize/pages/core.js")),
     ("pages/app.js", include_str!("../../app/mods/herdr-customize/pages/app.js")),
     ("pages/extras.js", include_str!("../../app/mods/herdr-customize/pages/extras.js")),
+    ("pages/popups.js", include_str!("../../app/mods/herdr-customize/pages/popups.js")),
 ];
 
 /// Writes the mod that opens this binary's popup in the app, checks it, and
