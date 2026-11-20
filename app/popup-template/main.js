@@ -58,7 +58,10 @@ async function launch(focus) {
 
 export default class Popup extends View {
   init(_props, cx) {
-    this.bar = herdr.props()?.role === "bar";
+    const given = herdr.props();
+    this.bar = given?.role === "bar";
+    // The bar owns a non-persistent terminal: close() ends it whenever its window goes.
+    this.owned = this.bar && !given.persistent ? given.address : null;
     if (typeof herdr.checking === "function" ? herdr.checking() : !herdr.window()) return;
     if (this.bar) return;
     const overlay = herdr.props()?.overlay;
@@ -76,9 +79,12 @@ export default class Popup extends View {
     });
   }
 
+  async close() {
+    if (this.owned && herdr.terminals().some(t => t.address === this.owned && t.state === "live")) herdr.run("terminal.kill", { terminal: this.owned });
+  }
+
   dismiss() {
-    const { overlay, address, persistent } = herdr.props();
-    if (!persistent) herdr.run("terminal.kill", { terminal: address });
+    const overlay = herdr.props()?.overlay;
     if (overlay) herdr.closeOverlay(overlay);
   }
 
