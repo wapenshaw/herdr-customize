@@ -238,11 +238,9 @@ The Popups page creates floating terminals for local commands such as
 shortcut, and width and height as fractions of the window (0.2 to 1, default
 0.8). A shortcut already in use is never replaced. **Try** opens the popup;
 its title bar closes it, while Escape goes to the program. A persistent popup
-keeps its terminal running when closed and reuses it next time; otherwise
-Close ends the terminal. Remote spaces are not supported.
-Switching layouts closes the window without ending its terminal. Reopening
-an already open nonpersistent popup replaces the window but leaves the old
-terminal running.
+keeps its terminal running when closed and reuses it next time; otherwise the
+terminal ends when the window goes: Close, a layout switch, or reopening the
+popup. Remote spaces are not supported.
 
 Commands are split into arguments without a shell: single or double quotes
 group text, and a backslash escapes a quote. Other backslashes are preserved,
