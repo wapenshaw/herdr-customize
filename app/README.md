@@ -4,7 +4,7 @@ Customize Herdr from one screen: pick a theme with a live preview, change
 your keybindings, presets and the new keys app updates leave out, find,
 review and install mods and layouts from GitHub, set herdr-core's shell,
 scrollback and timeouts, edit the app's settings, switch and style layouts,
-add popups and programs, and install extras such as a keyboard copy mode.
+add popups and programs, and install bundled mods such as a keyboard copy mode.
 No config files to edit.
 
 | Themes | Keys | Mods | Core |

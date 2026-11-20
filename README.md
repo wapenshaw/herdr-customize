@@ -26,7 +26,7 @@ popup for my convenience. Use it if it helps you too.
 - **The Herdr app**: a screen in the new desktop app, drawn with its own
   controls, for every palette as a theme, its keys and presets, mods from
   GitHub, the app's and the core's settings, layouts, popups and programs,
-  and extras such as a keyboard copy mode.
+  and bundled mods such as a keyboard copy mode.
   Add it like any mod; see [The Herdr app](docs/app.md).
 - **Safe edits**: your comments and layout stay put. Herdr checks every change
   before it is written, the original is backed up daily, and Herdr reloads
