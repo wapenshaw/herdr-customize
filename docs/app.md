@@ -5,7 +5,7 @@ herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
 adds a screen to the app with nine pages: Themes, Keys, Mods, Core, App,
-Extras, Popups, Layouts and Programs. It
+Bundled mods, Popups, Layouts and Programs. It
 never touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
@@ -186,9 +186,10 @@ defaults apply. Child nodes and unknown fields are preserved. Invalid or
 unreadable layout files are shown but never overwritten. Writes are atomic,
 with daily backups, and serialize with other herdr-customize writers.
 
-## Extras
+## Bundled mods
 
-The Extras page offers optional mods bundled with herdr-customize: Copy mode
+The Bundled mods page offers optional mods that ship inside herdr-customize
+instead of coming from GitHub: Copy mode
 and Scrollback in an editor. It shows their required app commands and the
 default shortcut's status. Install and Update check the mod with the app;
 a failed check restores the previous installation. Only the platform's
@@ -196,7 +197,7 @@ shortcut is added, and keys already taken or hidden by a more specific
 section are skipped rather than replaced.
 
 An unrelated mod with the same name is never overwritten. Updating refuses
-edited files; removing an edited extra keeps its folder and removes only keys
+edited files; removing an edited mod keeps its folder and removes only keys
 still bound to the original action. Install records are kept in
 `data/herdr-customize/extras.json`. Each installed mod includes its recipe
 with usage and limitations.

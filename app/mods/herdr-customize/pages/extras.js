@@ -6,7 +6,7 @@ import { page } from "../lib.js";
 export default function create(app) {
   class Page {
     id = "extras";
-    title = "Extras";
+    title = "Bundled mods";
     init() { this.extras = null; }
     focus() { this.handle.focus(); }
     show(cx) { this.load(cx, ["extras"], data => { this.extras = data.extras; }); }

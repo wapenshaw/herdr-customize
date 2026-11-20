@@ -4,10 +4,10 @@ Customize Herdr from one screen: pick a theme with a live preview, change
 your keybindings, presets and the new keys app updates leave out, find,
 review and install mods and layouts from GitHub, set herdr-core's shell,
 scrollback and timeouts, edit the app's settings, switch and style layouts,
-add popups and programs, and install extras such as a keyboard copy mode.
+add popups and programs, and install bundled mods such as a keyboard copy mode.
 No config files to edit.
 
-![Customize: the Themes, Keys, Mods, Core, App, Extras, Popups, Layouts and Programs pages](preview.png)
+![Customize: the Themes, Keys, Mods, Core, App, Bundled mods, Popups, Layouts and Programs pages](preview.png)
 
 ## Before you add it
 
@@ -65,7 +65,7 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - **App**: the app's `settings.json` by group (Look, Terminal, Input and
   clipboard, Behavior); each setting with its value or default, an input or
   chips, **Save** and **Use the default**.
-- **Extras**: one card per bundled mod (copy mode, scrollback in an
+- **Bundled mods**: one card per mod that ships with Customize (copy mode, scrollback in an
   editor) with its keys, **Install**, **Update** or **Remove**, and why it is
   unavailable on an older app.
 - **Popups**: the popups made here, an add form (name, command, size, key,
