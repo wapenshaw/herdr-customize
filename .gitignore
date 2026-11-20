@@ -4,3 +4,6 @@
 /herdr-customize
 /.build/
 /target/
+/app/**/gpui-kit.d.ts
+/app/**/herdr.d.ts
+/app/**/jsconfig.json
