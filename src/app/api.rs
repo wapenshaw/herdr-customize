@@ -100,6 +100,15 @@ fn run(args: &[String]) -> Result<Value> {
         "extras" => Ok(json!({ "extras": super::extras::describe(&super::commands()?)? })),
         "extras-install" => Ok(serde_json::to_value(super::extras::install(a.need("name")?, &super::commands()?)?)?),
         "extras-remove" => Ok(serde_json::to_value(super::extras::remove(a.need("name")?)?)?),
+        "popups" => Ok(json!({ "popups": super::popups::describe()? })),
+        "popup-add" => {
+            let width = if a.flag("width").is_empty() { 0.8 } else { a.flag("width").parse()? };
+            let height = if a.flag("height").is_empty() { 0.8 } else { a.flag("height").parse()? };
+            let persistent = if a.flag("persistent").is_empty() { false } else { a.flag("persistent").parse()? };
+            super::popups::add(a.need("name")?, a.need("command")?, width, height, a.flag("key"), persistent)?;
+            Ok(json!({}))
+        }
+        "popup-remove" => Ok(serde_json::to_value(super::popups::remove(a.need("name")?)?)?),
         "market" => market(&a),
         "review" => review(&a),
         "install" => install(&a),
