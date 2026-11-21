@@ -272,7 +272,7 @@ export default class Customize extends View {
       .track_focus(this.handle).on_key_down((e, cx) => this.onKey(e, cx))
       .child(h_flex().px(20).h(52).gap(14).items_center().border_b(1).border_color(t.border).flex_none()
         .child(div().text_size(14).font_semibold().child("Customize"))
-        .child(h_flex().id("tabs").gap(2).p(3).rounded(8).bg(t.surface).flex_1().min_w(0).overflow_x_scroll().track_scroll(this.tabScroll)
+        .child(h_flex().id("tabs").gap(2).p(3).rounded(8).bg(t.surface).min_w(0).overflow_x_scroll().track_scroll(this.tabScroll)
           .children(this.pageList.map(({ id, title }) => div().id(`tab-${id}`).px(8).py(5).rounded(6).flex_none()
           .text_size(12).font_medium().cursor_pointer().bg(this.tab === id ? t.raised : t.surface).text_color(this.tab === id ? t.foreground : t.muted)
           .hover(s => s.text_color(t.foreground)).on_click((_e, cx) => this.showTab(id, cx)).child(title))))
