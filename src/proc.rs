@@ -5,7 +5,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -49,46 +49,45 @@ fn detach(command: impl Fn() -> Command) -> std::io::Result<()> {
 }
 
 /// Runs cmd like Command::output, but gives up once timeout passes, killing
-/// it if it still runs. A descendant can hold the pipes open after cmd exits,
-/// so reading them has the same deadline.
+/// it if it still runs. A descendant can hold the pipes open after cmd exits;
+/// the output is then what was written by the time it exited.
 pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
     let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
-    let (tx, rx) = mpsc::channel();
-    let read = |pipe: Option<Box<dyn Read + Send>>, is_err: bool| {
-        let tx = tx.clone();
+    let read = |mut pipe: Option<Box<dyn Read + Send>>| {
+        let shared = Arc::new(Mutex::new(Vec::new()));
+        let (done, finished) = mpsc::channel();
+        let into = Arc::clone(&shared);
         std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            if let Some(mut pipe) = pipe {
-                let _ = pipe.read_to_end(&mut buf);
+            let mut chunk = [0u8; 8192];
+            while let Some(n) = pipe.as_mut().and_then(|p| p.read(&mut chunk).ok()).filter(|n| *n > 0) {
+                if let Ok(mut all) = into.lock() {
+                    all.extend_from_slice(&chunk[..n]);
+                }
             }
-            let _ = tx.send((is_err, buf));
+            let _ = done.send(());
         });
+        (shared, finished)
     };
-    read(child.stdout.take().map(|p| Box::new(p) as _), false);
-    read(child.stderr.take().map(|p| Box::new(p) as _), true);
+    let (out, out_done) = read(child.stdout.take().map(|p| Box::new(p) as _));
+    let (err, err_done) = read(child.stderr.take().map(|p| Box::new(p) as _));
     let deadline = Instant::now() + timeout;
-    let give_up = |mut child: std::process::Child| -> Result<Output> {
-        let _ = child.kill();
-        let _ = child.wait();
-        Err(TimedOut(timeout).into())
-    };
-    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    for _ in 0..2 {
-        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok((is_err, buf)) => *(if is_err { &mut stderr } else { &mut stdout }) = buf,
-            Err(_) => return give_up(child),
-        }
-    }
     let status = loop {
         if let Some(status) = child.try_wait()? {
             break status;
         }
         if Instant::now() > deadline {
-            return give_up(child);
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(TimedOut(timeout).into());
         }
         std::thread::sleep(Duration::from_millis(5));
     };
-    Ok(Output { status, stdout, stderr })
+    let flushed = Instant::now() + Duration::from_millis(500);
+    for done in [&out_done, &err_done] {
+        let _ = done.recv_timeout(flushed.saturating_duration_since(Instant::now()));
+    }
+    let take = |buf: Arc<Mutex<Vec<u8>>>| buf.lock().map(|mut all| std::mem::take(&mut *all)).unwrap_or_default();
+    Ok(Output { status, stdout: take(out), stderr: take(err) })
 }
 
 /// The error output_within gives when its timeout passes.
@@ -315,13 +314,14 @@ mod tests {
     }
 
     // A descendant that keeps the output pipe open after its parent exits
-    // must not hold up the caller either.
+    // must not hold up the caller, or turn a program that succeeded into a failure.
     #[test]
     fn output_within_stops_waiting_on_inherited_pipes() {
         let mut cmd = if cfg!(windows) { Command::new("cmd") } else { Command::new("sh") };
-        cmd.args(if cfg!(windows) { ["/C", "start /b ping -n 4 127.0.0.1"] } else { ["-c", "sleep 3 &"] });
+        cmd.args(if cfg!(windows) { ["/C", "echo hi & start /b ping -n 4 127.0.0.1"] } else { ["-c", "echo hi; sleep 3 &"] });
         let start = Instant::now();
-        assert!(output_within(&mut cmd, Duration::from_millis(200)).is_err());
-        assert!(start.elapsed() < Duration::from_millis(1500), "{:?}", start.elapsed());
+        let out = output_within(&mut cmd, Duration::from_secs(10)).unwrap();
+        assert!(out.status.success() && String::from_utf8_lossy(&out.stdout).trim_start().starts_with("hi"));
+        assert!(start.elapsed() < Duration::from_millis(2000), "{:?}", start.elapsed());
     }
 }
