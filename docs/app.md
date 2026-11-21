@@ -4,8 +4,8 @@ The Herdr app (`herdr-app`) is a desktop window over terminals that
 herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
-adds a screen to the app with eight pages: Themes, Keys, Mods, Core, App,
-Popups, Layouts and Programs. It
+adds a screen to the app with eight pages: Themes, Keys, Mods, Layouts, Core,
+App, Popups and Programs. It
 never touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
@@ -174,12 +174,19 @@ and other programs do not necessarily share that lock.
 
 ## Layouts
 
-The Layouts page lists the available layouts and marks the active one. Switch
-layouts or clone one with an optional new name; refresh the list after cloning.
-Shipped layouts are read-only and must be cloned before changing their look.
-Personal layouts expose root theme (including light and dark pairs), fonts,
-terminal spacing and opacity, title bar and blur, and installed mod pickers
-for menus, notifications and ordered link handlers.
+The Layouts page, beside Mods, has two views. My layouts lists the available
+layouts, marks the active one and offers **Switch to this layout**. A built-in
+layout can't be edited; **Make a copy** (with an optional name) creates one you
+can. Switching and copying refresh the list on their own. Personal layouts
+expose root theme (including light and dark pairs), fonts, terminal spacing and
+opacity, title bar and blur, and installed mod pickers for menus,
+notifications and ordered link handlers.
+
+Community gallery lists the repositories tagged `herdr-layout` on GitHub, the
+same list as herdr.dev/gallery, with the same Review and Install as the Mods
+page. A layout with mods brings them. The first load of a page of results can
+take a while, because each repository is read once; later loads use what was
+read.
 
 Use **Use the default** to remove a root field and let the app's settings or
 defaults apply. Child nodes and unknown fields are preserved. Invalid or

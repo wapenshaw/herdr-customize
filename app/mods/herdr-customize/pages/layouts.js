@@ -27,9 +27,10 @@ export default function create(app) {
     title = "Layouts";
     init() {
       this.data = null;
+      this.view = "mine";
       this.selected = "";
       this.field = "theme";
-      this.cloneName = InputState.new({ placeholder: "New layout name (optional)" });
+      this.cloneName = InputState.new({ placeholder: "Name for your copy (optional)" });
       this.edit = InputState.new({ placeholder: "Value" });
       this.edit.on("submit", (_e, cx) => this.save(cx, value(this.edit)));
     }
@@ -41,8 +42,24 @@ export default function create(app) {
         this.pickField(this.field, cx);
       });
     }
-    show(cx) { if (!this.data) this.refresh(cx); }
-    focus() { this.handle.focus(); }
+    show(cx) { this.refresh(cx); }
+    focus() {
+      const mods = this.pages.mods;
+      if (this.view === "community" && !mods.reviewed) mods.marketSearch.focus(); else this.handle.focus();
+    }
+    // The app acts on a request some seconds later, so the list is read again a few times.
+    refreshSoon(cx) {
+      for (const ms of [1500, 3000, 5000, 8000, 12000]) cx.timer.after(ms, c => { if (this.view === "mine") this.refresh(c); });
+    }
+    community(cx) {
+      const mods = this.pages.mods;
+      this.view = "community";
+      mods.topic = "layouts";
+      mods.page = 1;
+      mods.loadMarket(cx);
+      this.focus();
+      cx.notify();
+    }
     pickField(field, cx) {
       this.field = field;
       const current = this.current()?.root[field];
@@ -69,7 +86,7 @@ export default function create(app) {
         this.pickField(this.field, cx);
       });
     }
-    render() {
+    mine() {
       const t = theme();
       if (!this.data) return this.empty("Reading layouts…");
       const layout = this.current();
@@ -80,21 +97,31 @@ export default function create(app) {
           .on_click((_e, cx) => { this.selected = row.name; this.pickField(this.field, cx); })
           .child(div().flex_1().min_w(0).text_size(12.5).child(row.name))
           .when(row.name === active, el => el.child(this.badge("Active", t.done)))
-          .when(row.shipped, el => el.child(this.badge("Shipped", t.muted)))));
-      if (!layout) return this.split(300, [this.heading("Layouts"), left, this.button("layouts-refresh", "Refresh", (_e, cx) => this.refresh(cx))], this.empty("No layouts found."));
+          .child(this.badge(row.shipped ? "Built in" : "Yours", t.muted))));
+      if (!layout) return this.split(300, [left], this.empty("No layouts found."));
       const field = FIELDS.find(f => f[0] === this.field);
       const current = layout.root[this.field];
       const detail = v_flex().id("layout-detail").flex_1().min_w(0).h_full().overflow_y_scrollbar().gap(10)
-        .child(div().text_size(18).font_semibold().child(layout.name))
-        .child(h_flex().gap(8).child(this.button("layout-switch", "Switch", () => run("layout.switch", { name: layout.name })))
-          .child(this.input(this.cloneName))
-          .child(this.button("layout-clone", "Clone", (_e, cx) => {
-            const name = value(this.cloneName);
-            run("layout.clone", name ? { name: layout.name, as: name } : { name: layout.name });
-            this.notice = "Clone requested. Refresh the list to see it.";
-            cx.notify();
-          })))
-        .child(div().text_size(11.5).text_color(t.dim).child(layout.shipped ? "Shipped layouts are read-only. Clone this layout before editing." : "Changes apply to this layout's root; nested nodes are preserved."));
+        .child(h_flex().gap(10).items_center()
+          .child(div().text_size(18).font_semibold().child(layout.name))
+          .child(div().flex_1())
+          .child(this.button("layout-switch", layout.name === active ? "In use" : "Switch to this layout", (_e, cx) => { run("layout.switch", { name: layout.name }); this.refreshSoon(cx); }, { primary: true, enabled: layout.name !== active })))
+        .child(div().text_size(11.5).text_color(t.dim).child(layout.shipped ? "This one ships with the app and can't be edited. Make a copy to change its look." : "Your layout. The settings below change its look; its inner structure is kept as it is."))
+        .child(v_flex().gap(5).child(this.label("Make a copy to edit"))
+          .child(h_flex().gap(8).child(div().flex_1().child(this.input(this.cloneName)))
+            .child(this.button("layout-clone", "Make a copy", (_e, cx) => {
+              const taken = new Set(this.data.layouts.map(x => x.name));
+              let name = value(this.cloneName);
+              if (name && taken.has(name)) { this.error = `A layout named ${name} already exists.`; cx.notify(); return; }
+              for (let n = 2; !name; n++) {
+                const free = n === 2 ? `${layout.name}-copy` : `${layout.name}-copy-${n - 1}`;
+                if (!taken.has(free)) name = free;
+              }
+              run("layout.clone", { name: layout.name, as: name });
+              this.notice = `Copy ${name} requested. The app switches to it and it shows in the list in a moment.`;
+              this.refreshSoon(cx);
+              cx.notify();
+            }))));
       if (layout.error) detail.child(div().text_size(12).text_color(t.blocked).child(layout.error));
       if (layout.personal && !layout.error) {
         detail.child(this.heading("Root fields"))
@@ -119,7 +146,23 @@ export default function create(app) {
         }
         if (current !== null) detail.child(this.button("layout-default", "Use the default", (_e, cx) => this.reset(cx)));
       }
-      return this.split(300, [this.heading("Layouts"), left, this.button("layouts-refresh", "Refresh", (_e, cx) => this.refresh(cx))], detail);
+      return this.split(300, [left], detail);
+    }
+    render() {
+      const t = theme();
+      const mods = this.pages.mods;
+      const body = this.view === "community" ? (mods.reviewed ? mods.reviewPanel() : mods.browse(true)) : this.mine();
+      return v_flex().flex_1().min_h(0).gap(10)
+        .when(!(this.view === "community" && mods.reviewed), el => el
+          .child(div().text_size(12).text_color(t.muted).child("A layout is the whole arrangement of the window: sidebar, tab bar and terminal area, and the mods that draw them. Switching changes how Herdr looks and works; your terminals keep running."))
+          .child(h_flex().gap(5).items_center()
+            .children(this.segment("layouts-view", [["mine", "My layouts"], ["community", "Community gallery"]], this.view, (view, cx) => {
+              if (view === "community") this.community(cx);
+              else { this.view = "mine"; this.refresh(cx); this.focus(); cx.notify(); }
+            }))
+            .child(div().flex_1())
+            .when(this.view === "community", el2 => el2.child(div().text_size(11).text_color(t.dim).child("The layouts on herdr.dev/gallery: GitHub repositories tagged herdr-layout. Review one to see its files before installing.")))))
+        .child(body);
     }
   }
   return page(app, new Page());

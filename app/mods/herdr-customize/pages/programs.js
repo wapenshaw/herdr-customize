@@ -80,7 +80,7 @@ export default function create(app) {
     }
     // The app reloads programs.json a moment after it is written; asking at once returns the old table.
     recheckAgents(cx) {
-      cx.timer.after(1500, () => this.checkAgents(cx));
+      cx.timer.after(1500, c => this.checkAgents(c));
     }
     save(cx) {
       const key = value(this.inputs.key);
