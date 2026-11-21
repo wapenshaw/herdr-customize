@@ -4,6 +4,23 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [1.0.0](https://github.com/wapenshaw/herdr-customize/compare/v0.10.0...v1.0.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tui:** herdr-plugin.toml is gone, so `herdr plugin install` and `herdr plugin update` no longer work on this repository's main branch, and the ui, open, bind, apply, reset, sync and preview commands are removed. v0.10.0 is the last release with the TUI plugin; pin it with `herdr plugin install wapenshaw/herdr-customize --ref v0.10.0`.
+
+### Bug Fixes
+
+* **app:** fit all eight page tabs in the customize header ([dd2212e](https://github.com/wapenshaw/herdr-customize/commit/dd2212ef8de833dd73aad986f59788a32c342b6a))
+* **app:** show numbers the app wrote in single precision as typed ([50a3e0d](https://github.com/wapenshaw/herdr-customize/commit/50a3e0da682061f9cd1f0faeed36d8124e4df703))
+
+
+### Refactoring
+
+* **tui:** drop the herdr tui plugin ([9d92cc9](https://github.com/wapenshaw/herdr-customize/commit/9d92cc969e4d3e79eb94a19fae319b86dad84aea))
+
 ## [0.10.0](https://github.com/wapenshaw/herdr-customize/compare/v0.9.0...v0.10.0) (2026-11-21)
 
 
