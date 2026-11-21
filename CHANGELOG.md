@@ -4,6 +4,41 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [0.10.0](https://github.com/wapenshaw/herdr-customize/compare/v0.9.0...v0.10.0) (2026-11-21)
+
+
+### Features
+
+* **app:** add a layouts page to switch, clone and style layouts ([5c9df90](https://github.com/wapenshaw/herdr-customize/commit/5c9df90cb6472f065f6f15d25da243eeeb94cbeb))
+* **app:** add a programs page for the app's programs.json ([2a48c86](https://github.com/wapenshaw/herdr-customize/commit/2a48c86db7b2577dff206a610f50802da836499e))
+* **app:** add app settings, extras, health and keys form pages ([bfd8942](https://github.com/wapenshaw/herdr-customize/commit/bfd89422ffbb1ff847e32d79fae168b0b8834231))
+* **app:** add copy mode and scrollback extras ([d13051a](https://github.com/wapenshaw/herdr-customize/commit/d13051ae57f77fab3d3ebe873014d535a8864b5c))
+* **app:** add popups that open a command in a floating terminal ([44d66ab](https://github.com/wapenshaw/herdr-customize/commit/44d66ab235508461dc326caba7de603e651d1d12))
+* **app:** explain popups and start the form from examples ([d47a1a6](https://github.com/wapenshaw/herdr-customize/commit/d47a1a612793863193a29d5012722fef164ca674))
+* **app:** make the programs page click-to-customize ([47b11fa](https://github.com/wapenshaw/herdr-customize/commit/47b11fa7d672e2183e1e7dfa0e521e0262a68032))
+* **app:** put layouts beside mods with a community gallery ([76eec56](https://github.com/wapenshaw/herdr-customize/commit/76eec56ae45227b70af7866e1d578cb6d319575c))
+* **app:** run the monitor popup example in btop's theme colors ([ee2db38](https://github.com/wapenshaw/herdr-customize/commit/ee2db383dc905945916a3af6de02b9d894aaafac))
+* **app:** show a loader with elapsed seconds while GitHub is read ([0177858](https://github.com/wapenshaw/herdr-customize/commit/01778583f445b68bacc544d487b3db1e337439ff))
+* **app:** warn when a PowerShell shell drops the core's folder hook ([818ed02](https://github.com/wapenshaw/herdr-customize/commit/818ed02e9a488fb58ea8491b07c232c2e0fdd6e2))
+
+
+### Bug Fixes
+
+* **app:** close Customize before opening a popup from Try ([6a692ba](https://github.com/wapenshaw/herdr-customize/commit/6a692ba4296f05c748f144c73ebe8837f881fd9d))
+* **app:** end a nonpersistent popup's terminal when its window goes ([8fa8915](https://github.com/wapenshaw/herdr-customize/commit/8fa8915f49601212f56b37ab5d6b631e96ad64be))
+* **app:** fetch only a package's folders when reviewing a repository ([0cbeeb7](https://github.com/wapenshaw/herdr-customize/commit/0cbeeb7eb7f5e36ca4761a2dc568104f0a6a77ab))
+* **app:** keep spaced shell arguments intact on the core page ([804e956](https://github.com/wapenshaw/herdr-customize/commit/804e9565a40206d8d5c1148d8f91ff0310db3fb8))
+* **app:** open scrollback in the default text app on windows ([166f083](https://github.com/wapenshaw/herdr-customize/commit/166f083a603f734dee450f713a49a5ed53910438))
+* **app:** pin the program form's buttons and refresh agents after a save ([cacc4b9](https://github.com/wapenshaw/herdr-customize/commit/cacc4b91bdb88487328f2a8a4c704b634723d90e))
+* **app:** start one terminal per popup however quickly it is opened ([6cdbbb1](https://github.com/wapenshaw/herdr-customize/commit/6cdbbb19f72d76bf9cb42da568a8f749a93291bf))
+* **proc:** return at a program's exit, not when its children close the pipes ([18f9f9e](https://github.com/wapenshaw/herdr-customize/commit/18f9f9e61344b4be66ab64761aaf5e4f1a9d98b7))
+
+
+### Refactoring
+
+* **app:** call the bundled extras bundled mods ([1d03df5](https://github.com/wapenshaw/herdr-customize/commit/1d03df571dc3c45023d57d6404ebe8580517201c))
+* **app:** move bundled mods into a view of the Mods page ([63fcbff](https://github.com/wapenshaw/herdr-customize/commit/63fcbff937b22f3412294596c9dbb654d288a14c))
+
 ## [0.9.0](https://github.com/wapenshaw/herdr-customize/compare/v0.8.4...v0.9.0) (2026-11-06)
 
 
