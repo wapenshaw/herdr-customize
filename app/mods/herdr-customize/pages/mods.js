@@ -20,6 +20,7 @@ export default function create(app) {
       if (looksLikeRepo(text)) this.review(text, cx);
       else { this.page = 1; this.loadMarket(cx); }
     });
+    this.bundledMods = null;
     this.reviewed = null;
     }
 
@@ -79,10 +80,10 @@ export default function create(app) {
 
   modsPage() {
     const t = theme();
-    const body = this.reviewed ? this.reviewPanel() : this.modView === "browse" ? this.browse() : this.installed();
+    const body = this.reviewed ? this.reviewPanel() : this.modView === "browse" ? this.browse() : this.modView === "bundled" ? this.bundled() : this.installed();
     return v_flex().flex_1().min_h(0).gap(10)
       .when(!this.reviewed, el => el.child(h_flex().gap(5)
-        .children(this.segment("mods", [["installed", "Installed"], ["browse", "Browse GitHub"]], this.modView, (view, cx) => {
+        .children(this.segment("mods", [["installed", "Installed"], ["bundled", "Bundled with Customize"], ["browse", "Browse GitHub"]], this.modView, (view, cx) => {
           this.modView = view;
           this.focusPage();
           if (view === "browse" && !this.market) this.loadMarket(cx);
@@ -91,6 +92,32 @@ export default function create(app) {
         .child(div().flex_1())
         .child(div().text_size(11).text_color(t.dim).child("Mods and layouts from the herdr-mod and herdr-layout topics."))))
       .child(body);
+  }
+
+  changeBundled(mod, action, cx) {
+    this.task(cx, `${action === "extras-remove" ? "Removing" : "Installing"} ${mod.title}`, [action, "--name", mod.name], async data => {
+      const messages = [];
+      if (data.added.length) messages.push(`Added: ${data.added.join(", ")}`);
+      if (data.skipped.length) messages.push(`Skipped: ${data.skipped.join(", ")}`);
+      if (data.kept.length) messages.push(`Edited files kept: ${data.kept.join(", ")}`);
+      this.notice = messages.length ? messages.join(" · ") : `${mod.title} ${action === "extras-remove" ? "removed" : "installed"}.`;
+      this.bundledMods = (await this.call(["extras"])).extras;
+    });
+  }
+
+  bundled() {
+    const t = theme();
+    if (!this.bundledMods) return this.empty("Loading…");
+    return v_flex().id("bundled").flex_1().min_h(0).overflow_y_scrollbar().gap(8)
+      .children(this.bundledMods.map(mod => h_flex().id(`bundled-${mod.name}`).p(12).gap(10).items_center().rounded(9).bg(t.surface)
+        .child(v_flex().flex_1().min_w(0).gap(4)
+          .child(div().text_size(13).font_semibold().child(mod.title))
+          .child(div().text_size(11.5).text_color(t.muted).child(mod.about))
+          .child(div().text_size(11).text_color(t.dim).child(mod.installed ? (mod.changed ? "Installed · edited or not managed here" : "Installed") : "Not installed"))
+          .when(!mod.available, el => el.child(div().text_size(11).text_color(t.muted).child(`Needs Herdr 0.1.16 or newer; missing: ${mod.missing.join(", ")}`)))
+          .children(mod.keys.map(key => div().text_size(11).text_color(t.dim).child(`${key.section}: ${key.key} · ${key.status}${key.conflict ? ` (${key.conflict})` : ""}`))))
+        .child(this.button(`install-${mod.name}`, mod.installed ? "Update" : "Install", (_e, cx) => this.changeBundled(mod, "extras-install", cx), { enabled: mod.available && !mod.changed }))
+        .when(mod.installed, el => el.child(this.button(`remove-${mod.name}`, "Remove", (_e, cx) => this.changeBundled(mod, "extras-remove", cx), { danger: true })))));
   }
 
   installed() {
@@ -214,7 +241,10 @@ export default function create(app) {
   }
 
   focus() { if (this.modView === "browse" && !this.reviewed) this.marketSearch.focus(); else this.handle.focus(); }
-  show(cx) { if (this.modView === "browse" && !this.market) this.loadMarket(cx); }
+  show(cx) {
+    this.load(cx, ["extras"], data => { this.bundledMods = data.extras; });
+    if (this.modView === "browse" && !this.market) this.loadMarket(cx);
+  }
   render() { return this.modsPage(); }
   }
   return page(app, new Page());

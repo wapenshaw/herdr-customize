@@ -4,8 +4,8 @@ The Herdr app (`herdr-app`) is a desktop window over terminals that
 herdr-core runs. It is separate from Herdr in the terminal: it keeps its
 own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
-adds a screen to the app with nine pages: Themes, Keys, Mods, Core, App,
-Bundled mods, Popups, Layouts and Programs. It
+adds a screen to the app with eight pages: Themes, Keys, Mods, Core, App,
+Popups, Layouts and Programs. It
 never touches Herdr's `config.toml` from there.
 
 | Themes | Keys | Mods |
@@ -188,8 +188,8 @@ with daily backups, and serialize with other herdr-customize writers.
 
 ## Bundled mods
 
-The Bundled mods page offers optional mods that ship inside herdr-customize
-instead of coming from GitHub: Copy mode
+The Mods page has a Bundled with Customize view for optional mods that ship
+inside herdr-customize instead of coming from GitHub: Copy mode
 and Scrollback in an editor. It shows their required app commands and the
 default shortcut's status. Install and Update check the mod with the app;
 a failed check restores the previous installation. Only the platform's
@@ -284,6 +284,11 @@ and other machines get, the key that leaves `hc attach`, and the size of a
 terminal nobody is watching. Draft wait defaults to 60 seconds; 0 leaves only
 the quiet pause. Screen recovery is off by default; when enabled, a lost kept
 terminal's last saved screen appears above its new shell at the next recovery.
+
+On Windows, with no shell set, core 0.1.21 starts PowerShell 7 (`pwsh`) when
+it is installed, with a start-up hook that follows `cd` for the programs a
+terminal starts. Naming `pwsh` or `powershell` with other arguments replaces
+that hook, so the page warns and offers PowerShell (default) instead.
 
 ![Core: the core's settings, with the shells found on this machine](screenshots/app-core.png)
 

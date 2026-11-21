@@ -257,7 +257,6 @@ const POPUP_FILES: &[(&str, &str)] = &[
     ("pages/mods.js", include_str!("../../app/mods/herdr-customize/pages/mods.js")),
     ("pages/core.js", include_str!("../../app/mods/herdr-customize/pages/core.js")),
     ("pages/app.js", include_str!("../../app/mods/herdr-customize/pages/app.js")),
-    ("pages/extras.js", include_str!("../../app/mods/herdr-customize/pages/extras.js")),
     ("pages/layouts.js", include_str!("../../app/mods/herdr-customize/pages/layouts.js")),
     ("pages/programs.js", include_str!("../../app/mods/herdr-customize/pages/programs.js")),
     ("pages/popups.js", include_str!("../../app/mods/herdr-customize/pages/popups.js")),
