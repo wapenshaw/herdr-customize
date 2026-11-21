@@ -250,6 +250,11 @@ keeps its terminal running when closed and reuses it next time; otherwise the
 terminal ends when the window goes: Close, a layout switch, or reopening the
 popup. Remote spaces are not supported.
 
+A program that paints its own colors, like btop, ignores the app's theme. Run
+it in its terminal-colors mode so it uses the theme's palette: `btop --tty_on`
+(`btop4win --tty_on` on Windows, the btop port that ships with winget). The
+example button fills that in.
+
 Commands are split into arguments without a shell: single or double quotes
 group text, and a backslash escapes a quote. Other backslashes are preserved,
 including Windows paths. Use a shell explicitly for pipes or shell syntax.
