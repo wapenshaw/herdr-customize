@@ -3,12 +3,14 @@
 //! core checks it before it is written.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use toml_edit::{Array, DocumentMut, Item, value};
 
-use crate::fsutil;
+use crate::{fsutil, proc};
 
 /// What a setting holds, and so how it is checked and written.
 #[derive(Clone, Copy, PartialEq)]
@@ -130,12 +132,26 @@ pub fn path() -> PathBuf {
     base.join("herdr-core").join("config.toml")
 }
 
-fn read(path: &Path) -> Result<DocumentMut> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => text.parse().with_context(|| format!("{} is not valid TOML, so the core uses its defaults", path.display())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(DocumentMut::new()),
-        Err(e) => Err(e).with_context(|| format!("read {}", path.display())),
-    }
+/// Where the settings of machine (this computer when None) are, as shown.
+fn shown_path(machine: Option<&str>) -> String {
+    machine.map_or_else(|| path().display().to_string(), |m| format!("{m}: ~/{REMOTE_PATH}"))
+}
+
+/// The file's text, or None when there is no file.
+fn read_text(machine: Option<&str>) -> Result<Option<String>> {
+    let Some(machine) = machine else {
+        let path = path();
+        return match std::fs::read_to_string(&path) {
+            Ok(text) => Ok(Some(text)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).with_context(|| format!("read {}", path.display())),
+        };
+    };
+    remote_read(machine, REMOTE_PATH)
+}
+
+fn parse_doc(text: Option<&str>, machine: Option<&str>) -> Result<DocumentMut> {
+    text.map_or_else(|| Ok(DocumentMut::new()), |t| t.parse().with_context(|| format!("{} is not valid TOML, so the core uses its defaults", shown_path(machine))))
 }
 
 /// A value as the screen shows and sends it: a shell as its JSON list.
@@ -148,18 +164,25 @@ fn text(item: &Item) -> Option<String> {
     })
 }
 
-/// Every setting with its value, the shells found here, and why the file
-/// cannot be read, if it cannot.
-pub fn describe() -> Value {
-    let path = path();
-    let (doc, error) = match read(&path) {
+/// Every setting of machine (this computer when None) with its value, the
+/// shells found there, the machines hc reaches, and why the file cannot be
+/// read, if it cannot.
+pub fn describe(machine: Option<&str>) -> Value {
+    let (doc, error) = match read_text(machine).and_then(|text| parse_doc(text.as_deref(), machine)) {
         Ok(doc) => (doc, None),
         Err(e) => (DocumentMut::new(), Some(format!("{e:#}"))),
     };
     let settings: Vec<Value> =
         SETTINGS.iter().map(|s| json!({ "key": s.key, "title": s.title, "about": s.about, "hint": s.hint, "default": s.default, "value": doc.get(s.key).and_then(text) })).collect();
-    let shells: Vec<Value> = shells().into_iter().map(|(name, argv)| json!({ "name": name, "argv": argv })).collect();
-    json!({ "path": path, "error": error, "settings": settings, "shells": shells })
+    let shells = match machine {
+        None => shells(),
+        Some(m) => {
+            let listed = remote_read(m, "/etc/shells").ok().flatten().unwrap_or_default();
+            listed_shells(&listed, remote_read(m, MAC_MARKER).is_ok_and(|t| t.is_some()), |_| true)
+        }
+    };
+    let shells: Vec<Value> = shells.into_iter().map(|(name, argv)| json!({ "name": name, "argv": argv })).collect();
+    json!({ "path": shown_path(machine), "machine": machine, "machines": machines(), "error": error, "settings": settings, "shells": shells })
 }
 
 /// Checks text as the core would read it, and returns it as TOML.
@@ -207,53 +230,131 @@ fn parse(s: &Setting, text: &str) -> Result<Item> {
     })
 }
 
-/// Sets key to text, or back to the core's default when text is None.
-pub fn set(key: &str, text: Option<&str>) -> Result<()> {
+/// Sets key to text, or back to the core's default when text is None, on
+/// this computer or on machine.
+pub fn set(machine: Option<&str>, key: &str, text: Option<&str>) -> Result<()> {
     let s = SETTINGS.iter().find(|s| s.key == key).with_context(|| format!("no core setting {key:?}"))?;
     let item = text.map(|t| parse(s, t)).transpose()?;
-    let path = path();
-    let mut doc = read(&path)?;
+    let old = read_text(machine)?;
+    let mut doc = parse_doc(old.as_deref(), machine)?;
     match item {
         Some(item) => doc[key] = item,
         None => {
             doc.remove(key);
         }
     }
-    std::fs::create_dir_all(path.parent().context("config path")?)?;
-    fsutil::write_backed_up(&path, doc.to_string().as_bytes(), 0o644)
+    let Some(machine) = machine else {
+        let path = path();
+        std::fs::create_dir_all(path.parent().context("config path")?)?;
+        return fsutil::write_backed_up(&path, doc.to_string().as_bytes(), 0o644);
+    };
+    remote_write(machine, old.as_deref(), &doc.to_string())
 }
 
 /// Shells to offer, by name, as the argv the core would start. PowerShell is
 /// not among them: on Windows it is the default, which adds the hook that lets
 /// the core follow the shell's folder, so the screen offers it as the default.
 fn shells() -> Vec<(String, Vec<String>)> {
-    let mut out = Vec::new();
-    if cfg!(windows) {
-        let on_path = |exe: &str| std::env::var_os("PATH").and_then(|p| std::env::split_paths(&p).map(|d| d.join(exe)).find(|f| f.is_file()));
-        let git_bash = on_path("git.exe")
-            .and_then(|git| Some(git.parent()?.parent()?.join(r"bin\bash.exe")))
-            .filter(|b| b.is_file())
-            .or_else(|| Some(PathBuf::from(r"C:\Program Files\Git\bin\bash.exe")).filter(|b| b.is_file()));
-        if let Some(bash) = git_bash {
-            out.push(("Git Bash".into(), vec![bash.display().to_string(), "--login".into(), "-i".into()]));
-        }
-        for (name, exe) in [("Nushell", "nu.exe"), ("WSL", "wsl.exe")] {
-            if let Some(f) = on_path(exe) {
-                out.push((name.into(), vec![f.display().to_string()]));
-            }
-        }
-    } else {
+    if !cfg!(windows) {
         let listed = std::fs::read_to_string("/etc/shells").unwrap_or_default();
-        for line in listed.lines().map(str::trim).filter(|l| l.starts_with('/')) {
-            let name = line.rsplit('/').next().unwrap_or(line);
-            if Path::new(line).is_file() && !out.iter().any(|(n, _): &(String, Vec<String>)| n.as_str() == name) {
-                // The core starts its own default shell as a login shell on macOS.
-                let argv = if cfg!(target_os = "macos") { vec![line.to_string(), "-l".into()] } else { vec![line.to_string()] };
-                out.push((name.into(), argv));
-            }
+        return listed_shells(&listed, cfg!(target_os = "macos"), |p| Path::new(p).is_file());
+    }
+    let mut out = Vec::new();
+    let on_path = |exe: &str| std::env::var_os("PATH").and_then(|p| std::env::split_paths(&p).map(|d| d.join(exe)).find(|f| f.is_file()));
+    let git_bash = on_path("git.exe")
+        .and_then(|git| Some(git.parent()?.parent()?.join(r"bin\bash.exe")))
+        .filter(|b| b.is_file())
+        .or_else(|| Some(PathBuf::from(r"C:\Program Files\Git\bin\bash.exe")).filter(|b| b.is_file()));
+    if let Some(bash) = git_bash {
+        out.push(("Git Bash".into(), vec![bash.display().to_string(), "--login".into(), "-i".into()]));
+    }
+    for (name, exe) in [("Nushell", "nu.exe"), ("WSL", "wsl.exe")] {
+        if let Some(f) = on_path(exe) {
+            out.push((name.into(), vec![f.display().to_string()]));
         }
     }
     out
+}
+
+/// The shells an /etc/shells lists that exist, one per name. The core starts
+/// its own default shell as a login shell on macOS, so these do too there.
+fn listed_shells(listed: &str, mac: bool, exists: impl Fn(&str) -> bool) -> Vec<(String, Vec<String>)> {
+    let mut out: Vec<(String, Vec<String>)> = Vec::new();
+    for line in listed.lines().map(str::trim).filter(|l| l.starts_with('/')) {
+        let name = line.rsplit('/').next().unwrap_or(line);
+        if exists(line) && !out.iter().any(|(n, _)| n == name) {
+            let argv = if mac { vec![line.to_string(), "-l".into()] } else { vec![line.to_string()] };
+            out.push((name.into(), argv));
+        }
+    }
+    out
+}
+
+/* ------------------------------------------------------- other machines */
+
+/// Another machine's file, from its home, where its core looks unless that
+/// machine sets XDG_CONFIG_HOME.
+const REMOTE_PATH: &str = ".config/herdr-core/config.toml";
+
+/// Only macOS has this file, and its core starts shells as login shells.
+const MAC_MARKER: &str = "/System/Library/CoreServices/SystemVersion.plist";
+
+/// hc's JSON answer to args, with its error, if any, left in it: hc prints an
+/// error's JSON on stderr.
+fn hc(args: &[&str], input: Option<&[u8]>, timeout: Duration) -> Result<Value> {
+    let bin = super::core_bin().context("hc not found: install herdr-core, or set HERDR_CORE_BIN")?;
+    let mut cmd = Command::new(bin);
+    cmd.args(args).arg("--json");
+    let out = match input {
+        Some(input) => proc::output_fed(&mut cmd, input, timeout),
+        None => proc::output_within(&mut cmd, timeout),
+    }
+    .with_context(|| format!("hc {}", args.join(" ")))?;
+    let reply = if out.status.success() { &out.stdout } else { &out.stderr };
+    serde_json::from_slice(reply).with_context(|| format!("hc {}: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim()))
+}
+
+/// hc's answer, failing with its message when it reports an error.
+fn hc_ok(args: &[&str], input: Option<&[u8]>, timeout: Duration) -> Result<Value> {
+    let reply = hc(args, input, timeout)?;
+    if let Some(e) = reply.get("error") {
+        bail!("{}", e["message"].as_str().unwrap_or("hc failed"));
+    }
+    Ok(reply)
+}
+
+/// path on machine, or None when there is no such file.
+fn remote_read(machine: &str, path: &str) -> Result<Option<String>> {
+    let reply = hc(&["file", "read", path, "--on", machine], None, Duration::from_secs(30))?;
+    match reply.get("error") {
+        Some(e) if e["kind"] == "not_found" => Ok(None),
+        Some(e) => bail!("{machine}: {}", e["message"].as_str().unwrap_or("hc file read failed")),
+        None => Ok(Some(reply["text"].as_str().unwrap_or_default().to_string())),
+    }
+}
+
+/// Writes text over machine's file, keeping the day's backup as the local
+/// file does.
+fn remote_write(machine: &str, old: Option<&str>, text: &str) -> Result<()> {
+    let write = |path: &str, data: &str| hc_ok(&["file", "write", path, "--on", machine], Some(data.as_bytes()), Duration::from_secs(30));
+    if let Some(old) = old {
+        let backup = format!("{REMOTE_PATH}.bak-{}", fsutil::today());
+        if remote_read(machine, &backup)?.is_none() {
+            write(&backup, old)?;
+        }
+    }
+    write(REMOTE_PATH, text).map(drop)
+}
+
+/// The machines hc reaches and the core each runs; none when hc cannot say.
+fn machines() -> Vec<Value> {
+    let reply = hc_ok(&["machine", "ls"], None, Duration::from_secs(10)).unwrap_or_default();
+    reply["machines"].as_array().into_iter().flatten().map(|m| json!({ "name": m["name"], "state": m["state"], "version": m["version"] })).collect()
+}
+
+/// Copies this hc to machine and restarts its core; its terminals keep running.
+pub fn update_machine(machine: &str) -> Result<()> {
+    hc_ok(&["machine", "update", machine], None, Duration::from_secs(300)).map(drop)
 }
 
 #[cfg(test)]
@@ -303,26 +404,46 @@ mod tests {
         let path = path();
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "# mine\nsocket = \"/tmp/x.sock\"\nhistory_mb = 5\n").unwrap();
-        set("shell", Some(r#"["C:\\Program Files\\Git\\bin\\bash.exe", "--login", "-i"]"#)).unwrap();
-        set("history_mb", None).unwrap();
-        set("draft_wait", Some("1.5")).unwrap();
-        set("restore_screen", Some("on")).unwrap();
-        let described = describe();
+        set(None, "shell", Some(r#"["C:\\Program Files\\Git\\bin\\bash.exe", "--login", "-i"]"#)).unwrap();
+        set(None, "history_mb", None).unwrap();
+        set(None, "draft_wait", Some("1.5")).unwrap();
+        set(None, "restore_screen", Some("on")).unwrap();
+        let described = describe(None);
         let settings = described["settings"].as_array().unwrap();
         assert_eq!(settings.iter().find(|s| s["key"] == "draft_wait").unwrap()["value"], "1.5");
         assert_eq!(settings.iter().find(|s| s["key"] == "restore_screen").unwrap()["value"], "true");
-        assert!(set("draft_wait", Some("-1")).is_err());
-        assert!(set("restore_screen", Some("maybe")).is_err());
-        set("draft_wait", None).unwrap();
-        set("restore_screen", None).unwrap();
+        assert!(set(None, "draft_wait", Some("-1")).is_err());
+        assert!(set(None, "restore_screen", Some("maybe")).is_err());
+        set(None, "draft_wait", None).unwrap();
+        set(None, "restore_screen", None).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.starts_with("# mine\nsocket = \"/tmp/x.sock\"\n"), "{text}");
         assert!(!text.contains("history_mb"));
-        let shell = describe()["settings"][0]["value"].as_str().unwrap().to_string();
+        let shell = describe(None)["settings"][0]["value"].as_str().unwrap().to_string();
         assert_eq!(serde_json::from_str::<Vec<String>>(&shell).unwrap()[2], "-i");
-        assert!(set("socket", Some("/elsewhere")).is_err());
+        assert!(set(None, "socket", Some("/elsewhere")).is_err());
         std::fs::write(&path, "shell = [").unwrap();
-        assert!(describe()["error"].as_str().unwrap().contains("defaults"));
-        assert!(set("notes", Some("off")).is_err(), "a broken file is left for the person to fix");
+        assert!(describe(None)["error"].as_str().unwrap().contains("defaults"));
+        assert!(set(None, "notes", Some("off")).is_err(), "a broken file is left for the person to fix");
+    }
+
+    // Without hc, another machine's settings say why and nothing is written.
+    #[test]
+    fn other_machines_need_hc() {
+        let _guard = crate::testenv::isolated();
+        let described = describe(Some("vps"));
+        assert!(described["error"].as_str().unwrap().contains("hc"), "{described}");
+        assert_eq!(described["settings"].as_array().unwrap().len(), SETTINGS.len());
+        assert_eq!(described["machines"], json!([]));
+        assert!(set(Some("vps"), "notes", Some("off")).is_err());
+    }
+
+    #[test]
+    fn shells_come_from_etc_shells() {
+        let listed = "# comment\n/bin/sh\n/usr/bin/zsh\n/bin/zsh\nnot-a-path\n";
+        let names = |mac| listed_shells(listed, mac, |_| true);
+        assert_eq!(names(false), [("sh".to_string(), vec!["/bin/sh".to_string()]), ("zsh".to_string(), vec!["/usr/bin/zsh".to_string()])]);
+        assert_eq!(names(true)[1].1, ["/usr/bin/zsh", "-l"]);
+        assert_eq!(listed_shells(listed, false, |p| p != "/bin/sh")[0].0, "zsh");
     }
 }

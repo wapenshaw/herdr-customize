@@ -322,14 +322,25 @@ is shown and left alone. **Shell** offers the shells found on this machine:
 PowerShell, Git Bash, Nushell and WSL on Windows, or those in `/etc/shells`.
 PowerShell is the core's default there, with a hook that lets the core follow
 the shell's folder, so picking it clears the setting rather than naming it. `socket` is left out: moving it leaves
-clients looking for the core in the old place. The page edits this machine's
-file only; the others keep theirs.
+clients looking for the core in the old place.
+
+Each machine runs its own core with its own file, so a setting changed here
+changes nothing on the others. When `hc machine ls` lists other machines, a
+**Settings of** row picks whose file the page edits: this computer's, or
+another machine's `~/.config/herdr-core/config.toml`, read and written through
+`hc file --on <machine>` with the same checks and a daily backup beside it.
+A machine that sets `XDG_CONFIG_HOME` keeps its file elsewhere, which the page
+does not follow. Its shells come from its `/etc/shells`, as login shells on
+macOS.
 
 The **Updates** card, when supported by the app, shows app and core versions,
 ready updates, the last successful check and core update errors. It offers
 the commands available in that app to check, update an unmanaged core, or
 restart the app into a downloaded update. Updating the core keeps terminals
 running; a package-managed core is updated through its package manager.
+It also lists each connected machine's core, and offers `hc machine update`
+for one older than this computer's: that copies this computer's `hc` there and
+restarts its core, and its terminals keep running.
 The page also offers a command to copy and run in a terminal outside Herdr:
 `hc server restart --fresh` makes new terminals use that shell's environment
 without ending programs.

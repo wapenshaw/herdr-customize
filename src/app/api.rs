@@ -83,10 +83,17 @@ fn run(args: &[String]) -> Result<Value> {
             keys::remove(a.need("section")?, a.need("key")?)?;
             Ok(json!({}))
         }
-        "core" => Ok(super::core_config::describe()),
+        // --machine names another machine hc reaches; without it, this computer.
+        "core" => Ok(super::core_config::describe(a.flags.get("machine").copied())),
         "core-set" => {
-            super::core_config::set(a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
-            Ok(super::core_config::describe())
+            let machine = a.flags.get("machine").copied();
+            super::core_config::set(machine, a.need("key")?, if a.flags.contains_key("default") { None } else { Some(a.need("value")?) })?;
+            Ok(super::core_config::describe(machine))
+        }
+        "core-update-machine" => {
+            let machine = a.need("machine")?;
+            super::core_config::update_machine(machine)?;
+            Ok(super::core_config::describe(Some(machine)))
         }
         "settings" => Ok(super::settings::describe()),
         "settings-set" => {
