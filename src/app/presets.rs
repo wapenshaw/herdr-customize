@@ -59,9 +59,9 @@ fn available(commands: &[AppCommand]) -> Vec<Preset> {
 
 fn normalized_action(action: &str, commands: &[AppCommand]) -> Option<(String, Value)> {
     if action.starts_with('{') {
-        let value: Value = serde_json::from_str(action).ok()?;
-        let name = value.get("command")?.as_str()?.to_owned();
-        let args = value.get("args").cloned().unwrap_or_else(|| json!({}));
+        let Value::Object(mut object) = serde_json::from_str(action).ok()? else { return None };
+        let Some(Value::String(name)) = object.remove("command") else { return None };
+        let args = object.remove("args").unwrap_or_else(|| json!({}));
         return args.is_object().then_some((name, args));
     }
     let (name, argument) = action.split_once(':').map_or((action, None), |(name, value)| (name, Some(value)));

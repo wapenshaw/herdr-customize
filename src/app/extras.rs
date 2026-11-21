@@ -45,7 +45,6 @@ const EXTRAS: &[Extra] = &[
 
 #[derive(Default, Serialize, Deserialize)]
 struct Installed {
-    version: String,
     files: BTreeMap<String, String>,
     keys: Vec<[String; 3]>,
 }
@@ -204,7 +203,7 @@ fn install_with(name: &str, commands: &[AppCommand], check: impl FnOnce(&Path) -
     let stage = fsutil::temp_path(&state_dir(), "extra-stage");
     fs::create_dir(&stage)?;
     let backup = fsutil::temp_path(&state_dir(), "extra-backup");
-    let mut next = Installed { version: env!("CARGO_PKG_VERSION").into(), ..Default::default() };
+    let mut next = Installed::default();
     let prepare = (|| -> Result<()> {
         for (path, text) in extra.files {
             let dest = stage.join(path);

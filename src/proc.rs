@@ -8,28 +8,30 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
+fn read_pipe<R: Read + Send + 'static>(pipe: Option<R>) -> (Arc<Mutex<Vec<u8>>>, mpsc::Receiver<()>) {
+    let shared = Arc::new(Mutex::new(Vec::new()));
+    let (done, finished) = mpsc::channel();
+    let into = Arc::clone(&shared);
+    std::thread::spawn(move || {
+        let mut pipe = pipe;
+        let mut chunk = [0u8; 8192];
+        while let Some(n) = pipe.as_mut().and_then(|p| p.read(&mut chunk).ok()).filter(|n| *n > 0) {
+            if let Ok(mut all) = into.lock() {
+                all.extend_from_slice(&chunk[..n]);
+            }
+        }
+        let _ = done.send(());
+    });
+    (shared, finished)
+}
+
 /// Runs cmd like Command::output, but gives up once timeout passes, killing
 /// it if it still runs. A descendant can hold the pipes open after cmd exits;
 /// the output is then what was written by the time it exited.
 pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
     let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
-    let read = |mut pipe: Option<Box<dyn Read + Send>>| {
-        let shared = Arc::new(Mutex::new(Vec::new()));
-        let (done, finished) = mpsc::channel();
-        let into = Arc::clone(&shared);
-        std::thread::spawn(move || {
-            let mut chunk = [0u8; 8192];
-            while let Some(n) = pipe.as_mut().and_then(|p| p.read(&mut chunk).ok()).filter(|n| *n > 0) {
-                if let Ok(mut all) = into.lock() {
-                    all.extend_from_slice(&chunk[..n]);
-                }
-            }
-            let _ = done.send(());
-        });
-        (shared, finished)
-    };
-    let (out, out_done) = read(child.stdout.take().map(|p| Box::new(p) as _));
-    let (err, err_done) = read(child.stderr.take().map(|p| Box::new(p) as _));
+    let (out, out_done) = read_pipe(child.stdout.take());
+    let (err, err_done) = read_pipe(child.stderr.take());
     let deadline = Instant::now() + timeout;
     let status = loop {
         if let Some(status) = child.try_wait()? {
