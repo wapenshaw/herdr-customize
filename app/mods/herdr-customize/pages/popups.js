@@ -86,7 +86,7 @@ export default function create(app) {
             .child(div().text_size(13).font_semibold().child(popup.name))
             .child(div().text_size(12).text_color(t.muted).child(popup.command))
             .child(div().text_size(11).text_color(t.dim).child(`${popup.width} × ${popup.height} · ${popup.key || "No shortcut"} · ${popup.persistent ? "Keeps running" : "Ends on close"}${popup.changed ? " · Edited" : ""}`)))
-          .child(this.button(`try-${popup.name}`, "Try", () => herdr.run("mod.open", { name: `popup-${popup.name}` })))
+          .child(this.button(`try-${popup.name}`, "Try", () => this.closeAndRun("mod.open", { name: `popup-${popup.name}` })))
           .child(this.button(`remove-${popup.name}`, "Remove", (_e, cx) => this.remove(popup, cx), { danger: true }))));
       return v_flex().id("popup-page").flex_1().min_h(0).overflow_y_scrollbar().gap(12)
         .child(div().text_size(12).text_color(t.muted).child("A popup is a small floating terminal that runs one command, like lazygit or btop, over your work. A shortcut opens it and it goes away when you are done."))

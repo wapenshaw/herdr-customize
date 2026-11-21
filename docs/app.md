@@ -247,7 +247,7 @@ foreground is not the recovered shell.
 The Popups page creates floating terminals for local commands such as
 `lazygit` or `fzf`. Give each a lowercase name, a command, optional global
 shortcut, and width and height as fractions of the window (0.2 to 1, default
-0.8). A shortcut already in use is never replaced. **Try** opens the popup;
+0.8). A shortcut already in use is never replaced. **Try** closes Customize and opens the popup;
 its title bar closes it, while Escape goes to the program. A persistent popup
 keeps its terminal running when closed and reuses it next time; otherwise the
 terminal ends when the window goes: Close, a layout switch, or reopening the
