@@ -29,7 +29,7 @@ fn names(dir: &Path, folders: bool) -> BTreeSet<String> {
     fs::read_dir(dir)
         .into_iter()
         .flatten()
-        .flatten()
+        .filter_map(Result::ok)
         .filter_map(|entry| {
             let path = entry.path();
             if folders {

@@ -31,37 +31,37 @@ pub fn main(args: &[String]) -> i32 {
 }
 
 /// Positional words, then --name value pairs; a name with no value is "true".
-struct Args {
-    words: Vec<String>,
-    flags: BTreeMap<String, String>,
+struct Args<'a> {
+    words: Vec<&'a str>,
+    flags: BTreeMap<&'a str, &'a str>,
 }
 
-impl Args {
-    fn parse(args: &[String]) -> Args {
+impl<'a> Args<'a> {
+    fn parse(args: &'a [String]) -> Args<'a> {
         let (mut words, mut flags) = (Vec::new(), BTreeMap::new());
         let mut it = args.iter().peekable();
         while let Some(arg) = it.next() {
             match arg.strip_prefix("--") {
                 Some(name) => {
-                    let value = it.next_if(|v| !v.starts_with("--")).cloned().unwrap_or_else(|| "true".into());
-                    flags.insert(name.to_string(), value);
+                    let value = it.next_if(|v| !v.starts_with("--")).map_or("true", String::as_str);
+                    flags.insert(name, value);
                 }
-                None => words.push(arg.clone()),
+                None => words.push(arg.as_str()),
             }
         }
         Args { words, flags }
     }
 
     fn word(&self, i: usize, what: &str) -> Result<&str> {
-        self.words.get(i).map(String::as_str).ok_or_else(|| anyhow!("{what} is required"))
+        self.words.get(i).copied().ok_or_else(|| anyhow!("{what} is required"))
     }
 
     fn flag(&self, name: &str) -> &str {
-        self.flags.get(name).map_or("", String::as_str)
+        self.flags.get(name).copied().unwrap_or("")
     }
 
     fn need(&self, name: &str) -> Result<&str> {
-        self.flags.get(name).map(String::as_str).ok_or_else(|| anyhow!("--{name} is required"))
+        self.flags.get(name).copied().ok_or_else(|| anyhow!("--{name} is required"))
     }
 }
 
@@ -100,7 +100,7 @@ fn run(args: &[String]) -> Result<Value> {
         }
         "programs" => Ok(super::programs::describe()),
         "program-set" => {
-            super::programs::set(a.need("key")?, a.need("json")?, a.flags.get("run-line").map(String::as_str))?;
+            super::programs::set(a.need("key")?, a.need("json")?, a.flags.get("run-line").copied())?;
             Ok(super::programs::describe())
         }
         "program-remove" => {
@@ -166,8 +166,15 @@ fn check(a: &Args) -> Result<(Vec<String>, Vec<String>, Option<String>)> {
     // Without the app's command list, any action passes.
     let commands = super::commands().unwrap_or_default();
     errors.extend(keys::action_problem(action, &commands, &mods::mod_names()));
+    let key = keys::normalize(key);
     let old = a.flags.get("old").map(|o| keys::normalize(o));
-    let held = bindings.into_iter().find(|b| b.section == section && keys::normalize(&b.key) == keys::normalize(key) && old.as_deref() != Some(keys::normalize(&b.key).as_str())).map(|b| b.action);
+    let held = bindings
+        .into_iter()
+        .find(|b| {
+            let normalized = keys::normalize(&b.key);
+            b.section == section && normalized == key && old.as_deref() != Some(normalized.as_str())
+        })
+        .map(|b| b.action);
     Ok((errors, warnings, held))
 }
 
@@ -187,7 +194,7 @@ fn key_set(a: &Args) -> Result<Value> {
     {
         bail!("{} already runs {held}", a.need("key")?);
     }
-    let old = a.flags.get("old").map(String::as_str);
+    let old = a.flags.get("old").copied();
     keys::set(a.need("section")?, old, a.need("key")?, a.need("action")?)?;
     Ok(json!({ "warnings": warnings }))
 }

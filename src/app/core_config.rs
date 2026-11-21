@@ -245,11 +245,11 @@ fn shells() -> Vec<(String, Vec<String>)> {
     } else {
         let listed = std::fs::read_to_string("/etc/shells").unwrap_or_default();
         for line in listed.lines().map(str::trim).filter(|l| l.starts_with('/')) {
-            let name = line.rsplit('/').next().unwrap_or(line).to_string();
-            if Path::new(line).is_file() && !out.iter().any(|(n, _): &(String, Vec<String>)| *n == name) {
+            let name = line.rsplit('/').next().unwrap_or(line);
+            if Path::new(line).is_file() && !out.iter().any(|(n, _): &(String, Vec<String>)| n.as_str() == name) {
                 // The core starts its own default shell as a login shell on macOS.
                 let argv = if cfg!(target_os = "macos") { vec![line.to_string(), "-l".into()] } else { vec![line.to_string()] };
-                out.push((name, argv));
+                out.push((name.into(), argv));
             }
         }
     }

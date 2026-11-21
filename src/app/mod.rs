@@ -67,16 +67,9 @@ pub fn bin() -> Option<PathBuf> {
     if let Some(found) = proc::look_path("herdr-app") {
         return Some(found);
     }
-    let mut places = Vec::new();
-    if cfg!(windows)
-        && let Some(local) = env("LOCALAPPDATA")
-    {
-        places.push(Path::new(&local).join("Programs").join("herdr-app").join("herdr-app.exe"));
-    }
-    if let Some(user) = env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
-        places.push(Path::new(&user).join(".local").join("bin").join("herdr-app"));
-    }
-    places.into_iter().find(|p| p.is_file())
+    let local = if cfg!(windows) { env("LOCALAPPDATA").map(|local| Path::new(&local).join("Programs").join("herdr-app").join("herdr-app.exe")) } else { None };
+    let user = env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(|user| Path::new(&user).join(".local").join("bin").join("herdr-app"));
+    local.into_iter().chain(user).find(|path| path.is_file())
 }
 
 /// herdr-app with args, aimed at the window that owns home().
@@ -138,7 +131,9 @@ fn health_files(root: &Path) -> Vec<serde_json::Value> {
 
 fn health_with_status(root: &Path, status: Option<&str>) -> serde_json::Value {
     let mut problems = health_files(root);
-    if let Some(errors) = status.and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()).and_then(|s| s.get("errors").and_then(|e| e.as_array()).cloned()) {
+    if let Some(status) = status.and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+        && let Some(errors) = status.get("errors").and_then(serde_json::Value::as_array)
+    {
         for error in errors {
             let Some(message) = error.as_str().and_then(|s| s.lines().next()).map(str::trim) else { continue };
             if !message.is_empty() && !problems.iter().any(|p| p["message"] == message) {
@@ -214,8 +209,9 @@ fn read_record<T: DeserializeOwned + Default>(name: &str) -> Result<T> {
 }
 
 fn write_record(name: &str, value: &impl serde::Serialize) -> Result<()> {
-    fs::create_dir_all(state_dir())?;
-    fsutil::atomic_write(&state_dir().join(name), (serde_json::to_string_pretty(value)? + "\n").as_bytes(), 0o644)
+    let dir = state_dir();
+    fs::create_dir_all(&dir)?;
+    fsutil::atomic_write(&dir.join(name), (serde_json::to_string_pretty(value)? + "\n").as_bytes(), 0o644)
 }
 
 /// Reads a JSON object file; a missing file is an empty object.

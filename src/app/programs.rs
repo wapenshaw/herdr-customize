@@ -32,7 +32,7 @@ pub fn describe() -> Value {
             })
             .collect()
     });
-    json!({ "path": path, "error": error, "programs": programs, "shells": doc.get("shells").cloned().unwrap_or(json!([])), "interpreters": doc.get("interpreters").cloned().unwrap_or(json!([])) })
+    json!({ "path": path, "error": error, "programs": programs, "shells": doc.get("shells").cloned().unwrap_or_else(|| json!([])), "interpreters": doc.get("interpreters").cloned().unwrap_or_else(|| json!([])) })
 }
 
 fn key_valid(key: &str) -> bool {

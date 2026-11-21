@@ -178,8 +178,10 @@ pub fn install_featured(force: bool) -> Result<Summary> {
     let _lock = lock()?;
     let mut record: BTreeMap<String, String> = read_record(RECORD)?;
     let mut summary = Summary::default();
-    let wanted: Vec<_> = library.into_iter().filter(|slug| FEATURED.contains(&slug.as_str()) || record.contains_key(slug)).collect();
-    for slug in wanted {
+    for slug in library {
+        if !FEATURED.contains(&slug.as_str()) && !record.contains_key(&slug) {
+            continue;
+        }
         match install_locked(&slug, force, &mut record) {
             Ok(Wrote::Written) => summary.written += 1,
             Ok(Wrote::Same) => summary.same += 1,

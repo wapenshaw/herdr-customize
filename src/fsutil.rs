@@ -92,7 +92,7 @@ pub fn write_lock(path: &Path) -> Result<File> {
 }
 
 /// FNV-1a of the real path. Unlike std's hasher it never changes between
-/// builds, so every version of the plugin picks the same lock.
+/// builds, so every version of this program picks the same lock.
 fn path_hash(path: &Path) -> u64 {
     let mut text = real_path(path).to_string_lossy().into_owned();
     if cfg!(windows) {
@@ -206,7 +206,7 @@ mod tests {
         assert_eq!(civil(20_788), (2026, 12, 1));
     }
 
-    // Every process and plugin version must name the same lock for a file.
+    // Every process and program version must name the same lock for a file.
     #[test]
     fn path_hash_is_stable() {
         assert_eq!(path_hash(Path::new("/herdr/config.toml")), path_hash(Path::new("/herdr/config.toml")));

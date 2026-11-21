@@ -9,10 +9,8 @@ use anyhow::{Context, Result, anyhow, bail};
 /// around the working folder.
 fn root() -> PathBuf {
     let has_themes = |dir: &Path| dir.join("themes").is_dir();
-    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf))
-        && let Some(found) = dir.ancestors().take(4).find(|d| has_themes(d))
-    {
-        return found.to_path_buf();
+    if let Some(found) = std::env::current_exe().ok().and_then(|exe| exe.parent()?.ancestors().take(4).find(|d| has_themes(d)).map(Path::to_path_buf)) {
+        return found;
     }
     if let Ok(cwd) = std::env::current_dir()
         && let Some(found) = cwd.ancestors().take(3).find(|d| has_themes(d))
