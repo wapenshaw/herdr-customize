@@ -227,7 +227,10 @@ pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
     let dir = fsutil::temp_path(&std::env::temp_dir(), "herdr-customize-mod-");
     let checkout = Arc::new(Checkout(dir.clone()));
     let dir_text = dir.to_string_lossy();
-    git(&["clone", "--depth", "1", "--quiet", "--no-tags", &format!("{}/{repo}", git_base()), &dir_text], Duration::from_secs(120)).with_context(|| format!("download {repo}"))?;
+    // Whole repositories carry history-heavy files: only the package folders are downloaded.
+    let url = format!("{}/{repo}", git_base());
+    git(&["clone", "--depth", "1", "--filter=blob:none", "--no-checkout", "--sparse", "--quiet", "--no-tags", &url, &dir_text], Duration::from_secs(120))
+        .with_context(|| format!("download {repo}"))?;
     let head = git(&["-C", &dir_text, "rev-parse", "--abbrev-ref", "HEAD"], Duration::from_secs(10))?;
     // Install and updates read the default branch, so a link to another one
     // would review files that never get installed.
@@ -237,6 +240,19 @@ pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
         bail!("{repo}: only its default branch, {head}, can be installed, not {b}");
     }
     let commit = git(&["-C", &dir_text, "rev-parse", "HEAD"], Duration::from_secs(10))?;
+    let listing = git_bytes(&["-C", &dir_text, "ls-tree", "-r", "-z", "--name-only", "HEAD"], Duration::from_secs(30))?;
+    let listing = String::from_utf8_lossy(&listing);
+    let roots = package_roots(&listing.split('\0').collect::<Vec<_>>(), &want);
+    if !roots.is_empty() {
+        let mut args: Vec<String> = ["-C", &dir_text, "sparse-checkout", "set", "--cone"].map(String::from).to_vec();
+        for root in &roots {
+            for folder in ["mods", "layouts", "themes", "fonts"] {
+                args.push(if root.is_empty() { folder.into() } else { format!("{root}/{folder}") });
+            }
+        }
+        git(&args.iter().map(String::as_str).collect::<Vec<_>>(), Duration::from_secs(30))?;
+        git(&["-C", &dir_text, "checkout", "--quiet"], Duration::from_secs(120)).with_context(|| format!("download {repo}"))?;
+    }
     let installed = packages()?;
     let mut plans = Vec::new();
     for root in package_dirs(&dir) {
@@ -253,6 +269,29 @@ pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
         bail!("{} has no mods/ or layouts/ folder{}", repo, if want.is_empty() { String::new() } else { format!(" at {want}") });
     }
     Ok(plans)
+}
+
+/// The folders package_dirs would find, read from a file list: the shallowest
+/// ones holding mods/ or layouts/, at most two down. `want` picks one.
+fn package_roots(files: &[&str], want: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for file in files {
+        let parts: Vec<&str> = file.split('/').collect();
+        for i in 0..parts.len().saturating_sub(1).min(3) {
+            if parts[..i].contains(&"node_modules") {
+                break;
+            }
+            if matches!(parts[i], "mods" | "layouts") {
+                found.push(parts[..i].join("/"));
+                break;
+            }
+        }
+    }
+    found.sort();
+    found.dedup();
+    let all = found.clone();
+    found.retain(|r| !all.iter().any(|o| o != r && (o.is_empty() || r.starts_with(&format!("{o}/")))) && (want.is_empty() || r == want));
+    found
 }
 
 /// Folders laid out like the app's home: the root, or folders a few levels
@@ -605,5 +644,14 @@ pub(crate) mod tests {
         assert!(fetch("https://github.com/o/many/tree/other/b").unwrap_err().to_string().contains("default branch"));
         assert!(fetch("o/many/c").is_err());
         assert!(fetch("not a repo").is_err());
+    }
+
+    // The sparse checkout must fetch the folders package_dirs would read, and no others.
+    #[test]
+    fn roots_come_from_the_file_list() {
+        let files = ["README.md", "web/app.js", "a/layouts/a.json", "a/mods/x/main.js", "b/c/mods/y/main.js", "node_modules/z/mods/m/main.js", "p/q/r/mods/deep/main.js"];
+        assert_eq!(package_roots(&files, ""), ["a", "b/c"]);
+        assert_eq!(package_roots(&files, "b/c"), ["b/c"]);
+        assert_eq!(package_roots(&["mods/m/main.js", "a/mods/n/main.js", "mods"], ""), [""], "a root package hides the folders below it");
     }
 }

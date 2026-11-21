@@ -156,7 +156,9 @@ updates with herdr-customize rather than as a package. **Check for update**
 reviews a package again; one with files you changed
 asks first. **Remove** takes it away with the keys it added; files you
 changed stay. The record is `data/herdr-customize/packages.json`. Downloads
-use `git`.
+use `git` (2.25 or newer) and fetch only a package's `mods`, `layouts`, `themes`
+and `fonts` folders and its top-level files, so a large repository reviews in
+seconds instead of downloading its whole history and unrelated code.
 
 ## App settings
 
