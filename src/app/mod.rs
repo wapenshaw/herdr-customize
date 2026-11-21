@@ -61,14 +61,24 @@ pub fn home_relative(path: &Path) -> String {
 /// The herdr-app executable: HERDR_APP_BIN, PATH, then where the app's
 /// installers put it.
 pub fn bin() -> Option<PathBuf> {
-    if let Some(bin) = env("HERDR_APP_BIN") {
+    installed("herdr-app", "HERDR_APP_BIN", "herdr-app")
+}
+
+/// hc, herdr-core's CLI, found the same way through HERDR_CORE_BIN.
+pub fn core_bin() -> Option<PathBuf> {
+    installed("hc", "HERDR_CORE_BIN", "herdr-core")
+}
+
+/// name from var, PATH, %LOCALAPPDATA%\Programs\<folder> or ~/.local/bin.
+fn installed(name: &str, var: &str, folder: &str) -> Option<PathBuf> {
+    if let Some(bin) = env(var) {
         return Some(bin.into());
     }
-    if let Some(found) = proc::look_path("herdr-app") {
+    if let Some(found) = proc::look_path(name) {
         return Some(found);
     }
-    let local = if cfg!(windows) { env("LOCALAPPDATA").map(|local| Path::new(&local).join("Programs").join("herdr-app").join("herdr-app.exe")) } else { None };
-    let user = env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(|user| Path::new(&user).join(".local").join("bin").join("herdr-app"));
+    let local = if cfg!(windows) { env("LOCALAPPDATA").map(|local| Path::new(&local).join("Programs").join(folder).join(format!("{name}.exe"))) } else { None };
+    let user = env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(|user| Path::new(&user).join(".local").join("bin").join(name));
     local.into_iter().chain(user).find(|path| path.is_file())
 }
 

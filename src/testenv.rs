@@ -50,6 +50,7 @@ static SANDBOX: LazyLock<PathBuf> = LazyLock::new(|| {
         fs::set_permissions(&app, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
         fs::write(dir.join("commands.json"), COMMANDS).unwrap();
         set("HERDR_APP_BIN", &app);
+        set("HERDR_CORE_BIN", &dir.join("no-hc"));
         // The app's home and herdr-core's config then sit under these.
         for var in ["HOME", "USERPROFILE", "XDG_CONFIG_HOME", "APPDATA", "LOCALAPPDATA"] {
             set(var, &dir.join("home").join(var));

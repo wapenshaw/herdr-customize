@@ -1,6 +1,6 @@
 //! Running other programs with a deadline, and finding them on PATH.
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
@@ -29,7 +29,22 @@ fn read_pipe<R: Read + Send + 'static>(pipe: Option<R>) -> (Arc<Mutex<Vec<u8>>>,
 /// it if it still runs. A descendant can hold the pipes open after cmd exits;
 /// the output is then what was written by the time it exited.
 pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
-    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    run_within(cmd, None, timeout)
+}
+
+/// output_within with input written to cmd's stdin.
+pub fn output_fed(cmd: &mut Command, input: &[u8], timeout: Duration) -> Result<Output> {
+    run_within(cmd, Some(input.to_vec()), timeout)
+}
+
+fn run_within(cmd: &mut Command, input: Option<Vec<u8>>, timeout: Duration) -> Result<Output> {
+    let mut child = cmd.stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
+        // A thread, so a program that answers before reading all of it cannot block us.
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+        });
+    }
     let (out, out_done) = read_pipe(child.stdout.take());
     let (err, err_done) = read_pipe(child.stderr.take());
     let deadline = Instant::now() + timeout;

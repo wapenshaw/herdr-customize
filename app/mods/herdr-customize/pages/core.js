@@ -21,12 +21,21 @@ function parseArgs(text) {
 
 const FRESH_COMMAND = "hc server restart --fresh";
 
+// Whether version a is before version b, both dotted numbers like 0.1.18.
+function older(a, b) {
+  if (!a || !b) return false;
+  const x = a.split(".").map(Number), y = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0);
+  return false;
+}
+
 export default function create(app) {
   class Page {
     id = "core";
     title = "Core";
     init(cx) {
     this.core = null;
+    this.machine = null;
     this.coreSel = "shell";
     this.coreProblem = "";
     this.coreInput = InputState.new({ placeholder: "" });
@@ -64,6 +73,20 @@ export default function create(app) {
     return program ? JSON.stringify([program, ...parseArgs(value(this.shellArgs))]) : "";
   }
 
+  // The settings shown are this.machine's, or this computer's when it is null.
+  on(args) {
+    return this.machine ? [...args, "--machine", this.machine] : args;
+  }
+
+  pickMachine(name, cx) {
+    if (name === this.machine) return;
+    this.task(cx, `Reading ${name ?? "this computer"}'s settings`, name ? ["core", "--machine", name] : ["core"], (data, cx) => {
+      this.machine = name;
+      this.core = data;
+      this.pickCore(this.coreSel, cx);
+    });
+  }
+
   saveCore(cx, text = this.coreText()) {
     const s = this.coreSetting();
     if (!s) return;
@@ -72,7 +95,7 @@ export default function create(app) {
       cx.notify();
       return;
     }
-    this.task(cx, `Saving ${s.title.toLowerCase()}`, ["core-set", "--key", s.key, "--value", text], (data, cx) => {
+    this.task(cx, `Saving ${s.title.toLowerCase()}`, this.on(["core-set", "--key", s.key, "--value", text]), (data, cx) => {
       this.core = data;
       this.notice = s.key === "restore_screen" ? "Restore screen saved; it applies at the next recovery." : `${s.title} saved; the core uses it the next time it needs it.`;
       this.pickCore(s.key, cx);
@@ -81,7 +104,7 @@ export default function create(app) {
 
   resetCore(cx) {
     const s = this.coreSetting();
-    this.task(cx, `Resetting ${s.title.toLowerCase()}`, ["core-set", "--key", s.key, "--default"], (data, cx) => {
+    this.task(cx, `Resetting ${s.title.toLowerCase()}`, this.on(["core-set", "--key", s.key, "--default"]), (data, cx) => {
       this.core = data;
       this.notice = `${s.title} is back to the default.`;
       this.pickCore(s.key, cx);
@@ -101,13 +124,24 @@ export default function create(app) {
       .child(line(`Core ${updates.core.version ?? "unknown"}${updates.core.managed ? ` · managed by ${updates.core.managed}` : " · not package-managed"}${updates.core.ready ? ` · update ${updates.core.ready} ready` : " · no update ready"}`))
       .child(line(updates.checked == null ? "No successful check recorded" : `Checked ${new Date(updates.checked * 1000).toLocaleString()}`))
       .when(Boolean(updates.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(updates.core.error)));
+    // hc machine update copies this computer's hc there, so it only moves an older core forward.
+    const machines = (this.core?.machines ?? []).filter(m => m.state === "connected");
+    for (const m of machines) card.child(line(`${m.name}: core ${m.version ?? "unknown"}`));
     const actions = h_flex().gap(8).flex_wrap()
       .when(has("app.check_updates"), el => el.child(this.button("check-updates", "Check for updates", () => herdr.run("app.check_updates"))))
       .when(Boolean(updates.core.ready && !updates.core.managed && has("app.update_core")), el =>
         el.child(this.button("update-core", "Update core", () => herdr.run("app.update_core"))))
       .when(Boolean(updates.app.ready && has("app.update")), el =>
-        el.child(this.button("update-app", "Restart app into update", () => herdr.run("app.update"))));
-    return card.child(actions).child(line("Updating the core keeps terminals running."));
+        el.child(this.button("update-app", "Restart app into update", () => herdr.run("app.update"))))
+      .children(machines.filter(m => older(m.version, updates.core.version)).map(m =>
+        this.button(`update-${m.name}`, `Update ${m.name} to ${updates.core.version}`, (_e, cx) =>
+          this.task(cx, `Updating ${m.name}'s core`, ["core-update-machine", "--machine", m.name], (data, cx) => {
+            this.machine = m.name;
+            this.core = data;
+            this.notice = `${m.name} runs core ${updates.core.version} now.`;
+            this.pickCore(this.coreSel, cx);
+          }))));
+    return card.child(actions).child(line("Updating a core keeps its terminals running."));
   }
 
   corePage() {
@@ -130,10 +164,10 @@ export default function create(app) {
     } else if (s.key === "shell") {
       // PowerShell is the core's default on Windows, with a hook that follows the
       // shell's folder, so picking it clears the setting rather than naming it.
-      const powershell = platform() === "windows" ? [this.chip("shell-default", "PowerShell (default)", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
+      const powershell = platform() === "windows" && !this.machine ? [this.chip("shell-default", "PowerShell (default)", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
       const program = value(this.coreInput).toLowerCase();
       // Without the core's -Command hook, cd in the shell never reaches programs it starts.
-      const hookLost = platform() === "windows" && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !parseArgs(value(this.shellArgs)).some(a => /^-c(ommand)?$/i.test(a));
+      const hookLost = platform() === "windows" && !this.machine && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !parseArgs(value(this.shellArgs)).some(a => /^-c(ommand)?$/i.test(a));
       detail.child(h_flex().gap(6).flex_wrap().children([...powershell, ...this.core.shells.map((sh, i) =>
         this.chip(`shell-${i}`, sh.name, s.value === JSON.stringify(sh.argv), (_e, cx) => this.saveCore(cx, JSON.stringify(sh.argv))))]))
         .child(v_flex().gap(5).child(this.label("Program")).child(this.input(this.coreInput)).child(hint(s.hint)))
@@ -149,9 +183,18 @@ export default function create(app) {
       .child(h_flex().gap(8).items_center()
         .child(div().flex_1().text_size(11.5).text_color(t.muted).child("To make new terminals take your shell's environment without ending programs, run hc server restart --fresh from a terminal outside Herdr."))
         .child(this.button("copy-fresh", "Copy", (_e, cx) => { cx.write_to_clipboard(FRESH_COMMAND); this.notice = "Copied the restart command."; cx.notify(); })))
+      // A failed hc machine ls lists nothing; the picker stays while a machine is
+      // picked, so the way back to this computer never disappears.
+      .when(this.core.machines.length > 0 || Boolean(this.machine), el => el.child(h_flex().gap(6).flex_wrap().items_center()
+        .child(div().text_size(11.5).text_color(t.muted).child("Settings of"))
+        .child(this.chip("machine-here", "This computer", !this.machine, (_e, cx) => this.pickMachine(null, cx)))
+        .children([...this.core.machines, ...this.machine && !this.core.machines.some(m => m.name === this.machine) ? [{ name: this.machine, state: "not listed" }] : []]
+          .map(m => this.chip(`machine-${m.name}`, m.state === "connected" ? m.name : `${m.name} (${m.state})`, this.machine === m.name, (_e, cx) => this.pickMachine(m.name, cx))))))
       .child(this.split(420, [
       v_flex().id("core-settings").flex_1().min_h(0).overflow_y_scrollbar().gap(4).children(rows),
-      div().text_size(11).text_color(t.dim).child(`Saved to ${this.core.path}. The core reads it each time it needs a setting; screen restoration applies at the next recovery.`),
+      div().text_size(11).text_color(t.dim).child(this.machine
+        ? `Saved to ${this.core.path} through hc. That machine's core reads it each time it needs a setting.`
+        : `Saved to ${this.core.path}. The core reads it each time it needs a setting; screen restoration applies at the next recovery.`),
     ], detail
       .when(Boolean(this.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.core.error)))
       .when(Boolean(this.coreProblem), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.coreProblem)))

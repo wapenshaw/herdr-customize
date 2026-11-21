@@ -153,7 +153,7 @@ pub fn temp_path(dir: &Path, prefix: &str) -> PathBuf {
 }
 
 /// Today's UTC date as YYYYMMDD.
-fn today() -> String {
+pub fn today() -> String {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     let (year, month, day) = civil(secs.cast_signed() / 86_400);
     format!("{year:04}{month:02}{day:02}")
