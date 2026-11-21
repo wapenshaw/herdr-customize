@@ -3,7 +3,7 @@ name = "herdr-customize"
 version = "0.10.0"
 edition = "2024"
 rust-version = "1.99"
-description = "Themes, plugins, keybindings and settings for Herdr, all from one popup. No more hunting for config files or hand-editing TOML. Linux, macOS and Windows."
+description = "The Customize screen for the Herdr desktop app: themes, keys, mods, layouts, popups, programs and settings, without hand-editing JSON. Linux, macOS and Windows."
 license = "MIT"
 homepage = "https://github.com/wapenshaw/herdr-customize?tab=readme-ov-file"
 authors = ["Siddharth Abbineni <contact@siddharthabbineni.in>"]
@@ -13,30 +13,17 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-crossterm = "0.29"
-ratatui = "0.30"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-toml = "1"
 toml_edit = "0.25"
-unicode-width = "0.2"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = [
-    "Wdk_System_Threading",
-    "Win32_Foundation",
-    "Win32_System_Console",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Memory",
-    "Win32_System_Threading",
-    "Win32_System_Time",
-    "Win32_UI_Shell",
-] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Time"] }
 
 # Beyond clippy's defaults; CI denies warnings, so these hold there too.
 [lints.clippy]

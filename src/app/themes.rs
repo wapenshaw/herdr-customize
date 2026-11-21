@@ -73,10 +73,9 @@ pub fn to_json(pal: &Palette) -> String {
 
 /// The app's panel colors that it does not take from a palette by itself:
 /// its text is a fixed neutral grey, so the palette's text and its tints go
-/// here, plus the colors set for this palette in Herdr.
+/// here.
 fn panel_colors(pal: &Palette) -> serde_json::Map<String, Value> {
-    let tokens = pal.tokens();
-    let (bg, text) = (&pal.background, &tokens["text"]);
+    let (bg, text) = (&pal.background, &pal.foreground);
     // Shares of the way to the background, as the app's own greys sit;
     // muted keeps body-text contrast and dim that of large text.
     let muted = toward(text, bg, 0.38, 4.5);
@@ -84,11 +83,6 @@ fn panel_colors(pal: &Palette) -> serde_json::Map<String, Value> {
     let mut colors = serde_json::Map::new();
     for (key, value) in [("foreground", text), ("muted", &muted), ("dim", &dim), ("idle", &dim), ("unknown", &dim), ("solid", text), ("solid_foreground", bg)] {
         colors.insert(key.into(), value.as_str().into());
-    }
-    for (token, key) in [("accent", "accent"), ("sidebar_bg", "chrome")] {
-        if let Some(value) = pal.overrides.get(token) {
-            colors.insert(key.into(), value.as_str().into());
-        }
     }
     colors
 }
@@ -143,7 +137,7 @@ fn lock() -> Result<fs::File> {
 }
 
 fn install_locked(slug: &str, force: bool, record: &mut BTreeMap<String, String>) -> Result<Wrote> {
-    let text = to_json(&theme::resolve_palette(slug)?.0);
+    let text = to_json(&theme::resolve_palette(slug)?);
     let path = theme_file(slug);
     match fs::read_to_string(&path) {
         Ok(old) if old == text => {
@@ -178,22 +172,21 @@ pub struct Summary {
     pub kept: Vec<String>,
 }
 
-/// Writes the FEATURED palettes, the person's own and any written before
-/// to the app.
+/// Writes the FEATURED palettes, and any written before, to the app.
 pub fn install_featured(force: bool) -> Result<Summary> {
-    let (library, _) = theme::library()?;
+    let library = theme::library()?;
     let _lock = lock()?;
     let mut record: BTreeMap<String, String> = read_record(RECORD)?;
     let mut summary = Summary::default();
-    let wanted: Vec<_> = library.into_iter().filter(|i| i.user || FEATURED.contains(&i.slug.as_str()) || record.contains_key(&i.slug)).collect();
-    for item in wanted {
-        match install_locked(&item.slug, force, &mut record) {
+    let wanted: Vec<_> = library.into_iter().filter(|slug| FEATURED.contains(&slug.as_str()) || record.contains_key(slug)).collect();
+    for slug in wanted {
+        match install_locked(&slug, force, &mut record) {
             Ok(Wrote::Written) => summary.written += 1,
             Ok(Wrote::Same) => summary.same += 1,
-            Ok(Wrote::Kept) => summary.kept.push(item.slug),
+            Ok(Wrote::Kept) => summary.kept.push(slug),
             Err(e) => {
                 write_record(RECORD, &record)?;
-                return Err(e.context(format!("write {}", item.slug)));
+                return Err(e.context(format!("write {slug}")));
             }
         }
     }
@@ -203,7 +196,7 @@ pub fn install_featured(force: bool) -> Result<Summary> {
 
 /// Shows name in the app; a palette is written to themes/ first.
 pub fn apply(name: &str) -> Result<()> {
-    if theme::library()?.0.iter().any(|i| i.slug == name) {
+    if theme::library()?.iter().any(|slug| slug == name) {
         install(name, false)?;
     }
     super::run("app.theme", &[("name", name)])
@@ -230,7 +223,7 @@ mod tests {
     }
 
     // The panels' text takes the palette's tint yet stays readable, even
-    // when the palette's text is already faint; Herdr's own overrides carry.
+    // when the palette's text is already faint.
     #[test]
     fn panel_colors_keep_contrast() {
         let mut pal = theme::parse_palette(BODY).unwrap();
@@ -238,18 +231,15 @@ mod tests {
         assert_eq!(colors["foreground"], "#cdd6f4");
         let muted = colors["muted"].as_str().unwrap();
         assert!(contrast(rgb(muted), rgb(&pal.background)) >= 4.5 && muted != "#cdd6f4", "{muted}");
-        assert!(!colors.contains_key("accent"));
         pal.foreground = "#45475a".into();
-        pal.overrides.insert("accent", "#ff8800".into());
         let colors = panel_colors(&pal);
         assert_eq!(colors["dim"], "#45475a", "too faint to dim further");
-        assert_eq!(colors["accent"], "#ff8800");
     }
     // A palette edited in the app's folder stays; one herdr-customize wrote
     // and nobody touched is brought up to date.
     #[test]
     fn install_keeps_edited_files() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         assert_eq!(install("dracula-default", false).unwrap(), Wrote::Written);
         assert_eq!(install("dracula-default", false).unwrap(), Wrote::Same);

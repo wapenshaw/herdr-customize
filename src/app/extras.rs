@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn install_conflicts_updates_and_edited_removal() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         let available = commands();
         let key = extra_keys(extra("copymode").unwrap()).unwrap().remove(0).key;
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn conflict_missing_and_failed_check() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         let available = commands();
         let key = extra_keys(extra("scrollback").unwrap()).unwrap().remove(0).key;
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn changed_binding_after_status_is_skipped() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         let available = commands();
         let binding = extra_keys(extra("scrollback").unwrap()).unwrap().remove(0);
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn removal_keeps_a_reassigned_key() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         let binding = extra_keys(extra("copymode").unwrap()).unwrap().remove(0);
         install_with("copymode", &commands(), |_| Ok(())).unwrap();

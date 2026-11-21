@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn edits_only_personal_root_and_refuses_invalid_input() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let home = super::super::home();
         let dir = home.join("layouts");
         fs::create_dir_all(&dir).unwrap();

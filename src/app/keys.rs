@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::{Map, Value};
 
 use super::{AppCommand, home, read_object, read_record, state_dir, write_record};
-use crate::config::env;
+use crate::env;
 use crate::fsutil;
 
 pub fn path() -> PathBuf {
@@ -472,7 +472,7 @@ mod tests {
     // object; written back as a string, the app would refuse it.
     #[test]
     fn object_bindings_stay_objects() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = std::fs::remove_dir_all(home());
         std::fs::create_dir_all(home()).unwrap();
         std::fs::write(path(), r#"{"global":{"ctrl-shift-r":{"command":"layout.resize","args":{"id":"sidebar","px":240}}}}"#).unwrap();
@@ -488,7 +488,7 @@ mod tests {
     // its place.
     #[test]
     fn edits_keep_the_order() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = std::fs::remove_dir_all(home());
         std::fs::create_dir_all(home()).unwrap();
         std::fs::write(path(), r#"{"global":{"alt-1":"space.select:1","ctrl-shift-t":"tab.new","f2":"tab.rename"},"terminal":{"ctrl-v":"terminal.paste"}}"#).unwrap();
@@ -509,7 +509,7 @@ mod tests {
     // the person moved, removed or turned down is never offered back.
     #[test]
     fn new_shipped_keys_are_offered_once() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = std::fs::remove_dir_all(home());
         std::fs::create_dir_all(state_dir()).unwrap();
         let shipped = r#"{"global":{"ctrl-shift-t":"tab.new","ctrl-shift-w":"tab.close","ctrl-?":"app.help"},"terminal":{"ctrl-shift-f":"terminal.search"}}"#;

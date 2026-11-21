@@ -299,7 +299,7 @@ mod tests {
     // Comments and settings the screen does not show stay as they were.
     #[test]
     fn edits_keep_the_rest_of_the_file() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let path = path();
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "# mine\nsocket = \"/tmp/x.sock\"\nhistory_mb = 5\n").unwrap();

@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn preserves_unknown_fields_and_nested_values() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let path = super::super::home().join("settings.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, r#"{"other":{"x":1},"sounds":{"done":"bell","enabled":true}}"#).unwrap();
@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn refuses_broken_files_and_invalid_values() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let path = super::super::home().join("settings.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{broken").unwrap();
