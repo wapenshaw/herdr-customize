@@ -7,7 +7,7 @@ scrollback and timeouts, edit the app's settings, switch and style layouts,
 add popups and programs, and install bundled mods such as a keyboard copy mode.
 No config files to edit.
 
-![Customize: the Themes, Keys, Mods, Core, App, Popups, Layouts and Programs pages](preview.png)
+![Customize: the Themes, Keys, Mods, Layouts, Core, App, Popups and Programs pages](preview.png)
 
 ## Before you add it
 
@@ -68,10 +68,12 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - **App**: the app's `settings.json` by group (Look, Terminal, Input and
   clipboard, Behavior); each setting with its value or default, an input or
   chips, **Save** and **Use the default**.
-- **Popups**: the popups made here, an add form (name, command, size, key,
-  keep running) with **Try** and **Remove**.
-- **Layouts**: the layouts with **Switch**, **Clone** and, for a personal
-  one, its root look fields.
+- **Popups**: what a popup is, an add form (name, command, size, shortcut,
+  keep running or end on close) with examples to start from, and the popups
+  made here with **Try** and **Remove**.
+- **Layouts**: My layouts (each with **Switch to this layout**, **Make a copy**
+  and, for your own, its root look fields) and the Community gallery of
+  `herdr-layout` repositories with the Mods page's Review and Install.
 - **Programs**: the agents the + menu can start, each with its installed
   state; click one to customize it, or **Add a program**. A form with a hint
   under every field writes only what you changed to `programs.json`.

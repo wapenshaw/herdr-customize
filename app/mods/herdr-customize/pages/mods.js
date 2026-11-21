@@ -55,7 +55,7 @@ export default function create(app) {
     if (r.takeKeys) args.push("--take-keys");
     this.task(cx, `Installing ${p.label}`, args, async data => {
       const failed = data.checks.filter(c => c.error);
-      this.notice = failed.length ? "" : `${p.label} is installed.`;
+      this.notice = failed.length ? "" : p.layouts.length ? `${p.label} is installed. Switch to it on the Layouts tab.` : `${p.label} is installed.`;
       if (failed.length) this.error = failed.map(c => `${c.name}: ${c.error}`).join("\n");
       this.reviewed = null;
       this.modView = "installed";
@@ -152,7 +152,8 @@ export default function create(app) {
       .child(h_flex().flex_wrap().gap(6).children(shipped.map(([kind, name], i) => open(kind, name, `s${i}`, kind === "layout"))));
   }
 
-  browse() {
+  // layoutsOnly is the Layouts tab's view of the same list: no Mods/Layouts choice.
+  browse(layoutsOnly = false) {
     const t = theme();
     const m = this.market;
     const pages = m ? Math.max(1, Math.ceil(Math.min(m.total, 1000) / m.per_page)) : 1;
@@ -160,7 +161,7 @@ export default function create(app) {
     return v_flex().flex_1().min_h(0).gap(8)
       .child(h_flex().gap(6).items_center()
         .child(div().flex_1().child(this.input(this.marketSearch)))
-        .children(this.segment("topic", [["mods", "Mods"], ["layouts", "Layouts"]], this.topic, (topic, cx) => { this.topic = topic; go(1, cx); }))
+        .children(layoutsOnly ? [] : this.segment("topic", [["mods", "Mods"], ["layouts", "Layouts"]], this.topic, (topic, cx) => { this.topic = topic; go(1, cx); }))
         .child(div().w(8))
         .children(this.segment("sort", [["stars", "Stars"], ["updated", "Updated"]], this.sort, (sort, cx) => { this.sort = sort; go(1, cx); })))
       .child(v_flex().id("market").flex_1().min_h(0).overflow_y_scrollbar().gap(6)
@@ -196,7 +197,7 @@ export default function create(app) {
       .child(div().text_size(12).child(text));
     const blocked = p.taken.length > 0 || (p.edited.length > 0 && !r.replaceEdits);
     const folder = `https://github.com/${p.repo}${p.subdir ? `/tree/${p.branch}/${p.subdir}` : ""}`;
-    const line = `Read ~/.config/herdr-app/AGENTS.md, then add this ${p.mods.length || !p.layouts.length ? "mod" : "layout"}: ${folder}`;
+    const line = `Read ~/.config/herdr-app/AGENTS.md, then add this ${p.layouts.length ? "layout" : "mod"}: ${folder}`;
     // The title is in the header, and pictures beside the recipe can't load here.
     const recipe = p.recipe.replace(/^# .*\n+/, "").replace(/!\[[^\]]*\]\((?![a-z]+:)[^)]*\)\s*/gi, "");
     const blob = `https://github.com/${p.repo}/blob/${p.commit}/${p.subdir ? `${p.subdir}/` : ""}`;
