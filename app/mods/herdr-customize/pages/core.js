@@ -4,6 +4,21 @@ import * as herdr from "herdr";
 import { page, value, platform } from "../lib.js";
 
 const { theme } = herdr;
+
+// An argument with a space (a -Command script) can't survive splitting, so such a list shows as JSON.
+const formatArgs = args => args.some(a => /\s/.test(a)) ? JSON.stringify(args) : args.join(" ");
+
+function parseArgs(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const list = JSON.parse(trimmed);
+      if (Array.isArray(list) && list.every(a => typeof a === "string")) return list.filter(Boolean);
+    } catch {}
+  }
+  return trimmed.split(/\s+/).filter(Boolean);
+}
+
 const FRESH_COMMAND = "hc server restart --fresh";
 
 export default function create(app) {
@@ -36,17 +51,17 @@ export default function create(app) {
     if (s?.key === "shell") {
       const argv = s.value ? JSON.parse(s.value) : [];
       this.coreInput.set_value(argv[0] ?? "");
-      this.shellArgs.set_value(argv.slice(1).join(" "));
+      this.shellArgs.set_value(formatArgs(argv.slice(1)));
     } else this.coreInput.set_value(s?.value ?? "");
     this.focusPage();
     cx.notify();
   }
 
-  // Arguments split at spaces: a shell's own flags have none in them.
+  // Arguments are split at spaces, or read as a JSON list when they start with [.
   coreText() {
     if (this.coreSel !== "shell") return value(this.coreInput);
     const program = value(this.coreInput);
-    return program ? JSON.stringify([program, ...value(this.shellArgs).split(/\s+/).filter(Boolean)]) : "";
+    return program ? JSON.stringify([program, ...parseArgs(value(this.shellArgs))]) : "";
   }
 
   saveCore(cx, text = this.coreText()) {
@@ -118,12 +133,12 @@ export default function create(app) {
       const powershell = platform() === "windows" ? [this.chip("shell-default", "PowerShell (default)", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
       const program = value(this.coreInput).toLowerCase();
       // Without the core's -Command hook, cd in the shell never reaches programs it starts.
-      const hookLost = platform() === "windows" && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !/(^|\s)-c(ommand)?(\s|$)/i.test(value(this.shellArgs));
+      const hookLost = platform() === "windows" && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !parseArgs(value(this.shellArgs)).some(a => /^-c(ommand)?$/i.test(a));
       detail.child(h_flex().gap(6).flex_wrap().children([...powershell, ...this.core.shells.map((sh, i) =>
         this.chip(`shell-${i}`, sh.name, s.value === JSON.stringify(sh.argv), (_e, cx) => this.saveCore(cx, JSON.stringify(sh.argv))))]))
         .child(v_flex().gap(5).child(this.label("Program")).child(this.input(this.coreInput)).child(hint(s.hint)))
         .child(v_flex().gap(5).child(this.label("Arguments")).child(this.input(this.shellArgs))
-          .child(hint("Split at spaces, like --login -i for Git Bash, or -l for a login shell. Leave empty for none.")))
+          .child(hint("Split at spaces, like --login -i for Git Bash. An argument that holds spaces shows the list as JSON, like [\"-NoLogo\", \"-Command\", \"...\"]; edit it in that form. Leave empty for none.")))
         .when(hookLost, el => el.child(div().text_size(11.5).text_color(t.working).child("Naming PowerShell here replaces the core's default start-up: new terminals no longer follow cd for the programs they start. Choose PowerShell (default) unless you need other arguments.")));
     } else {
       detail.child(v_flex().gap(5).child(this.input(this.coreInput)).child(hint(s.hint)).child(hint(`Default: ${s.default}`)));
