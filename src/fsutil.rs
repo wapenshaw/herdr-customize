@@ -152,73 +152,23 @@ pub fn temp_path(dir: &Path, prefix: &str) -> PathBuf {
     dir.join(format!("{prefix}{}-{n}-{nanos}", std::process::id()))
 }
 
-/// Today's local date as YYYYMMDD.
+/// Today's UTC date as YYYYMMDD.
 fn today() -> String {
-    format_local(std::time::SystemTime::now(), "%Y%m%d")
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let (year, month, day) = civil(secs.cast_signed() / 86_400);
+    format!("{year:04}{month:02}{day:02}")
 }
 
-/// Formats t in local time, replacing %Y, %m, %d, %H, %M and %S in fmt.
-pub fn format_local(t: std::time::SystemTime, fmt: &str) -> String {
-    let t = local_time(t);
-    let fields = [
-        ("%Y", format!("{:04}", t.year)),
-        ("%m", format!("{:02}", t.month)),
-        ("%d", format!("{:02}", t.day)),
-        ("%H", format!("{:02}", t.hour)),
-        ("%M", format!("{:02}", t.minute)),
-        ("%S", format!("{:02}", t.second)),
-    ];
-    fields.iter().fold(fmt.to_string(), |out, (code, value)| out.replace(code, value))
-}
-
-struct LocalTime {
-    year: i32,
-    month: u32,
-    day: u32,
-    hour: u32,
-    minute: u32,
-    second: u32,
-}
-
-fn unix_seconds(t: std::time::SystemTime) -> i64 {
-    t.duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
-}
-
-/// Breaks t into local calendar fields.
-#[cfg(unix)]
-fn local_time(t: std::time::SystemTime) -> LocalTime {
-    // Naming libc::time_t warns on musl, where it is due to become 64-bit on
-    // 32-bit targets; let localtime_r's signature pick the type.
-    #[allow(clippy::useless_conversion, reason = "time_t is 32-bit on some targets")]
-    let secs = unix_seconds(t).try_into().unwrap_or_default();
-    // SAFETY: localtime_r only writes the tm we pass it.
-    let tm = unsafe {
-        let mut tm: libc::tm = std::mem::zeroed();
-        libc::localtime_r(&secs, &mut tm);
-        tm
-    };
-    LocalTime { year: tm.tm_year + 1900, month: tm.tm_mon as u32 + 1, day: tm.tm_mday as u32, hour: tm.tm_hour as u32, minute: tm.tm_min as u32, second: tm.tm_sec as u32 }
-}
-
-/// Breaks t into local calendar fields.
-#[cfg(windows)]
-fn local_time(t: std::time::SystemTime) -> LocalTime {
-    use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
-    use windows_sys::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};
-    // FILETIME counts 100 ns intervals from 1601-01-01.
-    let ticks = (unix_seconds(t) as u64 + 11_644_473_600) * 10_000_000;
-    let ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
-    // SAFETY: both calls only write the SYSTEMTIME values we pass them.
-    let st = unsafe {
-        let mut utc: SYSTEMTIME = std::mem::zeroed();
-        let mut local: SYSTEMTIME = std::mem::zeroed();
-        FileTimeToSystemTime(&ft, &mut utc);
-        if SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) == 0 {
-            local = utc;
-        }
-        local
-    };
-    LocalTime { year: st.wYear as i32, month: st.wMonth as u32, day: st.wDay as u32, hour: st.wHour as u32, minute: st.wMinute as u32, second: st.wSecond as u32 }
+/// The calendar date days after 1970-01-01, by Howard Hinnant's civil_from_days.
+fn civil(days: i64) -> (i64, i64, i64) {
+    let z = days + 719_468;
+    let (era, doe) = (z.div_euclid(146_097), z.rem_euclid(146_097));
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    (yoe + era * 400 + i64::from(month <= 2), month, day)
 }
 
 #[cfg(test)]
@@ -249,9 +199,11 @@ mod tests {
     }
 
     #[test]
-    fn format_local_fills_every_field() {
-        let text = format_local(std::time::SystemTime::now(), "on %Y-%m-%d at %H:%M:%S");
-        assert!(regex::Regex::new(r"^on \d{4}-\d{2}-\d{2} at \d{2}:\d{2}:\d{2}$").unwrap().is_match(&text), "{text}");
+    fn civil_dates() {
+        assert_eq!(civil(0), (1970, 1, 1));
+        assert_eq!(civil(11_016), (2000, 2, 29));
+        assert_eq!(civil(19_723), (2024, 1, 1));
+        assert_eq!(civil(20_788), (2026, 12, 1));
     }
 
     // Every process and plugin version must name the same lock for a file.

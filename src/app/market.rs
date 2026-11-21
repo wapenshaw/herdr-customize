@@ -2,11 +2,9 @@
 //! topic.
 
 use std::process::Command;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
-use regex::Regex;
 use serde::Deserialize;
 
 use crate::{env, proc};
@@ -36,9 +34,12 @@ pub struct Results {
     pub repos: Vec<Repo>,
 }
 
-/// A result name reaches git clone and the browser, so only plain owner/repo
-/// slugs are accepted from the API.
-static SLUG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$").unwrap());
+/// One part of a GitHub path: letters, digits, `_`, `.` and `-`. A result
+/// name reaches git clone and the browser, so only plain owner/repo slugs
+/// are accepted from the API.
+pub fn is_name(part: &str) -> bool {
+    !part.is_empty() && part.bytes().all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+}
 
 /// Finds repositories tagged with topic. sort is "stars" or "updated";
 /// page counts from 1.
@@ -99,7 +100,7 @@ fn search_at(base: &str, token: Option<String>, topic: &str, query: &str, sort: 
         repos: data
             .items
             .into_iter()
-            .filter(|i| SLUG.is_match(&i.full_name))
+            .filter(|i| i.full_name.split_once('/').is_some_and(|(owner, repo)| is_name(owner) && is_name(repo)))
             .map(|i| Repo { full_name: i.full_name, stars: i.stargazers_count, description: sanitize(&i.description.unwrap_or_default()), pushed_at: i.pushed_at })
             .collect(),
     })
