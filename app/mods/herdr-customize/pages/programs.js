@@ -70,10 +70,17 @@ export default function create(app) {
       if (typeof herdr.knownAgents !== "function") { this.agentStatus = "This version of the app cannot list them."; return; }
       this.agentStatus = "Checking…";
       cx.spawn(async cx => {
-        try { this.agents = await herdr.knownAgents(); this.agentStatus = ""; }
-        catch { this.agents = null; this.agentStatus = "Could not check."; }
+        try {
+          this.agents = await herdr.knownAgents();
+          this.agentStatus = "";
+          if (this.builtin) this.builtin = this.agents.find(a => a.key === this.selected) ?? this.builtin;
+        } catch { this.agents = null; this.agentStatus = "Could not check."; }
         cx.notify();
       });
+    }
+    // The app reloads programs.json a moment after it is written; asking at once returns the old table.
+    recheckAgents(cx) {
+      cx.timer.after(1500, () => this.checkAgents(cx));
     }
     save(cx) {
       const key = value(this.inputs.key);
@@ -95,7 +102,7 @@ export default function create(app) {
         this.data = data;
         this.notice = "Program saved.";
         this.pick(key, cx);
-        this.checkAgents(cx);
+        this.recheckAgents(cx);
       });
     }
     remove(cx) {
@@ -103,7 +110,7 @@ export default function create(app) {
         this.data = data;
         this.notice = this.builtin ? "Back to the built-in program." : "Program removed.";
         this.stopEditing(cx);
-        this.checkAgents(cx);
+        this.recheckAgents(cx);
       });
     }
     focus() { this.handle.focus(); }
@@ -131,24 +138,26 @@ export default function create(app) {
       const t = herdr.theme();
       const own = this.selected && this.personal(this.selected);
       const title = !this.selected ? "Add a program" : this.builtin ? `Customize ${this.builtin.name}` : "Edit program";
-      const detail = v_flex().flex_1().min_h(0).overflow_y_scrollbar().min_w(0).gap(8).id("program-form")
+      const head = v_flex().min_w(0).gap(8)
         .child(h_flex().gap(10).items_center()
           .child(this.button("program-back", "Back", (_e, cx) => this.stopEditing(cx)))
-          .child(div().text_size(18).font_semibold().child(title)))
-        .child(div().text_size(11.5).text_color(t.muted).child(this.builtin ? `Built into the app (${this.selected}). Fields you leave as they are keep the app's values.` : "Your own entry; the app's built-in programs are not touched."));
+          .child(div().text_size(18).font_semibold().child(title))
+          .child(div().flex_1())
+          .when(Boolean(own), el => el.child(this.button("program-remove", this.builtin ? "Back to built-in" : "Remove", (_e, cx) => this.remove(cx), { danger: true })))
+          .child(this.button("program-save", "Save", (_e, cx) => this.save(cx), { primary: true })))
+        .child(div().text_size(11.5).text_color(t.muted).child(this.builtin ? `Built into the app (${this.selected}). Fields you leave as they are keep the app's values.` : "Your own entry; the app's built-in programs are not touched."))
+        .when(Boolean(this.data.error), el => el.child(div().text_size(11).text_color(t.blocked).child(this.data.error)));
+      const body = v_flex().id("program-form").flex_1().min_h(0).overflow_y_scrollbar().gap(8);
       for (const name of fields) {
         if (name === "key" && this.selected) continue;
         const input = h_flex().gap(6).items_center().child(div().flex_1().child(this.input(this.inputs[name])));
         if ((name === "tile" || name === "color") && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value(this.inputs[name]))) input.child(div().w(20).h(20).rounded(4).bg(value(this.inputs[name])));
-        detail.child(v_flex().gap(3).child(this.label(labels[name])).child(input).child(div().text_size(11).text_color(t.dim).child(helps[name])));
+        body.child(v_flex().gap(3).child(this.label(labels[name])).child(input).child(div().text_size(11).text_color(t.dim).child(helps[name])));
       }
-      detail.child(h_flex().gap(8).items_center()
-          .child(this.chip("program-tint", "Tint the icon", this.tint, (_e, cx) => { this.tint = !this.tint; cx.notify(); }))
-          .child(div().text_size(11).text_color(t.dim).child("For a one-color glyph; leave off for a picture.")))
-        .when(Boolean(this.data.error), el => el.child(div().text_size(11).text_color(t.blocked).child(this.data.error)))
-        .child(h_flex().gap(8).child(this.button("program-save", "Save", (_e, cx) => this.save(cx), { primary: true }))
-          .when(Boolean(own), el => el.child(this.button("program-remove", this.builtin ? "Back to built-in" : "Remove", (_e, cx) => this.remove(cx), { danger: true }))));
-      return detail;
+      body.child(h_flex().gap(8).items_center()
+        .child(this.chip("program-tint", "Tint the icon", this.tint, (_e, cx) => { this.tint = !this.tint; cx.notify(); }))
+        .child(div().text_size(11).text_color(t.dim).child("For a one-color glyph; leave off for a picture.")));
+      return v_flex().flex_1().min_w(0).h_full().gap(8).child(head).child(body);
     }
     render() {
       const t = herdr.theme();
