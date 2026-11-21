@@ -1,6 +1,6 @@
 # Contributing to herdr-customize
 
-What the plugin does and how to install it are in the [README](README.md).
+What the program does and how to install it are in the [README](README.md).
 This is how to work on it.
 
 ## Before you start
@@ -14,22 +14,21 @@ This is how to work on it.
 
 ## Getting set up
 
-You need Rust 1.99 or newer and Herdr. On Windows, use the MSVC toolchain with
-the Visual Studio Build Tools.
+You need Rust 1.99 or newer and Cargo to build from source, `herdr-app` to
+drive the screen, and Git 2.25 or newer for repository operations. On Windows,
+the MSVC build tools are needed only when building from source.
 
 ```sh
 git clone https://github.com/wapenshaw/herdr-customize.git
 cd herdr-customize
 cargo test
 cargo build --release
-herdr plugin link "$PWD"     # link skips the build step, so build first
-herdr server reload-config
 ```
 
-> [!WARNING]
-> A linked checkout edits your **real** `config.toml`, recolors your real
-> terminals and installs real plugins. The tests never do: they run against a
-> scripted `herdr` in a temporary sandbox. Keep it that way when you add one.
+To load the screen into the configured app home, run
+`./target/release/herdr-customize app install`. This writes the mod, key and
+featured palettes there. Tests use an isolated sandbox and must not change the
+real app home, reach GitHub or use the clipboard.
 
 ## Working on a change
 
@@ -40,34 +39,32 @@ herdr server reload-config
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org):
   `<type>(<scope>): <subject>`, imperative and lowercase, no trailing period,
   72 characters at most. Types in use are `feat`, `fix`, `perf`, `refactor`,
-  `docs`, `test`, `ci` and `chore`; the scope is a module or area (`themes`,
-  `plugins`, `keys`, `settings`, `config`, `terminal`, `sync`), or `deps` for
-  a dependency update. The body explains **why**; the diff already says what.
-  One logical change per commit, and never a co-author trailer.
+  `docs`, `test`, `ci` and `chore`; scopes include `app`, `themes`, `mods`,
+  `keys`, `proc`, `deps`, `docs` and `ci`. The body explains **why**; the diff
+  already says what. One logical change per commit, and never a co-author
+  trailer.
 - `feat`, `fix`, `perf` and `refactor` commits become the changelog, so write
-  their subjects for someone who uses the plugin. A dependency update is
+  their subjects for someone who uses the screen. A dependency update is
   `chore(deps)` whatever it updates, so it cuts no release on its own.
 - Tests land with the behaviour they cover.
-- **A struct field exists only if code reads it.** Herdr's JSON (plugin lists,
-  the config reference) carries far more than this plugin needs, and an unread
-  field is a promise to keep something working that nothing exercises.
+- **A struct field exists only if code reads it.** The app's JSON carries far
+  more than this program needs, and an unread field is a promise to keep
+  something working that nothing exercises.
 - A comment is at most three lines, and it explains what is surprising rather
   than what is visible. A decision that needs a paragraph goes into `docs/`
   with one line in the code pointing at it. The full rule is in
   [.claude/rules/comments.md](.claude/rules/comments.md).
-- Never pass a value from a terminal, a theme file or a plugin manifest to a
-  shell. Run programs with argument lists, as `src/proc.rs` and `src/herdr.rs`
-  do.
-- Check Herdr's behaviour instead of assuming it: its source,
-  `herdr --help` and the config reference it publishes. Record what you learn
-  in `docs/` when it is not obvious from the code.
+- Never pass a value from a terminal, a palette file or a mod manifest to a
+  shell. Run programs with argument lists.
+- Check the app's behaviour instead of assuming it: its documentation,
+  `herdr-app --help` and `herdr-app commands`. Record what you learn in
+  `docs/` when it is not obvious from the code.
 - Windows, macOS and Linux are all supported, and Windows is the reason this
   project exists. Platform code goes behind `#[cfg(unix)]`/`#[cfg(windows)]`,
   and a change to it type-checks for every target:
   `cargo clippy --all-targets --target x86_64-pc-windows-msvc` and
-  `--target x86_64-unknown-linux-gnu`. Terminal behaviour needs a run on the
-  OS itself; the Windows steps are in
-  [docs/windows-test-plan.md](docs/windows-test-plan.md).
+  `--target x86_64-unknown-linux-gnu`. For a real app mod, run
+  `herdr-app check <mod folder>` and inspect `herdr-app status`.
 
 ## Pull requests
 
@@ -85,8 +82,8 @@ herdr server reload-config
   so release-please would count every change twice, and a squash collapses a
   pull request into one changelog line.
 - Versions, tags and `CHANGELOG.md` belong to release-please, which bumps
-  `Cargo.toml`, `Cargo.lock` and `herdr-plugin.toml` in its release pull
-  request. Do not edit any of them by hand.
+  `Cargo.toml` and `Cargo.lock` in its release pull request. Do not edit
+  versions or the changelog by hand.
 - Keep a pull request to one thing. A refactor, a feature and a formatting
   sweep are three pull requests.
 - Fill in every section of the pull request template: a Summary that shows the

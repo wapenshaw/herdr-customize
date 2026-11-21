@@ -1,97 +1,37 @@
 # herdr-customize
 
-Settings and key bindings for [Herdr](https://herdr.dev) in one popup instead
-of hand-editing `config.toml`, with optional Themes and Plugins pages. Runs on
-Linux, macOS and Windows.
+herdr-customize adds a Customize screen to the [Herdr app](https://herdr.dev) for themes, keys, mods, layouts, core and app settings, popups, and programs. It runs on Linux, macOS and Windows.
 
-This is a personal plugin. I wrote it for my own Herdr setup, and to
-experiment and learn Rust along the way. The Themes and Plugins pages are Rust
-ports of two community plugins (see [Credits](#credits)), brought into one
-popup for my convenience. Use it if it helps you too.
+## Pages
 
-![The Settings page: every Herdr setting grouped by section, with the allowed values on each row](docs/screenshots/settings.png)
+| | |
+|---|---|
+| **Themes**: over 100 palettes with a live preview; one click makes one your light or dark theme.<br>![Themes: the palettes with a terminal drawn in the selected one's colors](docs/screenshots/app-themes.png) | **Keys**: every binding, a form to change or add one, and presets for common keys.<br>![Keys: the bindings with presets offering keys that are still free](docs/screenshots/app-keys.png) |
+| **Mods**: what is installed, the mods bundled with Customize, and Browse for herdr-mod repositories on GitHub.<br>![Mods: this screen, mods added by hand, and the ones the app ships](docs/screenshots/app-mods.png) | **Layouts**: switch, copy and style layouts, or install one from the community gallery.<br>![Layouts: the built-in layouts with the active one selected](docs/screenshots/app-layouts.png) |
+| **Core**: herdr-core's shell, scrollback and agent settings, and update checks.<br>![Core: updates, and the shell setting open with its hints](docs/screenshots/app-core.png) | **App**: the app's look, terminal and clipboard settings.<br>![App: settings by group, with zoom open](docs/screenshots/app-app.png) |
+| **Popups**: a key that opens a command such as lazygit or btop in a floating terminal.<br>![Popups: the add form with examples, and a btop popup](docs/screenshots/app-popups.png) | **Programs**: rename, recolor or change the agents in the + menu, or add your own.<br>![Programs: the agents in the + menu with whether each is installed](docs/screenshots/app-programs.png) |
 
-## Features
-
-- **Settings**: every setting your Herdr version has, grouped as in its docs,
-  with the allowed values right on the row. Flip through them with ←/→.
-- **Keys**: Herdr's actions, your custom commands and plugin actions that
-  have no key yet, in one list. Press a key to record it; conflicts are
-  flagged before you save.
-- **Themes** (optional): 112 palettes with a live preview. One key recolors
-  Herdr and the terminal it runs in, and the colors come back when Herdr
-  restarts. Add your own from the clipboard.
-- **Plugins** (optional): update, install, enable, remove and configure your
-  plugins, read their logs, and browse the marketplace.
-- **The Herdr app**: a screen in the new desktop app, drawn with its own
-  controls, for every palette as a theme, its keys and presets, mods from
-  GitHub, the app's and the core's settings, layouts, popups and programs,
-  and bundled mods such as a keyboard copy mode.
-  Add it like any mod; see [The Herdr app](docs/app.md).
-- **Safe edits**: your comments and layout stay put. Herdr checks every change
-  before it is written, the original is backed up daily, and Herdr reloads
-  by itself.
-
-The popup starts with Settings and Keys. Turn on Themes and Plugins at the top
-of the Settings page when you want them.
-
-| Keys | Themes | Plugins |
-| --- | --- | --- |
-| ![Keys page flagging a conflict](docs/screenshots/keys.png) | ![Themes page with a live preview of the selected palette](docs/screenshots/themes.png) | ![Plugins page with an update available](docs/screenshots/plugins.png) |
+See [the app guide](docs/app.md) for details.
 
 ## Install
 
-```bash
-herdr plugin install wapenshaw/herdr-customize
-herdr plugin action invoke bind --plugin herdr-customize
+Clone the repository, fetch or build its binary, then install the screen:
+
+```sh
+git clone --depth 1 https://github.com/wapenshaw/herdr-customize ~/.local/share/herdr-customize
+cd ~/.local/share/herdr-customize
+sh scripts/fetch-or-build.sh
+target/release/herdr-customize app install
 ```
 
-The first command installs the prebuilt binary for your platform. The second
-binds `prefix+t` to the popup. [Installing](docs/install.md) covers other
-keys, binding by hand and building from source.
+On Windows, run `scripts\fetch-or-build.ps1` in PowerShell instead. The screen opens with **ctrl+shift+y** (**cmd+shift+y** on macOS). See [installing](docs/install.md) for requirements, updates and removal.
 
-## Use
+## Herdr TUI
 
-- **prefix+t** opens the popup.
-- **Tab** and **Shift+Tab** switch pages, as do the number keys.
-- **Themes page** and **Plugins page**, at the top of Settings, add those
-  pages to the popup.
-- **?** lists every key on a page, and **Esc** closes the popup.
+The TUI plugin was retired in 1.0.0. Its last release was v0.10.0; pin it with `herdr plugin install wapenshaw/herdr-customize --ref v0.10.0`.
 
-To update, run `herdr plugin update herdr-customize`.
+## Development
 
-Coming from herdr-theme-picker or Plugin Manager? This plugin replaces both;
-[here is how to switch](docs/install.md#coming-from-herdr-theme-picker-or-plugin-manager).
+[Development](docs/development.md) · [Contributing](CONTRIBUTING.md)
 
-## Documentation
-
-- [Installing](docs/install.md): platforms, key bindings, updating and the
-  command line.
-- [Using the popup](docs/guide.md): every page and its keys.
-- [Themes](docs/themes.md): where a theme applies, terminal colors,
-  `herdr --remote` and adding palettes.
-- [Configuration and state](docs/configuration.md): how edits, checks,
-  backups and locks work.
-- [The Herdr app](docs/app.md): the desktop app's screen for themes, keys,
-  mods and the core's settings.
-- [For plugin authors](docs/plugin-authors.md): describe your settings with
-  `config-schema.json`.
-- [Development](docs/development.md) and [Contributing](CONTRIBUTING.md).
-
-## Ideas
-
-Sidebar row layouts with a preview, saved pane layouts, tab bar and window
-title builders, sounds and notifications, and restoring config backups.
-
-## Credits
-
-- The Themes page is a Rust port of
-  [qintmb/herdr-theme-picker](https://github.com/qintmb/herdr-theme-picker).
-  Thanks to its contributors.
-- The Plugins page is a Rust port of
-  [speardragon/herdr-plugin-manager](https://github.com/speardragon/herdr-plugin-manager)
-  (MIT).
-
-## License
-
-MIT; see [LICENSE](LICENSE).
+[MIT License](LICENSE).
