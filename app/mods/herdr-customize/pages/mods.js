@@ -165,7 +165,10 @@ export default function create(app) {
         .child(div().w(8))
         .children(this.segment("sort", [["stars", "Stars"], ["updated", "Updated"]], this.sort, (sort, cx) => { this.sort = sort; go(1, cx); })))
       .child(v_flex().id("market").flex_1().min_h(0).overflow_y_scrollbar().gap(6)
-        .when(!m, el => el.child(this.empty(this.busy ? "Reading GitHub…" : "Press Enter to search.")))
+        .when(!m, el => el.child(this.busy
+          ? this.loading("Reading GitHub", "The first list on this computer reads every repository once and can take up to a minute. After that it opens at once.")
+          : this.empty("Press Enter to search.")))
+        .when(Boolean(m) && Boolean(this.busy), el => el.child(this.loading(this.busy, "Reading from GitHub.")))
         .when(Boolean(m) && !m.repos.length, el => el.child(this.empty("Nothing found.")))
         .children((m?.repos ?? []).map((r, i) => {
           return h_flex().id(`repo-${i}`).p(10).gap(12).items_center().rounded(9).bg(t.surface).cursor_pointer().hover(s => s.bg(t.hover))
@@ -211,6 +214,7 @@ export default function create(app) {
         .when(stars > 0, el => el.child(div().text_size(11.5).text_color(t.dim).child(`★ ${stars}`)))
         .child(div().flex_1())
         .child(this.button("open-github", "View on GitHub", (_e, cx) => cx.open_url(folder))))
+      .when(Boolean(this.busy), el => el.child(this.loading(this.busy, "Cloning the repository from GitHub. A large one takes about a minute.")))
       .when(r.plans.length > 1, el => el.child(h_flex().flex_wrap().gap(5).children(r.plans.map((q, i) => this.chip(`plan-${i}`, q.title, i === r.at, (_e, cx) => { r.at = i; cx.notify(); })))))
       .child(h_flex().flex_1().min_h(0).gap(18).items_start()
         .child(v_flex().id("review-doc").flex_1().min_w(0).h_full().overflow_y_scrollbar().gap(14).pr(8)

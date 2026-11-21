@@ -119,11 +119,15 @@ export default class Customize extends View {
   task(cx, label, args, done) {
     if (this.busy) return;
     this.busy = label;
+    this.busyAt = Date.now();
     this.error = "";
     this.notice = "";
     cx.notify();
+    // The seconds on screen only move when something redraws it.
+    const tick = cx.timer.every(1000, c => c.notify());
     cx.spawn(async cx => {
       try { await done(await this.call(args), cx); } catch (e) { this.error = reason(e); }
+      tick.cancel();
       this.refreshHealth(cx);
       this.busy = "";
       cx.notify();
@@ -216,6 +220,22 @@ export default class Customize extends View {
     return div().p(14).rounded(8).bg(t.surface).text_size(12).text_color(t.muted).child(text);
   }
 
+  spinner() {
+    return div().w(12).flex_none().text_color(theme().accent).frames(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], 80);
+  }
+
+  busySeconds() { return Math.floor((Date.now() - this.busyAt) / 1000); }
+
+  // What the screen is waiting for, with the seconds so far: it shows work, not a hang.
+  loading(label, detail) {
+    const t = theme();
+    return h_flex().p(16).gap(12).items_start().rounded(8).bg(t.surface)
+      .child(div().pt(2).child(this.spinner()))
+      .child(v_flex().gap(4).min_w(0)
+        .child(div().text_size(13).font_medium().child(`${label}… ${this.busySeconds()} s`))
+        .child(div().text_size(12).text_color(t.muted).child(detail)));
+  }
+
   closeAndRun(command, args) {
     this.close();
     run(command, args);
@@ -257,7 +277,8 @@ export default class Customize extends View {
           .text_size(12).font_medium().cursor_pointer().bg(this.tab === id ? t.raised : t.surface).text_color(this.tab === id ? t.foreground : t.muted)
           .hover(s => s.text_color(t.foreground)).on_click((_e, cx) => this.showTab(id, cx)).child(title))))
         .child(div().flex_1())
-        .when(Boolean(this.busy), el => el.child(div().text_size(11.5).text_color(t.muted).child(`${this.busy}…`)))
+        .when(Boolean(this.busy), el => el.child(h_flex().gap(6).items_center().flex_none().text_size(11.5).text_color(t.muted)
+          .child(this.spinner()).child(`${this.busy}… ${this.busySeconds()} s`)))
         .child(this.button("close", "Close", () => this.close(), { always: true })))
       .when(this.problems.length > 0 && this.dismissedHealth !== JSON.stringify(this.problems), el => el.child(
         h_flex().mx(20).mt(10).p(10).gap(10).rounded(8).bg(`${t.blocked}18`).text_color(t.blocked).items_start().flex_none()
