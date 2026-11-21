@@ -82,11 +82,11 @@ pub fn lock(path: &Path) -> Result<File> {
     Ok(f)
 }
 
-/// Holds the write lock for path, kept in the plugin's state folder, until
-/// the returned file is dropped. Writers in this and every other process
-/// take turns, so none loads the file before another has replaced it.
+/// Holds the write lock for path, kept in herdr-customize's data folder,
+/// until the returned file is dropped. Writers in this and every other
+/// process take turns, so none loads the file before another has replaced it.
 pub fn write_lock(path: &Path) -> Result<File> {
-    let dir = crate::theme::state_dir().join("locks");
+    let dir = crate::app::state_dir().join("locks");
     fs::create_dir_all(&dir)?;
     lock(&dir.join(format!("{:016x}.lock", path_hash(path)))).with_context(|| format!("lock {}", path.display()))
 }

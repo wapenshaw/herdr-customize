@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn round_trip_preserves_other_content() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let home = super::super::home();
         std::fs::create_dir_all(&home).unwrap();
         let path = home.join("programs.json");
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn refuses_invalid_files_without_touching_them() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let path = super::super::home().join("programs.json");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "{broken").unwrap();
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn refuses_invalid_fields_and_escaping_icons() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let home = super::super::home();
         std::fs::create_dir_all(&home).unwrap();
         for (key, item) in [

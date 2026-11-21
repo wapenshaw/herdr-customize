@@ -8,13 +8,6 @@
       "include-component-in-tag": false,
       "draft": true,
       "force-tag-creation": true,
-      "extra-files": [
-        {
-          "type": "toml",
-          "path": "herdr-plugin.toml",
-          "jsonpath": "$.version"
-        }
-      ],
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },

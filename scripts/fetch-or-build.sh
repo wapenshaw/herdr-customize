@@ -1,10 +1,10 @@
 #!/bin/sh
-# Herdr's [[build]] step on Linux and macOS.
+# Puts herdr-customize in target/release on Linux and macOS.
 #
 # Downloads the release binary for this checkout's version and platform,
 # checks it against the release's SHA256SUMS, and installs it where the
-# manifest runs it. Anything missing or wrong (no release for this version,
-# no network, a checksum mismatch, an unknown platform) falls back to
+# app's screen looks for it. Anything missing or wrong (no release for this
+# version, no network, a checksum mismatch, an unknown platform) falls back to
 # building from source with cargo, so installing never gets harder than a
 # plain `cargo build`.
 #
@@ -23,7 +23,7 @@ build() {
 	echo "herdr-customize: $1; building from source." >&2
 	[ -n "$tmp" ] && rm -rf "$tmp"
 	if ! command -v cargo >/dev/null 2>&1; then
-		echo "herdr-customize: cargo was not found. Install Rust from https://rustup.rs, then run: herdr plugin install $REPO" >&2
+		echo "herdr-customize: cargo was not found. Install Rust from https://rustup.rs, then run this script again." >&2
 		exit 1
 	fi
 	cd "$ROOT" || exit 1

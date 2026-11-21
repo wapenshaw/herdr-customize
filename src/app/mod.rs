@@ -8,6 +8,7 @@ pub mod crawl;
 pub mod extras;
 pub mod keys;
 pub mod layouts;
+mod market;
 pub mod mods;
 pub mod popups;
 pub mod presets;
@@ -26,7 +27,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::config::env;
+use crate::env;
 use crate::{fsutil, proc};
 
 /// The mod that opens the popup in the app, and the folder of its data.
@@ -306,7 +307,7 @@ mod tests {
 
     #[test]
     fn health_combines_files_and_status_without_duplicates() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let root = home();
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("mods/example")).unwrap();
@@ -327,7 +328,7 @@ mod tests {
 
     #[test]
     fn health_caps_files_and_ignores_unavailable_status() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let root = home();
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
@@ -341,7 +342,7 @@ mod tests {
     // key is added once and never over another binding.
     #[test]
     fn install_popup_binds_a_free_key() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         fs::create_dir_all(home()).unwrap();
         fs::write(keys::path(), format!(r#"{{"global":{{"{DEFAULT_KEY}":"tab.new"}}}}"#)).unwrap();

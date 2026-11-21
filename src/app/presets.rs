@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn apply_preserves_taken_and_hidden_keys() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = std::fs::remove_dir_all(super::super::home());
         std::fs::create_dir_all(super::super::home()).unwrap();
         std::fs::write(keys::path(), r#"{"global":{"alt-shift-left":"tab.new"},"terminal":{"alt-shift-down":"terminal.copy"}}"#).unwrap();
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn already_set_bindings_are_not_conflicts_or_offered() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = std::fs::remove_dir_all(super::super::home());
         std::fs::create_dir_all(super::super::home()).unwrap();
         let key = if cfg!(target_os = "macos") { "cmd-f" } else { "ctrl-shift-f" };

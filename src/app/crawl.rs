@@ -10,9 +10,10 @@ use std::time::Duration;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use super::market;
 use super::mods::{self, Checkout, PREVIEWS};
 use super::{read_record, write_record};
-use crate::{fsutil, plugins};
+use crate::fsutil;
 
 /// What was found in each repository, by full name.
 const RECORD: &str = "browse.json";
@@ -51,7 +52,7 @@ struct Crawled {
 
 /// One row of Browse.
 pub struct Row {
-    pub repo: plugins::Repo,
+    pub repo: market::Repo,
     pub found: Found,
 }
 
@@ -66,9 +67,9 @@ impl Row {
 /// the packages they hold. A repository is read again only once pushed to.
 pub fn page(layouts: bool, query: &str, sort: &str, page: usize, per_page: usize) -> Result<(usize, Vec<Row>)> {
     let topic = if layouts { "herdr-layout" } else { "herdr-mod" };
-    let results = plugins::search(topic, query, sort, page, per_page)?;
+    let results = market::search(topic, query, sort, page, per_page)?;
     let mut known: BTreeMap<String, Crawled> = read_record(RECORD)?;
-    let stale: Vec<&plugins::Repo> = results.repos.iter().filter(|r| known.get(&r.full_name).is_none_or(|c| c.pushed_at != r.pushed_at)).collect();
+    let stale: Vec<&market::Repo> = results.repos.iter().filter(|r| known.get(&r.full_name).is_none_or(|c| c.pushed_at != r.pushed_at)).collect();
     // Workers take the next repository as they finish, so one slow clone
     // never holds up the rest.
     let next = AtomicUsize::new(0);
@@ -176,8 +177,8 @@ mod tests {
     // picture copied where the app can load it.
     #[test]
     fn packages_are_named_from_their_recipes() {
-        let _guard = crate::ui::tests::isolated();
-        let base = std::path::PathBuf::from(crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
+        let _guard = crate::testenv::isolated();
+        let base = std::path::PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         mods::tests::repo(
             &base,
             "o/kit",

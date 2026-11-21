@@ -1,9 +1,9 @@
-# Herdr's [[build]] step on Windows. Runs in the Windows PowerShell 5.1 that
-# ships with Windows, so installing needs no extra tools.
+# Puts herdr-customize in target\release on Windows. Runs in the Windows
+# PowerShell 5.1 that ships with Windows, so installing needs no extra tools.
 #
 # Downloads the release binary for this checkout's version, checks it against
-# the release's SHA256SUMS, and installs it where the manifest runs it.
-# Anything missing or wrong (no release for this version, no network, a
+# the release's SHA256SUMS, and installs it where the app's screen looks for
+# it. Anything missing or wrong (no release for this version, no network, a
 # checksum mismatch) falls back to building from source with cargo, which
 # needs Rust and the Visual Studio Build Tools.
 #
@@ -24,7 +24,7 @@ $Asset = 'herdr-customize-x86_64-pc-windows-msvc.exe'
 $script:Tmp = $null
 
 # Windows cannot overwrite a running executable but can rename it, so an
-# open popup does not block an update. The old copy is removed next time.
+# open Customize screen does not block an update. The old copy is removed next time.
 function Move-OldBinary {
     $old = "$Out.old"
     if (Test-Path $old) { Remove-Item -Force $old -ErrorAction SilentlyContinue }
@@ -35,7 +35,7 @@ function Build-FromSource([string]$Reason) {
     [Console]::Error.WriteLine("herdr-customize: $Reason; building from source.")
     if ($script:Tmp -and (Test-Path $script:Tmp)) { Remove-Item -Recurse -Force $script:Tmp -ErrorAction SilentlyContinue }
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        [Console]::Error.WriteLine("herdr-customize: cargo was not found. Install Rust from https://rustup.rs with the Visual Studio Build Tools, then run: herdr plugin install $Repo")
+        [Console]::Error.WriteLine("herdr-customize: cargo was not found. Install Rust from https://rustup.rs with the Visual Studio Build Tools, then run this script again.")
         exit 1
     }
     try { Move-OldBinary } catch {}

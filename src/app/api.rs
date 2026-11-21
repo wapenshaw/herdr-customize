@@ -133,27 +133,25 @@ fn run(args: &[String]) -> Result<Value> {
 
 /// Every palette, with the colors a swatch needs.
 fn palettes() -> Result<Value> {
-    let (library, warnings) = theme::library()?;
     let mut out = Vec::new();
-    for item in library {
-        let pal = match theme::resolve_palette(&item.slug) {
-            Ok((pal, _)) => pal,
+    for slug in theme::library()? {
+        let pal = match theme::resolve_palette(&slug) {
+            Ok(pal) => pal,
             Err(e) => {
-                out.push(json!({ "name": item.slug, "error": format!("{e:#}") }));
+                out.push(json!({ "name": slug, "error": format!("{e:#}") }));
                 continue;
             }
         };
         out.push(json!({
-            "name": item.slug,
-            "user": item.user,
-            "featured": themes::FEATURED.contains(&item.slug.as_str()),
+            "name": slug,
+            "featured": themes::FEATURED.contains(&slug.as_str()),
             "dark": theme::is_dark(&pal.background),
             "background": pal.background,
             "foreground": pal.foreground,
             "ansi": pal.colors,
         }));
     }
-    Ok(json!({ "palettes": out, "warnings": warnings }))
+    Ok(json!({ "palettes": out }))
 }
 
 /// What is wrong with binding key in section to action, what it takes from
@@ -294,7 +292,7 @@ mod tests {
     // is taken only when the screen asked the person first.
     #[test]
     fn keys_are_checked_then_set() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         fs::create_dir_all(home()).unwrap();
         fs::write(keys::path(), r#"{"global":{"ctrl-shift-t":"tab.new"}}"#).unwrap();
@@ -318,10 +316,10 @@ mod tests {
     // package that moved on since is refused.
     #[test]
     fn review_then_install() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         fs::create_dir_all(home()).unwrap();
-        let base = std::path::PathBuf::from(crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
+        let base = std::path::PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         mods::tests::repo(&base, "o/board", &[("mods/board/main.js", "fetch(x)"), ("README.md", "# Board\n\nA board.\n"), ("preview.png", "png")]);
         let reply = call(&["review", "o/board"]).unwrap();
         let plan = &reply["plans"][0];
@@ -345,7 +343,7 @@ mod tests {
 
     #[test]
     fn palettes_carry_their_swatch() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let reply = call(&["palettes"]).unwrap();
         let all = reply["palettes"].as_array().unwrap();
         let dracula = all.iter().find(|p| p["name"] == "dracula-default").unwrap();

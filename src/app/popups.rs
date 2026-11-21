@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn install_remove_and_preserve_edits() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         add_with("files", "lazygit", 0.8, 0.8, "alt-shift-f", true, |_| Ok(())).unwrap();
         assert_eq!(describe().unwrap()[0].popup.argv, ["lazygit"]);
@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn clean_removal_keeps_reassigned_key() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         add_with("clean", "fzf", 1.0, 0.2, "alt-shift-f", false, |_| Ok(())).unwrap();
         keys::set("global", None, "alt-shift-f", "tab.new").unwrap();
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn refuses_invalid_conflicts_and_failed_check() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let _ = fs::remove_dir_all(home());
         assert!(add_with("../bad", "x", 0.8, 0.8, "", false, |_| Ok(())).is_err());
         assert!(add_with("valid", "x", 0.1, 0.8, "", false, |_| Ok(())).is_err());

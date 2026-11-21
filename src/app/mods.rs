@@ -193,7 +193,7 @@ impl Plan {
 
 /// Where git clone finds owner/repo; replaced in tests.
 pub(super) fn git_base() -> String {
-    crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap_or_else(|| "https://github.com".into())
+    crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap_or_else(|| "https://github.com".into())
 }
 
 pub(super) fn git(args: &[&str], timeout: Duration) -> Result<String> {
@@ -574,12 +574,12 @@ pub(crate) mod tests {
     // files, and goes away leaving what the person changed.
     #[test]
     fn install_update_and_remove() {
-        let _guard = crate::ui::tests::isolated();
+        let _guard = crate::testenv::isolated();
         let home = home();
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&home).unwrap();
         fs::write(keys::path(), r#"{"global":{"ctrl-shift-j":"tab.new"}}"#).unwrap();
-        let base = PathBuf::from(crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
+        let base = PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         let main = "import { View } from \"gpui-kit\";\nimport { exec } from \"herdr\";\nexec(\"git\");\n";
         repo(
             &base,
@@ -629,8 +629,8 @@ pub(crate) mod tests {
     // A repository of several packages offers each, and a folder picks one.
     #[test]
     fn several_packages() {
-        let _guard = crate::ui::tests::isolated();
-        let base = PathBuf::from(crate::config::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
+        let _guard = crate::testenv::isolated();
+        let base = PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         repo(&base, "o/many", &[("a/layouts/a.json", "{}"), ("b/mods/b/main.js", ""), ("README.md", "x")]);
         let labels: Vec<String> = fetch("o/many").unwrap().iter().map(Plan::label).collect();
         assert_eq!(labels, ["o/many/a", "o/many/b"]);
