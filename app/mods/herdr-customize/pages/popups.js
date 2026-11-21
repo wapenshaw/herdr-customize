@@ -1,7 +1,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex, InputState } from "gpui-base";
 import * as herdr from "herdr";
-import { page, value } from "../lib.js";
+import { page, platform, value } from "../lib.js";
 
 export default function create(app) {
   class Page {
@@ -60,7 +60,7 @@ export default function create(app) {
       if (!this.popups) return this.empty("Loading popups…");
       const t = herdr.theme();
       const field = (label, input, hint) => v_flex().gap(4).child(this.label(label)).child(this.input(input)).child(div().text_size(11).text_color(t.dim).child(hint));
-      const examples = [["git", "lazygit", "ctrl-shift-g"], ["monitor", "btop", "ctrl-shift-u"], ["files", "yazi", "ctrl-shift-r"]];
+      const examples = [["git", "lazygit", "ctrl-shift-g"], ["monitor", platform() === "windows" ? "btop4win --tty_on" : "btop --tty_on", "ctrl-shift-u"], ["files", "yazi", "ctrl-shift-r"]];
       const form = v_flex().gap(10).p(14).rounded(9).bg(t.surface)
         .child(div().text_size(15).font_semibold().child("Add a popup"))
         .child(h_flex().gap(6).items_center().flex_wrap()
