@@ -20,7 +20,7 @@ export const looksLikeRepo = text => /^(https?:\/\/)?(github\.com\/)?[\w.-]+\/[\
 
 export function page(app, instance) {
   Object.setPrototypeOf(Object.getPrototypeOf(instance), app);
-  for (const name of ["busy", "error", "notice"]) {
+  for (const name of ["busy", "busyAt", "error", "notice"]) {
     Object.defineProperty(instance, name, { get: () => app[name], set: value => { app[name] = value; } });
   }
   return instance;

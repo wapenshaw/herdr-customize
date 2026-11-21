@@ -186,7 +186,8 @@ Community gallery lists the repositories tagged `herdr-layout` on GitHub, the
 same list as herdr.dev/gallery, with the same Review and Install as the Mods
 page. A layout with mods brings them. The first load of a page of results can
 take a while, because each repository is read once; later loads use what was
-read.
+read. While it waits, the page shows a spinner with the seconds so far, and the
+header shows the same for any other job.
 
 Use **Use the default** to remove a root field and let the app's settings or
 defaults apply. Child nodes and unknown fields are preserved. Invalid or
