@@ -11,11 +11,11 @@ export default function create(app) {
       this.popups = null;
       this.problem = "";
       this.persistent = false;
-      this.nameInput = InputState.new({ placeholder: "Name" });
-      this.commandInput = InputState.new({ placeholder: "Command and arguments" });
+      this.nameInput = InputState.new({ placeholder: "git" });
+      this.commandInput = InputState.new({ placeholder: "lazygit" });
       this.widthInput = InputState.new({ value: "0.8", placeholder: "0.8" });
       this.heightInput = InputState.new({ value: "0.8", placeholder: "0.8" });
-      this.keyInput = InputState.new({ placeholder: "Optional shortcut" });
+      this.keyInput = InputState.new({ placeholder: "ctrl-shift-g" });
       for (const input of [this.nameInput, this.commandInput, this.widthInput, this.heightInput, this.keyInput]) {
         input.on("change", (_e, cx) => { this.problem = ""; cx.notify(); });
         input.on("submit", (_e, cx) => this.add(cx));
@@ -49,36 +49,49 @@ export default function create(app) {
         this.popups = (await this.call(["popups"])).popups;
       });
     }
+    example(name, command, key, cx) {
+      this.nameInput.set_value(name);
+      this.commandInput.set_value(command);
+      this.keyInput.set_value(key);
+      this.problem = "";
+      cx.notify();
+    }
     render() {
       if (!this.popups) return this.empty("Loading popups…");
       const t = herdr.theme();
-      const field = (label, input) => v_flex().gap(5).child(this.label(label)).child(this.input(input));
+      const field = (label, input, hint) => v_flex().gap(4).child(this.label(label)).child(this.input(input)).child(div().text_size(11).text_color(t.dim).child(hint));
+      const examples = [["git", "lazygit", "ctrl-shift-g"], ["monitor", "btop", "ctrl-shift-u"], ["files", "yazi", "ctrl-shift-r"]];
+      const form = v_flex().gap(10).p(14).rounded(9).bg(t.surface)
+        .child(div().text_size(15).font_semibold().child("Add a popup"))
+        .child(h_flex().gap(6).items_center().flex_wrap()
+          .child(div().text_size(11.5).text_color(t.muted).child("Start from an example:"))
+          .children(examples.map(([name, command, key]) => this.chip(`example-${name}`, command, value(this.commandInput) === command, (_e, cx) => this.example(name, command, key, cx)))))
+        .child(h_flex().gap(12).items_start()
+          .child(v_flex().flex_1().min_w(0).child(field("Name", this.nameInput, "Lowercase, like git.")))
+          .child(v_flex().flex_1().min_w(0).child(field("Command", this.commandInput, "What runs in the window, like lazygit. Quote arguments that hold spaces."))))
+        .child(h_flex().gap(12).items_start()
+          .child(v_flex().flex_1().min_w(0).child(field("Width", this.widthInput, "A fraction of the window, 0.2 to 1.")))
+          .child(v_flex().flex_1().min_w(0).child(field("Height", this.heightInput, "A fraction of the window, 0.2 to 1.")))
+          .child(v_flex().flex_1().min_w(0).child(field("Shortcut (optional)", this.keyInput, "Like ctrl-shift-g. Without one, open it with Try."))))
+        .child(h_flex().gap(10).items_center()
+          .child(this.label("When you close the window"))
+          .children(this.segment("popup-persistent", [["false", "End the program"], ["true", "Keep it running"]], String(this.persistent), (v, cx) => { this.persistent = v === "true"; cx.notify(); })))
+        .when(Boolean(this.problem), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.problem)))
+        .child(h_flex().child(this.button("popup-add", "Add popup", (_e, cx) => this.add(cx), { primary: true })));
       const list = v_flex().gap(8)
-        .child(this.heading("Popups"))
-        .when(!this.popups.length, el => el.child(div().text_size(12).text_color(t.muted).child("No popups yet. Add one to open a command in a window.")))
+        .child(this.heading("Your popups"))
+        .when(!this.popups.length, el => el.child(div().text_size(12).text_color(t.muted).child("None yet. Add one above; it then shows here with Try and Remove.")))
         .children(this.popups.map(popup => h_flex().id(`popup-${popup.name}`).p(12).gap(10).items_center().rounded(9).bg(t.surface)
           .child(v_flex().flex_1().min_w(0).gap(4)
             .child(div().text_size(13).font_semibold().child(popup.name))
             .child(div().text_size(12).text_color(t.muted).child(popup.command))
-            .child(div().text_size(11).text_color(t.dim).child(`${popup.width} × ${popup.height} · ${popup.key || "No shortcut"} · ${popup.persistent ? "Persistent" : "Ends on close"}${popup.changed ? " · Edited" : ""}`)))
+            .child(div().text_size(11).text_color(t.dim).child(`${popup.width} × ${popup.height} · ${popup.key || "No shortcut"} · ${popup.persistent ? "Keeps running" : "Ends on close"}${popup.changed ? " · Edited" : ""}`)))
           .child(this.button(`try-${popup.name}`, "Try", () => herdr.run("mod.open", { name: `popup-${popup.name}` })))
           .child(this.button(`remove-${popup.name}`, "Remove", (_e, cx) => this.remove(popup, cx), { danger: true }))));
-      const form = v_flex().gap(10)
-        .child(this.heading("Add a popup"))
-        .child(field("Name", this.nameInput))
-        .child(field("Command", this.commandInput))
-        .child(h_flex().gap(10)
-          .child(v_flex().flex_1().min_w(0).child(field("Width", this.widthInput)))
-          .child(v_flex().flex_1().min_w(0).child(field("Height", this.heightInput))))
-        .child(div().text_size(11).text_color(t.dim).child("Sizes up to 1 are fractions of the window."))
-        .child(field("Key (optional)", this.keyInput))
-        .child(this.label("Keep the terminal running after closing"))
-        .child(h_flex().gap(6).children(this.segment("popup-persistent", [["false", "Off"], ["true", "On"]], String(this.persistent), (v, cx) => { this.persistent = v === "true"; cx.notify(); })))
-        .when(Boolean(this.problem), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.problem)))
-        .child(this.button("popup-add", "Add popup", (_e, cx) => this.add(cx), { primary: true }));
-      return h_flex().flex_1().min_h(0).gap(16)
-        .child(v_flex().flex_1().min_w(0).overflow_y_scrollbar().child(list))
-        .child(v_flex().w(320).min_w(0).overflow_y_scrollbar().child(form));
+      return v_flex().id("popup-page").flex_1().min_h(0).overflow_y_scrollbar().gap(12)
+        .child(div().text_size(12).text_color(t.muted).child("A popup is a small floating terminal that runs one command, like lazygit or btop, over your work. A shortcut opens it and it goes away when you are done."))
+        .child(form)
+        .child(list);
     }
   }
   return page(app, new Page());
