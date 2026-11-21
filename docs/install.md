@@ -1,100 +1,68 @@
 # Installing
 
-```bash
-herdr plugin install wapenshaw/herdr-customize
+Customize is a screen for the Herdr desktop app (`herdr-app`).
+
+## Requirements
+
+- `herdr-app` installed.
+- Git 2.25 or newer.
+- Either a release binary for your platform or Rust and Cargo to build one.
+  Windows needs the MSVC build tools only when building from source.
+
+Release binaries are available for Linux on x86_64 and arm64, macOS on Apple
+Silicon and Intel, and Windows on x64. The Windows build runs on ARM64 through
+emulation. The fetch-or-build script downloads the binary for the checkout's
+version and verifies its SHA-256 checksum; if no matching release is available,
+it builds with Cargo. Set `HERDR_CUSTOMIZE_BUILD_FROM_SOURCE=1` to always
+build.
+
+## Install
+
+On Linux and macOS:
+
+```sh
+git clone --depth 1 https://github.com/wapenshaw/herdr-customize ~/.local/share/herdr-customize
+cd ~/.local/share/herdr-customize
+sh scripts/fetch-or-build.sh
+target/release/herdr-customize app install
 ```
 
-The install downloads the prebuilt binary for your platform from this
-repository's GitHub release and checks it against the SHA-256 sums published
-with it. Release binaries exist for:
+On Windows, use Windows PowerShell 5.1 or PowerShell 7:
 
-- Linux on x86_64 and arm64 (static, so they run on any distro)
-- macOS on Apple Silicon and Intel
-- Windows on x64 (ARM64 Windows runs it under emulation)
-
-If the download fails, or there is no release for the version you are
-installing, the install builds from source with `cargo` instead. That needs
-Rust 1.99 or newer, plus the Visual Studio Build Tools (C++ workload) on
-Windows. Set `HERDR_CUSTOMIZE_BUILD_FROM_SOURCE=1` to always build from
-source.
-
-On Windows the install step runs in the Windows PowerShell 5.1 that ships
-with Windows, so PowerShell 7 is not needed. Herdr started from PowerShell 7
-works too.
-
-The Plugins page uses `git` for update checks.
-
-## Bind a key
-
-Herdr does not bind keys from plugin manifests, so bind one once after
-installing:
-
-```bash
-herdr plugin action invoke bind --plugin herdr-customize
+```powershell
+git clone --depth 1 https://github.com/wapenshaw/herdr-customize "$HOME\.local\share\herdr-customize"
+Set-Location "$HOME\.local\share\herdr-customize"
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1
+.\target\release\herdr-customize.exe app install
 ```
 
-That binds `prefix+t` to the popup and reloads Herdr, and the result shows
-as a Herdr notification. It changes nothing if one of the plugin's actions
-already has a key, and refuses a key another binding uses. A binding to an
-action no installed plugin has, such as `herdr-theme-picker.open` once Theme
-Picker is uninstalled, is pointed at the popup instead. For another key, run
-`./target/release/herdr-customize bind <key>` in the plugin's checkout, or
-change it on the Keys page. The Keys page can add the rest.
-
-To bind it by hand instead, add this to `config.toml` and reload:
-
-```toml
-[[keys.command]]
-key = "prefix+t"
-type = "plugin_action"
-command = "herdr-customize.open"
-description = "customize herdr"
-```
-
-```bash
-herdr server reload-config
-```
-
-`herdr-customize.open` opens the popup on Settings, and `.keys`, `.themes`
-and `.plugins` open it on that page, even when Themes or Plugins is turned off
-in Settings.
+`app install` writes the screen and its key to the app, plus the featured
+bundled palettes. It does not take a key already in use. The default key is
+**ctrl+shift+y** (**cmd+shift+y** on macOS); pass another key to `app install`
+if needed. See [the app guide](app.md) for the pages and commands.
 
 ## Update
 
-Run `herdr plugin update herdr-customize`, or update it from its own Plugins
-page.
-
-Since 0.5.0 the Themes and Plugins pages start turned off. Turn them on at the
-top of the Settings page; bindings to `.themes` and `.plugins` keep working
-either way.
-
-## Coming from herdr-theme-picker or Plugin Manager
-
-This plugin replaces both. Uninstall them first, with
-`herdr plugin uninstall <id>`, then run the `bind` action: it points Theme
-Picker's `prefix+t` at the popup. The Keys page marks any other binding whose
-action is no longer installed, such as `ray.plugin-manager.open`; point it at
-`herdr-customize.plugins`, or delete it. Turn on the Themes and Plugins pages
-at the top of Settings to keep them on the tab bar. Themes you added to herdr-theme-picker can be added again
-from the clipboard or your editor.
-
-## Commands
-
-The binary also runs outside the popup:
+Update the checkout, fetch or build its matching binary, and run `app install`
+again to update the screen:
 
 ```sh
-herdr-customize ui [page]              # the popup: settings, keys, themes or plugins
-herdr-customize open [page]            # open the popup inside Herdr from a shell
-herdr-customize bind [key]             # bind a key to the popup (default: prefix+t)
-herdr-customize apply dracula-default  # apply a theme by name
-herdr-customize reset                  # go back to Herdr's built-in theme
-herdr-customize sync                   # send the applied colors to local clients again
-herdr-customize sync --client 12345    # ... to one client PID only
-herdr-customize sync --startup         # ... to each client that appears within 10 s (Herdr runs this)
-herdr-customize preview dracula-default
+git pull
+sh scripts/fetch-or-build.sh
+target/release/herdr-customize app install
 ```
 
-For the Herdr desktop app, see [The Herdr app](app.md#commands).
+Use `powershell -File scripts\fetch-or-build.ps1` instead of the shell script
+on Windows. To rewrite the featured palettes separately, run
+`herdr-customize app themes`; `--force` replaces existing palette files.
 
-To run it on a machine that only connects with `herdr --remote`, see
-[Themes](themes.md#using-herdr---remote-from-another-machine).
+## Uninstall
+
+Remove the Customize screen from **Mods > Installed**; the [Mods section of
+the app guide](app.md#mods) describes what removal keeps. Palette files remain
+in the app's `themes` folder.
+
+## Herdr TUI
+
+The TUI plugin was retired in 1.0.0. Its last release was v0.10.0; pin it with
+`herdr plugin install wapenshaw/herdr-customize --ref v0.10.0`.

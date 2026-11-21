@@ -1,3 +1,5 @@
+> Historical note: the TUI plugin described here was retired in 1.0.0; its last release was v0.10.0.
+
 # Go vs Rust: the same plugin written twice
 
 herdr-customize was written in Go first (now on the `go` branch) and then

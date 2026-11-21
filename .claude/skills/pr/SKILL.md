@@ -18,9 +18,9 @@ Every pull request body here follows
 Read it, fill each section as below, and delete its HTML comments. Keep the
 `Before merging` checklist, ticking only what is true.
 
-Skip preambles and keep prose brief. Use the words the code and the README
-use: popup, page, theme, palette, client, sync, setting, binding, plugin,
-action. Write in English, whatever language the request came in. Add no
+Skip preambles and keep prose brief. Use the terms the code and README use:
+screen, page, theme, palette, mod, layout, popup, program, key and binding.
+Write in English, whatever language the request came in. Add no
 "Generated with" line or other attribution, for the same reason
 [AGENTS.md](../../../AGENTS.md) forbids a co-author trailer in a commit.
 
@@ -36,57 +36,53 @@ stays open after this pull request.
 - Logic or an algorithm as pseudocode:
 
 ```text
-on(apply theme)
-  write [theme.custom], keeping a daily backup of config.toml
-  record the selection beside it
-  recolor each client terminal, best effort
-  herdr server reload-config, best effort
+on(app api themes-apply)
+  write themes/<name>.json in the app home
+  herdr-app do app.theme
 ```
 
 - Runtime control flow as a call tree:
 
 ```text
-ui::run
-  App::key
-    Page::key
-      Ctx::spawn
-  App::dispatch(Msg)
-    Page::update
+app screen task()
+  page.applyTheme()
+    call("themes-apply")
+      write themes/<name>.json
+      herdr-app do app.theme
 ```
 
 - File responsibility or a broad refactor as a shallow file tree:
 
 ```text
 src/
-├── ui/         # the popup: event loop, Msg, Ctx and one file per page
-├── theme/      # palettes, [theme.custom] writes, apply and sync
-└── terminal/   # finding clients and recoloring them, per OS
+├── app/        # app-home reads, writes and JSON API
+├── theme/      # bundled palette loading
+└── testenv.rs  # isolated app test sandbox
+app/
+└── mods/       # the Customize screen
 ```
 
 - Component interaction or data flow with Mermaid:
 
 ```mermaid
 sequenceDiagram
-    participant Popup
-    participant Config as config.toml
-    participant Terminal as client terminal
-    participant Herdr
-    Popup->>Config: write [theme.custom]
-    Popup->>Terminal: OSC color writes
-    Popup->>Herdr: herdr server reload-config
+    participant Screen as Customize screen
+    participant Program as herdr-customize
+    participant Themes as app themes/
+    participant App as herdr-app
+    Screen->>Program: app api themes-apply
+    Program->>Themes: write themes/<name>.json
+    Program->>App: herdr-app do app.theme
 ```
 
 - A `diff` when the point is what changes and the surrounding shape already
   exists. Match the diff shape to the topic:
 
 ```diff
- theme::apply_theme
-   write_custom_block
-   fsutil::atomic_write(applied_file)
--  sync_terminal_colors
-+  if HERDR_CUSTOMIZE_CLIENT_PID is set
-+    sync_terminal_colors(that client)
-   herdr::reload
+app api themes-apply
+  write themes/<name>.json
+- do not show the selected palette
++ herdr-app do app.theme
 ```
 
 - The whole block when most of it is new, when omitted context would hide
@@ -100,9 +96,8 @@ usually enough, several are sometimes needed, all of them never are.
 
 Concrete evidence the change works: a before and an after.
 
-- The popup before and after is S-tier when the change is visible there: a
-  screenshot, or the screen as text from the UI test driver. Describe it in
-  text when neither is to hand.
+- The Customize screen before and after is S-tier when the change is visible:
+  a screenshot or a real app run. Describe it in text when neither is to hand.
 - Execution-based evidence is A-tier: the exact test that failed and now
   passes, named, with its output; a run on Windows or Linux for platform code.
 - `cargo test` and clippy green are the floor, not evidence. Say them only in
@@ -110,12 +105,16 @@ Concrete evidence the change works: a before and an after.
 
 ## Merge Danger
 
-**Door:** `one-way` or `two-way`. A two-way door is cheap to walk back. Here
-the usual one-way doors are a write to the user's `config.toml` that a revert
-cannot take back, colors pushed to their terminals, a plugin installed or
-removed, and a release asset name or version that `scripts/fetch-or-build.*`
-already depend on.
+**Door:** `one-way` or `two-way`. A two-way door is cheap to walk back. Usual
+one-way doors are a write to the user's app home or herdr-core `config.toml`,
+a mod installed or removed, and a release asset name that
+`scripts/fetch-or-build.*` already depends on.
 
 **Blast Radius:** one word, then a line of what could break and for whom:
-the user's config, Windows or Linux only, a Herdr version, remote clients over
-SSH, installs without cargo.
+the user's app home, Windows or Linux only, a Herdr app version, or installs
+without Cargo.
+
+## Commit scopes
+
+Use `app`, `themes`, `mods`, `keys`, `proc`, `deps`, `docs` or `ci` as the
+scope in Conventional Commit subjects.

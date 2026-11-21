@@ -28,11 +28,11 @@ By hand: herdr-customize needs its folder, not just the binary, because the
 palettes live beside it. Clone this repository to
 `~/.local/share/herdr-customize`, run `scripts/fetch-or-build.sh` there (or
 `.ps1` on Windows), which puts the binary in `target/release`, then run
-`target/release/herdr-customize app install`. If Herdr in the terminal
-already has the plugin, its binary works too.
+`target/release/herdr-customize app install`. The palettes live beside the
+binary in the checkout.
 
-`app install` writes 26 well-known palettes, and the ones you added in
-Herdr, to the app's `themes` folder. It also writes a mod,
+`app install` writes the featured bundled palettes, including palettes
+herdr-customize wrote before, to the app's `themes` folder. It also writes a mod,
 `mods/herdr-customize`, that draws the screen with the app's own controls
 and colors, and binds **ctrl+shift+y** (**cmd+shift+y** on macOS) to it.
 There, **Tab** and **Shift+Tab** switch pages and **Esc** closes it. A key already in
@@ -73,9 +73,10 @@ palette's own text color, with muted and dim shades of it that stay
 readable. An accent or sidebar color you set for a palette on Herdr's Themes
 page comes along.
 
-`app themes` writes the set again after you add a palette in Herdr. A theme
-file you edited, or one herdr-customize did not write, is left alone;
-`--force` replaces it. The record is `data/herdr-customize/themes.json`.
+`app themes` writes the featured bundled palettes, including those it wrote
+before, to the app again. A theme file you edited, or one herdr-customize did
+not write, is left alone; `--force` replaces it. The record is
+`data/herdr-customize/themes.json`.
 
 ## Keys
 
