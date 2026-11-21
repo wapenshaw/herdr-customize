@@ -115,12 +115,16 @@ export default function create(app) {
     } else if (s.key === "shell") {
       // PowerShell is the core's default on Windows, with a hook that follows the
       // shell's folder, so picking it clears the setting rather than naming it.
-      const powershell = platform() === "windows" ? [this.chip("shell-default", "PowerShell", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
+      const powershell = platform() === "windows" ? [this.chip("shell-default", "PowerShell (default)", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
+      const program = value(this.coreInput).toLowerCase();
+      // Without the core's -Command hook, cd in the shell never reaches programs it starts.
+      const hookLost = platform() === "windows" && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !/(^|\s)-c(ommand)?(\s|$)/i.test(value(this.shellArgs));
       detail.child(h_flex().gap(6).flex_wrap().children([...powershell, ...this.core.shells.map((sh, i) =>
         this.chip(`shell-${i}`, sh.name, s.value === JSON.stringify(sh.argv), (_e, cx) => this.saveCore(cx, JSON.stringify(sh.argv))))]))
         .child(v_flex().gap(5).child(this.label("Program")).child(this.input(this.coreInput)).child(hint(s.hint)))
         .child(v_flex().gap(5).child(this.label("Arguments")).child(this.input(this.shellArgs))
-          .child(hint("Split at spaces, like --login -i for Git Bash, or -l for a login shell. Leave empty for none.")));
+          .child(hint("Split at spaces, like --login -i for Git Bash, or -l for a login shell. Leave empty for none.")))
+        .when(hookLost, el => el.child(div().text_size(11.5).text_color(t.working).child("Naming PowerShell here replaces the core's default start-up: new terminals no longer follow cd for the programs they start. Choose PowerShell (default) unless you need other arguments.")));
     } else {
       detail.child(v_flex().gap(5).child(this.input(this.coreInput)).child(hint(s.hint)).child(hint(`Default: ${s.default}`)));
     }
