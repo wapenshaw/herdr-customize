@@ -144,7 +144,7 @@ impl PluginConfig {
                 if !options(&e.key).is_empty() && (!e.key.open() || key.is(" ")) {
                     return self.cycle(&f, &e, "right", ctx);
                 }
-                let text = e.value.clone().or_else(|| e.key.default_value()).map(|v| edit_text(&e.key, &v)).unwrap_or_default();
+                let text = e.value.clone().or_else(|| e.key.default_value()).map_or_else(String::new, |v| edit_text(&e.key, &v));
                 self.input = TextInput::new(format!("{} = ", e.key.key), &text);
                 self.editing = true;
             }

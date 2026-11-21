@@ -91,7 +91,7 @@ fn search_at(base: &str, token: Option<String>, topic: &str, query: &str, sort: 
     let body = resp.body_mut().read_to_string();
     if code >= 400 {
         let reason = if code == 403 || code == 429 { "GitHub rate limit" } else { "marketplace search failed" };
-        let message = body.ok().and_then(|s| serde_json::from_str::<Data>(&s).ok()).map(|d| d.message).unwrap_or_default();
+        let message = body.ok().and_then(|s| serde_json::from_str::<Data>(&s).ok()).map_or_else(String::new, |d| d.message);
         if message.is_empty() {
             bail!("{reason} (HTTP {code})");
         }

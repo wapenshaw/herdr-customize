@@ -221,7 +221,7 @@ impl SettingsPage {
     }
 
     fn edit_text(&mut self, r: &SettingRow) {
-        let text = r.value.clone().or_else(|| r.key.default_value()).map(|v| edit_text(&r.key, &v)).unwrap_or_default();
+        let text = r.value.clone().or_else(|| r.key.default_value()).map_or_else(String::new, |v| edit_text(&r.key, &v));
         self.input = TextInput::new(format!("{} = ", r.key.key), &text);
         self.mode = Mode::Editing;
     }
