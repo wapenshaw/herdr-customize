@@ -7,11 +7,10 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use super::keys::{self, Binding};
@@ -20,9 +19,6 @@ use crate::{fsutil, proc};
 
 /// The installed packages.
 const RECORD: &str = "packages.json";
-
-/// owner/repo, then an optional folder inside it.
-static SPEC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)((?:/[A-Za-z0-9_.-]+)*)$").unwrap());
 
 /// One package herdr-customize installed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -218,8 +214,11 @@ pub fn fetch(spec: &str) -> Result<Vec<Plan>> {
     let spec = spec.trim();
     let spec = spec.strip_prefix("https://").or_else(|| spec.strip_prefix("http://")).unwrap_or(spec);
     let spec = spec.strip_prefix("github.com/").unwrap_or(spec).trim_end_matches('/');
-    let m = SPEC.captures(spec).ok_or_else(|| anyhow!("{spec:?} is not owner/repo or owner/repo/folder"))?;
-    let (repo, mut want) = (m[1].trim_end_matches(".git").to_string(), m[2].trim_start_matches('/').to_string());
+    let parts: Vec<&str> = spec.split('/').collect();
+    if parts.len() < 2 || !parts.iter().all(|p| super::market::is_name(p)) {
+        bail!("{spec:?} is not owner/repo or owner/repo/folder");
+    }
+    let (repo, mut want) = (parts[..2].join("/").trim_end_matches(".git").to_string(), parts[2..].join("/"));
     let branch = want.strip_prefix("tree/").map(|rest| rest.split_once('/').unwrap_or((rest, ""))).map(|(b, folder)| (b.to_string(), folder.to_string()));
     if let Some((_, folder)) = &branch {
         want = folder.clone();

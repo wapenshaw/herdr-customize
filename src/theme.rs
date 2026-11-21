@@ -2,10 +2,8 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use anyhow::{Context, Result, anyhow, bail};
-use regex::Regex;
 
 /// The folder holding themes/: beside the binary in target/release, or
 /// around the working folder.
@@ -24,11 +22,9 @@ fn root() -> PathBuf {
     ".".into()
 }
 
-static SLUG_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-z0-9]+(?:-[a-z0-9]+)*$").unwrap());
-
 /// Lowercase letters, digits and single hyphens only.
 fn is_valid_slug(slug: &str) -> bool {
-    slug.len() <= 120 && SLUG_RE.is_match(slug)
+    slug.len() <= 120 && slug.split('-').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
 }
 
 /// Whether color is rrggbb with an optional leading #.
@@ -70,8 +66,6 @@ pub struct Palette {
     pub colors: [String; 16],
 }
 
-static PALETTE_ENTRY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^palette\s*=\s*(\d+)\s*=\s*(#?[A-Fa-f0-9]{6})(?:\s+#.*)?\s*$").unwrap());
-
 const MAX_PALETTE_BYTES: u64 = 1 << 20;
 
 fn parse_palette_file(path: &Path) -> Result<Palette> {
@@ -93,18 +87,22 @@ pub fn parse_palette(content: &str) -> Result<Palette> {
             continue;
         }
         let (key, value) = line.split_once('=').ok_or_else(|| anyhow!("line {n}: expected key = value"))?;
+        // A color, then nothing or a trailing comment.
+        let color = |value: &str| {
+            let fields: Vec<&str> = value.split_whitespace().collect();
+            if fields.is_empty() || (fields.len() > 1 && !fields[1].starts_with('#')) {
+                bail!("line {n}: invalid color value");
+            }
+            normalize_color(fields[0]).map_err(|e| anyhow!("line {n}: {e}"))
+        };
         match key.trim() {
             "palette" => {
-                let m = PALETTE_ENTRY.captures(line).ok_or_else(|| anyhow!("line {n}: invalid palette entry"))?;
-                let idx: usize = m[1].parse().ok().filter(|i| *i < 16).ok_or_else(|| anyhow!("line {n}: palette index must be 0..15"))?;
-                colors[idx] = Some(normalize_color(&m[2])?);
+                let (idx, value) = value.split_once('=').ok_or_else(|| anyhow!("line {n}: invalid palette entry"))?;
+                let idx: usize = idx.trim().parse().ok().filter(|i| *i < 16).ok_or_else(|| anyhow!("line {n}: palette index must be 0..15"))?;
+                colors[idx] = Some(color(value)?);
             }
             key @ ("background" | "foreground" | "selection-background" | "cursor-color") => {
-                let fields: Vec<&str> = value.split_whitespace().collect();
-                if fields.is_empty() || (fields.len() > 1 && !fields[1].starts_with('#')) {
-                    bail!("line {n}: invalid color value");
-                }
-                let v = normalize_color(fields[0]).map_err(|e| anyhow!("line {n}: {e}"))?;
+                let v = color(value)?;
                 match key {
                     "background" => pal.background = v,
                     "foreground" => pal.foreground = v,
@@ -179,6 +177,17 @@ palette = 8=#585b70\npalette = 9=#f38ba8\npalette = 10=#a6e3a1\npalette = 11=#f9
         assert!(parse_palette(&format!("{BODY}palette = 16=#000000\n")).is_err());
         assert!(parse_palette(&format!("{BODY}garbage\n")).is_err());
         assert!(parse_palette(&format!("\u{feff}{BODY}# comment\n")).is_ok());
+        assert_eq!(parse_palette(&format!("{BODY}palette = 3 = #ABCDEF # note\n")).unwrap().colors[3], "#abcdef");
+        assert!(parse_palette(&format!("{BODY}palette = 3=#abcdef junk\n")).is_err());
+        assert!(parse_palette(&format!("{BODY}palette = x=#abcdef\n")).is_err());
+    }
+
+    #[test]
+    fn slugs_are_lowercase_words_joined_by_single_hyphens() {
+        assert!(is_valid_slug("catppuccin-mocha") && is_valid_slug("a1"));
+        for bad in ["", "-a", "a-", "a--b", "A", "a_b", "../x", "a.b"] {
+            assert!(!is_valid_slug(bad), "{bad}");
+        }
     }
 
     #[test]

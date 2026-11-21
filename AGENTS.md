@@ -63,8 +63,9 @@ for methods and constants.
 
 Follow `rustfmt` and clippy. Platform code uses `#[cfg(unix)]`/`#[cfg(windows)]`
 on items, or separate `unix.rs`/`windows.rs` modules when a whole
-implementation differs; Windows APIs come from `windows-sys`, Unix ones from
-`libc`. `snake_case` for functions and modules, `PascalCase` for types. Errors
+implementation differs. The standard library covers every platform call the
+program makes today; add `windows-sys` or `libc` only for one it lacks.
+`snake_case` for functions and modules, `PascalCase` for types. Errors
 use `anyhow` with context; a type the caller must recognize is a struct it can
 `downcast_ref`. Keep app reads and writes behind the app API so they stay
 testable.
