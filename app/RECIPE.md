@@ -7,7 +7,7 @@ scrollback and timeouts, edit the app's settings, switch and style layouts,
 add popups and programs, and install bundled mods such as a keyboard copy mode.
 No config files to edit.
 
-![Customize: the Themes, Keys, Mods, Core, App, Bundled mods, Popups, Layouts and Programs pages](preview.png)
+![Customize: the Themes, Keys, Mods, Core, App, Popups, Layouts and Programs pages](preview.png)
 
 ## Before you add it
 
@@ -34,7 +34,7 @@ taken (`app install alt-shift-c` picks another), writes 26 palettes to
 
 An overlay of 86% of the window each way, in the theme's `popover` color.
 
-- **Header**, 52px: "Customize", the nine pages as a strip that scrolls to
+- **Header**, 52px: "Customize", the eight pages as a strip that scrolls to
   keep the active page in view, the running task's name while one runs, and
   **Close**.
 - **Themes**: on the left, 300px wide, a search box, the filters All, Dark,
@@ -51,7 +51,10 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   app's version ships that `keys.json` lacks, with **Add them** and
   **Dismiss**.
 - **Mods**: Installed (packages with **Check for update** and **Remove**,
-  mods added by hand, the app's own) and Browse GitHub (a search box, Mods
+  mods added by hand, the app's own), Bundled with Customize (one card per
+  mod that ships with it, such as copy mode and scrollback in an editor, with
+  its keys, **Install**, **Update** or **Remove**, and why it is unavailable
+  on an older app) and Browse GitHub (a search box, Mods
   or Layouts, Stars or Updated, 20 repositories a page, one card per
   package: its picture, recipe title, stars, first paragraph and
   **Review**). A review shows, on the left, the summary, picture and recipe;
@@ -65,9 +68,6 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
 - **App**: the app's `settings.json` by group (Look, Terminal, Input and
   clipboard, Behavior); each setting with its value or default, an input or
   chips, **Save** and **Use the default**.
-- **Bundled mods**: one card per mod that ships with Customize (copy mode, scrollback in an
-  editor) with its keys, **Install**, **Update** or **Remove**, and why it is
-  unavailable on an older app.
 - **Popups**: the popups made here, an add form (name, command, size, key,
   keep running) with **Try** and **Remove**.
 - **Layouts**: the layouts with **Switch**, **Clone** and, for a personal
