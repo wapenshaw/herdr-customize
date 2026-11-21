@@ -30,21 +30,33 @@ function notify(error) {
   herdr.notify({ title: `Popup: ${name}`, body: String(error?.message ?? error), level: "error" });
 }
 
+async function live() {
+  const list = JSON.parse(await hc(["ls", "--json", "--label", label]));
+  return list.terminals.filter(terminal => terminal.state === "live").map(terminal => terminal.address);
+}
+
 async function launch(focus) {
   const config = await settings();
   let address;
-  if (config.persistent) {
-    address = herdr.terminals().find(terminal => terminal.labels?.["herdr.popup"] === name && terminal.state === "live")?.address;
-    if (!address) {
-      const list = JSON.parse(await hc(["ls", "--json", "--label", label]));
-      address = list.terminals.find(terminal => terminal.state === "live")?.address;
-    }
-  }
+  if (config.persistent) address = (await live())[0];
+  // Opening it again replaces the window, and the terminal behind the old one must not live on.
+  else for (const old of await live()) await herdr.hc(["kill", old]).catch(() => {});
   if (!address) {
     const args = ["run", "--json", "--bg", "--no-parent", "--label", label, "--cwd", focus?.cwd || herdr.home()];
+    // A terminal name is unique among live ones, so quick repeats cannot start two.
+    if (name.length <= 26) args.push("--name", `popup-${name}`);
     args.push("--", ...config.argv);
-    const result = JSON.parse(await hc(args));
-    address = result.address;
+    const result = await herdr.hc(args);
+    const reply = JSON.parse(result.stdout || "{}");
+    if (reply.error?.kind === "name_taken") {
+      // Another launch of this popup won; a persistent one shows its terminal, a plain one leaves it to its own window.
+      if (!config.persistent) return;
+      address = (await live())[0];
+    } else if (result.code === 0) {
+      address = reply.address;
+    } else {
+      throw new Error(reply.error?.message || result.stderr.trim() || `hc exited with ${result.code}`);
+    }
     if (typeof address !== "string" || !address) throw new Error("hc run did not return a terminal address");
   }
   herdr.openOverlay({
@@ -79,8 +91,9 @@ export default class Popup extends View {
     });
   }
 
-  async close() {
-    if (this.owned && herdr.terminals().some(t => t.address === this.owned && t.state === "live")) herdr.run("terminal.kill", { terminal: this.owned });
+  close() {
+    // Quietly: the terminal may already be gone, ended by a newer window of this popup.
+    if (this.owned) herdr.hc(["kill", this.owned]).catch(() => {});
   }
 
   dismiss() {
