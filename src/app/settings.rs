@@ -123,10 +123,20 @@ pub fn describe() -> Value {
     let settings: Vec<Value> = SETTINGS.iter().map(|s| {
         let kind = match s.kind { Kind::Toggle => "toggle", Kind::Choice(_) => "choice", _ => "input" };
         let choices = match s.kind { Kind::Choice(values) => values, _ => &[] };
-        let value = get(&doc, s.key).map(|v| match v { Value::String(text) => text.clone(), _ => v.to_string() });
+        let value = get(&doc, s.key).map(shown);
         json!({ "key": s.key, "title": s.title, "group": s.group, "about": s.about, "hint": s.hint, "default": s.default, "kind": kind, "choices": choices, "value": value, "macos_only": s.key == "option_as_alt", "restart": s.key == "core" })
     }).collect();
     json!({ "path": path, "error": error, "settings": settings })
+}
+
+/// A setting as the page shows it. The app writes some numbers from single
+/// precision, so 1.4 arrives as 1.399999976158142 and is shown as 1.4.
+fn shown(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Number(n) if n.is_f64() => n.as_f64().map_or_else(|| n.to_string(), |f| if f64::from(f as f32) == f { format!("{:?}", f as f32) } else { f.to_string() }),
+        _ => value.to_string(),
+    }
 }
 
 fn parse(s: &Setting, text: &str) -> Result<Value> {
@@ -228,6 +238,15 @@ mod tests {
             assert_eq!(setting.default, default);
             assert!(parse(setting, default).is_ok());
         }
+    }
+
+    #[test]
+    fn single_precision_numbers_show_short() {
+        assert_eq!(shown(&serde_json::json!(1.399999976158142)), "1.4");
+        assert_eq!(shown(&serde_json::json!(1.4)), "1.4");
+        assert_eq!(shown(&serde_json::json!(1.0)), "1.0");
+        assert_eq!(shown(&serde_json::json!(14)), "14");
+        assert_eq!(shown(&serde_json::json!("dark")), "dark");
     }
 
     #[test]
