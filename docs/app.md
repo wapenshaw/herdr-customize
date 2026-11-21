@@ -252,15 +252,21 @@ and removes its shortcut only if it still runs that popup.
 
 ## Programs
 
-The Programs page edits personal entries in `programs.json`, which add to or
-override the app's built-in program table field by field. Add or edit a key,
-name, launch command, process matches, tile and icon colors, icon path and tint.
-The command line accepts single or double quotes around arguments. Use programs
-or shell functions, never aliases: the launcher does not expand aliases.
-Icon paths are relative to the app home and must name an existing file there.
+The Programs page lists the agents the + menu can start, with their installed
+status when the app can check it. Click one to customize it: rename it,
+recolor it, give it an icon or change the command the + menu runs. Only the
+fields you change are written to `programs.json`, so the rest keeps following
+the app; **Back to built-in** removes the override. **Add a program** makes an
+entry of your own, which appears under Your programs. Entries add to or
+override the app's built-in table field by field.
 
-The page also lists agents the + menu can start and their installed status,
-when the app supports checking them. Shell and interpreter lists and unknown
+The fields are the key, name, launch command, other process names, tile and
+icon colors, icon path and tint. The command line accepts single or double
+quotes around arguments. Use programs or shell functions, never aliases: the
+launcher does not expand aliases. Icon paths are relative to the app home and
+must name an existing file there. The app lists only built-in programs that
+have a launch command; editors and tools can still be added by key. Shell and
+interpreter lists and unknown
 fields are preserved; the built-in table is never edited. Invalid or unreadable
 files are shown and never overwritten. The app reports invalid files through
 `programs.error`; writes are atomic and use the same lock as other
