@@ -72,8 +72,9 @@ An overlay of 86% of the window each way, in the theme's `popover` color.
   keep running) with **Try** and **Remove**.
 - **Layouts**: the layouts with **Switch**, **Clone** and, for a personal
   one, its root look fields.
-- **Programs**: the entries in `programs.json` with an add or edit form, and
-  the agents the + menu can start with their installed state.
+- **Programs**: the agents the + menu can start, each with its installed
+  state; click one to customize it, or **Add a program**. A form with a hint
+  under every field writes only what you changed to `programs.json`.
 - A banner under the header lists the app's error files, red, after each
   change.
 - A strip at the bottom for the last notice, green, or error, red.
