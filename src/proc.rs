@@ -86,7 +86,7 @@ pub fn output_within(cmd: &mut Command, timeout: Duration) -> Result<Output> {
     for done in [&out_done, &err_done] {
         let _ = done.recv_timeout(flushed.saturating_duration_since(Instant::now()));
     }
-    let take = |buf: Arc<Mutex<Vec<u8>>>| buf.lock().map(|mut all| std::mem::take(&mut *all)).unwrap_or_default();
+    let take = |buf: Arc<Mutex<Vec<u8>>>| buf.lock().map_or_else(|_| Vec::new(), |mut all| std::mem::take(&mut *all));
     Ok(Output { status, stdout: take(out), stderr: take(err) })
 }
 

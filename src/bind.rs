@@ -43,7 +43,7 @@ enum Plan {
 fn existing(doc: &Doc, reference: &Reference, skip: &[usize]) -> Vec<Binding> {
     let table = doc.decoded();
     let mut out = Vec::new();
-    for k in reference.section("keys").map(|s| s.keys.as_slice()).unwrap_or_default() {
+    for k in reference.section("keys").map_or(&[][..], |s| s.keys.as_slice()) {
         let action = k.key.trim_start_matches("keys.");
         let current = config::lookup(&table, &k.path()).cloned().or_else(|| k.default_value());
         out.push(Binding { owner: k.key.clone(), keys: keys::indexed(action, keys::values(current.as_ref())), navigate: keys::navigate(action) });

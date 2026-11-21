@@ -22,20 +22,16 @@ pub fn describe() -> Value {
         Ok(doc) => (doc, None),
         Err(e) => (Map::new(), Some(format!("{e:#}"))),
     };
-    let programs: Vec<Value> = doc
-        .get("programs")
-        .and_then(Value::as_object)
-        .map(|entries| {
-            entries
-                .iter()
-                .map(|(key, fields)| {
-                    let mut row = fields.as_object().cloned().unwrap_or_default();
-                    row.insert("key".into(), json!(key));
-                    Value::Object(row)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let programs: Vec<Value> = doc.get("programs").and_then(Value::as_object).map_or_else(Vec::new, |entries| {
+        entries
+            .iter()
+            .map(|(key, fields)| {
+                let mut row = fields.as_object().cloned().unwrap_or_default();
+                row.insert("key".into(), json!(key));
+                Value::Object(row)
+            })
+            .collect()
+    });
     json!({ "path": path, "error": error, "programs": programs, "shells": doc.get("shells").cloned().unwrap_or(json!([])), "interpreters": doc.get("interpreters").cloned().unwrap_or(json!([])) })
 }
 

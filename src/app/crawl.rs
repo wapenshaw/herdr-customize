@@ -99,7 +99,7 @@ pub fn page(layouts: bool, query: &str, sort: &str, page: usize, per_page: usize
         .repos
         .into_iter()
         .flat_map(|repo| {
-            let found = known.get(&repo.full_name).map(|c| c.packages.clone()).unwrap_or_default();
+            let found = known.get(&repo.full_name).map_or_else(Vec::new, |c| c.packages.clone());
             found.into_iter().filter(|f| f.listed(layouts)).map(move |found| Row { repo: repo.clone(), found })
         })
         .collect();
@@ -121,7 +121,7 @@ fn packages(full_name: &str) -> Result<Vec<Found>> {
         let at = |name: &str| if root.is_empty() { name.to_string() } else { format!("{root}/{name}") };
         let show = |name: &str| mods::git_bytes(&["-C", &d, "show", &format!("HEAD:{}", at(name))], Duration::from_secs(30));
         let recipe = ["RECIPE.md", "README.md"].iter().find(|f| files.contains(&at(f).as_str())).and_then(|f| show(f).ok());
-        let recipe = recipe.map(|b| String::from_utf8_lossy(&b).replace("\r\n", "\n")).unwrap_or_default();
+        let recipe = recipe.map_or_else(String::new, |b| String::from_utf8_lossy(&b).replace("\r\n", "\n"));
         let preview = PREVIEWS.iter().find(|f| files.contains(&at(f).as_str())).and_then(|f| {
             let ext = f.rsplit('.').next().unwrap_or("png");
             show(f).ok().and_then(|b| mods::save_preview(&b, ext).ok())

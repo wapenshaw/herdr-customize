@@ -348,7 +348,7 @@ fn plan(root: &Path, repo: &str, subdir: &str, commit: &str, previous: Option<&P
             taken.push(rel.clone());
         }
     }
-    let edited = previous.map(|p| p.files.iter().filter(|(rel, d)| fs::read(home.join(rel)).is_ok_and(|b| digest(&b) != **d)).map(|(rel, _)| rel.clone()).collect()).unwrap_or_default();
+    let edited = previous.map_or_else(Vec::new, |p| p.files.iter().filter(|(rel, d)| fs::read(home.join(rel)).is_ok_and(|b| digest(&b) != **d)).map(|(rel, _)| rel.clone()).collect());
     let keys = package_keys(&root.join("keys.json"))?;
     let current = keys::load()?;
     let recipe = ["RECIPE.md", "README.md"].iter().find_map(|f| fs::read_to_string(root.join(f)).ok()).unwrap_or_default().replace("\r\n", "\n");

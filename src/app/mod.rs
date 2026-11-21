@@ -233,7 +233,7 @@ fn read_object(path: &Path) -> Result<serde_json::Map<String, serde_json::Value>
 /// The mods and layouts the app ships and replaces on every start: "agents",
 /// "layout:main".
 pub fn shipped() -> BTreeSet<String> {
-    read_object(&home().join("installed.json")).map(|m| m.into_iter().map(|(k, _)| k).collect()).unwrap_or_default()
+    read_object(&home().join("installed.json")).map_or_else(|_| BTreeSet::new(), |m| m.into_iter().map(|(k, _)| k).collect())
 }
 
 /// The key install binds when none is given: free in the app and in shells.

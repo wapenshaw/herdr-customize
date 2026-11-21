@@ -174,7 +174,7 @@ impl KeysPage {
 
     fn rebuild_from(&mut self, sh: &Shared, table: &toml::Table) {
         let mut rows = vec![KeyRow::new(Kind::Header, "Herdr actions".into())];
-        for k in sh.reference.section("keys").map(|s| s.keys.as_slice()).unwrap_or_default() {
+        for k in sh.reference.section("keys").map_or(&[][..], |s| s.keys.as_slice()) {
             let current = config::lookup(table, &k.path()).cloned();
             let changed = current.is_some();
             let action = k.key.trim_start_matches("keys.").to_string();
@@ -400,7 +400,7 @@ impl KeysPage {
     }
 
     fn command_owner(&self, index: usize) -> String {
-        self.rows.iter().find(|r| matches!(r.kind, Kind::Command { index: i, .. } if i == index)).map(|r| r.owner.clone()).unwrap_or_default()
+        self.rows.iter().find(|r| matches!(r.kind, Kind::Command { index: i, .. } if i == index)).map_or_else(String::new, |r| r.owner.clone())
     }
 
     fn form_view(&self) -> Vec<Line<'static>> {

@@ -310,8 +310,8 @@ impl PluginsPage {
         let mut items: Vec<MenuItem> =
             p.actions.iter().filter(|a| a.available()).map(|a| item("▶", first_non_empty(&[&a.title, &a.id]), a.qualified(&p.id), "", Action::Invoke(a.qualified(&p.id)))).collect();
         let detail = self.details.get(&p.id);
-        items.push(item("⚙", "Settings", detail.map(|d| d.settings.clone()).unwrap_or_default(), "s", Action::Settings));
-        items.push(item("≡", "Recent runs", detail.map(|d| d.last.clone()).unwrap_or_default(), "l", Action::Logs));
+        items.push(item("⚙", "Settings", detail.map_or_else(String::new, |d| d.settings.clone()), "s", Action::Settings));
+        items.push(item("≡", "Recent runs", detail.map_or_else(String::new, |d| d.last.clone()), "l", Action::Logs));
         if p.github() {
             items.push(item("↑", "Update", self.update_info(p), "u", Action::Update));
         }
