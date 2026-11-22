@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn install_keeps_edited_files() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         assert_eq!(install("dracula-default", false).unwrap(), Wrote::Written);
         assert_eq!(install("dracula-default", false).unwrap(), Wrote::Same);
         let path = theme_file("dracula-default");
@@ -261,6 +261,6 @@ mod tests {
         write_record(RECORD, &record).unwrap();
         let all = install_featured(false).unwrap();
         assert_eq!((all.written, all.same, all.kept.len()), (FEATURED.len(), 1, 0), "the featured ones, and one written before");
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 }

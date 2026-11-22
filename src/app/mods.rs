@@ -575,8 +575,7 @@ pub(crate) mod tests {
     fn install_update_and_remove() {
         let _guard = crate::testenv::isolated();
         let home = home();
-        let _ = fs::remove_dir_all(&home);
-        fs::create_dir_all(&home).unwrap();
+        crate::testenv::fresh_home();
         fs::write(keys::path(), r#"{"global":{"ctrl-shift-j":"tab.new"}}"#).unwrap();
         let base = PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         let main = "import { View } from \"gpui-kit\";\nimport { exec } from \"herdr\";\nexec(\"git\");\n";
@@ -622,13 +621,14 @@ pub(crate) mod tests {
         let keys: Vec<String> = keys::load().unwrap().into_iter().map(|b| b.key).collect();
         assert_eq!(keys, ["ctrl-shift-j"]);
         assert!(packages().unwrap().is_empty());
-        let _ = fs::remove_dir_all(&home);
+        crate::testenv::fresh_home();
     }
 
     // A repository of several packages offers each, and a folder picks one.
     #[test]
     fn several_packages() {
         let _guard = crate::testenv::isolated();
+        crate::testenv::fresh_home();
         let base = PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         repo(&base, "o/many", &[("a/layouts/a.json", "{}"), ("b/mods/b/main.js", ""), ("README.md", "x")]);
         let labels: Vec<String> = fetch("o/many").unwrap().iter().map(Plan::label).collect();

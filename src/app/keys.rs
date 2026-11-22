@@ -26,7 +26,16 @@ pub struct Binding {
 
 /// Every binding, in the file's order.
 pub fn load() -> Result<Vec<Binding>> {
-    Ok(bindings(read_object(&path())?))
+    Ok(bindings(sections()?))
+}
+
+/// keys.json's sections. Until the app first starts there is no file and its
+/// shipped keys apply, so reads and edits start from those, not from nothing.
+fn sections() -> Result<Map<String, Value>> {
+    if path().exists() {
+        return read_object(&path());
+    }
+    super::version().and_then(|v| shipped(&v)).context("keys.json does not exist yet and the app's default keys could not be read; open Herdr once, then try again")
 }
 
 /// The bindings in a keys.json's sections. An object binding's action is its
@@ -61,7 +70,7 @@ fn action_value(action: &str) -> Value {
 fn edit(f: impl FnOnce(&mut Map<String, Value>) -> Result<()>) -> Result<()> {
     std::fs::create_dir_all(state_dir())?;
     let _lock = fsutil::lock(&state_dir().join("keys.lock")).context("lock keys.json")?;
-    let mut map = read_object(&path())?;
+    let mut map = sections()?;
     f(&mut map)?;
     let text = serde_json::to_string_pretty(&Value::Object(map))? + "\n";
     fsutil::write_backed_up(&path(), text.as_bytes(), 0o644)
@@ -102,7 +111,7 @@ pub fn set(section: &str, old: Option<&str>, key: &str, action: &str) -> Result<
 pub fn set_if_free(binding: &Binding) -> Result<Option<Binding>> {
     std::fs::create_dir_all(state_dir())?;
     let _lock = fsutil::lock(&state_dir().join("keys.lock")).context("lock keys.json")?;
-    let mut map = read_object(&path())?;
+    let mut map = sections()?;
     let current = bindings(map.clone());
     let conflict = current.iter().find(|b| b.section == binding.section && normalize(&b.key) == normalize(&binding.key)).or_else(|| hidden_by(&current, &binding.section, &binding.key)).cloned();
     if conflict.is_some() {
@@ -146,12 +155,12 @@ const SHIPPED_FILE: &str = if cfg!(target_os = "macos") { "keys.macos.json" } el
 /// Shipped keys the person turned down, as section, key and action.
 const DISMISSED: &str = "keys-dismissed.json";
 
-/// The keys the app at version ships. A tag never changes, so the file is
-/// fetched once and kept with the other records.
-fn shipped(version: &str) -> Result<Vec<Binding>> {
+/// The keys the app at version ships, as the app writes them on its first
+/// start. A tag never changes, so the file is fetched once and kept.
+fn shipped(version: &str) -> Result<Map<String, Value>> {
     let cache = state_dir().join(format!("shipped-{version}-{SHIPPED_FILE}"));
     if let Ok(Value::Object(map)) = std::fs::read_to_string(&cache).map_err(anyhow::Error::from).and_then(|t| Ok(serde_json::from_str(&t)?)) {
-        return Ok(bindings(map));
+        return Ok(map);
     }
     let base = env("HERDR_CUSTOMIZE_RAW_BASE").unwrap_or_else(|| "https://raw.githubusercontent.com".into());
     let url = format!("{base}/herdrdev/herdr-app/v{version}/defaults/{SHIPPED_FILE}");
@@ -159,7 +168,7 @@ fn shipped(version: &str) -> Result<Vec<Binding>> {
     let Value::Object(map) = serde_json::from_str(&text).with_context(|| url.clone())? else { bail!("{url} is not a JSON object") };
     std::fs::create_dir_all(state_dir())?;
     fsutil::atomic_write(&cache, text.as_bytes(), 0o644)?;
-    Ok(bindings(map))
+    Ok(map)
 }
 
 /// The shipped keys the person's file lacks. One whose key or action the file
@@ -177,7 +186,7 @@ fn triple(b: &Binding) -> [String; 3] {
 /// not turned down. The app stops adding its new keys once keys.json is edited.
 pub fn new_shipped(version: &str) -> Result<Vec<Binding>> {
     let dismissed: Vec<[String; 3]> = read_record(DISMISSED)?;
-    Ok(missing(&shipped(version)?, &load()?).into_iter().filter(|b| !dismissed.contains(&triple(b))).collect())
+    Ok(missing(&bindings(shipped(version)?), &load()?).into_iter().filter(|b| !dismissed.contains(&triple(b))).collect())
 }
 
 /// Adds every key new_shipped finds.
@@ -473,7 +482,7 @@ mod tests {
     #[test]
     fn object_bindings_stay_objects() {
         let _guard = crate::testenv::isolated();
-        let _ = std::fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         std::fs::create_dir_all(home()).unwrap();
         std::fs::write(path(), r#"{"global":{"ctrl-shift-r":{"command":"layout.resize","args":{"id":"sidebar","px":240}}}}"#).unwrap();
         let action = load().unwrap()[0].action.clone();
@@ -481,7 +490,7 @@ mod tests {
         set("global", Some("ctrl-shift-r"), "alt-r", &action).unwrap();
         let file: Value = serde_json::from_str(&std::fs::read_to_string(path()).unwrap()).unwrap();
         assert_eq!(file["global"]["alt-r"]["args"]["px"], 240);
-        let _ = std::fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     // Edits keep every other binding where it was, and a renamed key keeps
@@ -489,7 +498,7 @@ mod tests {
     #[test]
     fn edits_keep_the_order() {
         let _guard = crate::testenv::isolated();
-        let _ = std::fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         std::fs::create_dir_all(home()).unwrap();
         std::fs::write(path(), r#"{"global":{"alt-1":"space.select:1","ctrl-shift-t":"tab.new","f2":"tab.rename"},"terminal":{"ctrl-v":"terminal.paste"}}"#).unwrap();
         set("global", Some("ctrl-shift-t"), "ctrl-shift-y", "tab.new").unwrap();
@@ -502,7 +511,7 @@ mod tests {
         let keys: Vec<String> = load().unwrap().into_iter().map(|b| b.key).collect();
         assert_eq!(keys, ["alt-1", "ctrl-shift-y", "f2"]);
         assert_eq!(load().unwrap()[2].action, "space.select:2");
-        let _ = std::fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     // An edited keys.json gets the app's new keys only from here, and a key
@@ -510,7 +519,7 @@ mod tests {
     #[test]
     fn new_shipped_keys_are_offered_once() {
         let _guard = crate::testenv::isolated();
-        let _ = std::fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         std::fs::create_dir_all(state_dir()).unwrap();
         let shipped = r#"{"global":{"ctrl-shift-t":"tab.new","ctrl-shift-w":"tab.close","ctrl-?":"app.help"},"terminal":{"ctrl-shift-f":"terminal.search"}}"#;
         std::fs::write(state_dir().join(format!("shipped-9.9.9-{SHIPPED_FILE}")), shipped).unwrap();
@@ -525,6 +534,25 @@ mod tests {
         assert_eq!(keys(new_shipped("9.9.9").unwrap()), ["ctrl-?"]);
         dismiss_shipped("9.9.9").unwrap();
         assert!(new_shipped("9.9.9").unwrap().is_empty());
-        let _ = std::fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
+    }
+
+    // Before the app's first start there is no keys.json; writing only the
+    // new key would leave the app without its defaults.
+    #[test]
+    fn a_missing_file_starts_from_the_shipped_keys() {
+        let _guard = crate::testenv::isolated();
+        crate::testenv::fresh_home();
+        std::fs::remove_file(path()).unwrap();
+        assert!(set("global", None, "ctrl-shift-y", "mod.open:x").is_err());
+        assert!(!path().exists());
+        std::fs::create_dir_all(state_dir()).unwrap();
+        let shipped = r#"{"global":{"ctrl-shift-t":"tab.new"},"terminal":{"ctrl-shift-c":"terminal.copy"}}"#;
+        std::fs::write(state_dir().join(format!("shipped-9.9.9-{SHIPPED_FILE}")), shipped).unwrap();
+        assert_eq!(load().unwrap().len(), 2);
+        set("global", None, "ctrl-shift-y", "mod.open:x").unwrap();
+        let keys: Vec<String> = load().unwrap().into_iter().map(|b| b.key).collect();
+        assert_eq!(keys, ["ctrl-shift-t", "ctrl-shift-y", "ctrl-shift-c"]);
+        crate::testenv::fresh_home();
     }
 }

@@ -126,6 +126,11 @@ repository, and offers the keys that yours lacks, under **Add them** and
 that section or binds its action to another key, so a key you moved or
 removed stays as you left it. Offline, it offers nothing.
 
+Until the app first starts there is no `keys.json`, and the shipped keys
+apply. A key added then, by `app install` or a mod, goes into a copy of the
+shipped file, read the same way, so the app's own keys stay. Offline, nothing
+is written, and the error asks to open Herdr once and try again.
+
 ## Mods
 
 **Installed** lists the packages installed from here, the mods and layouts

@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn install_popup_binds_a_free_key() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         fs::create_dir_all(home()).unwrap();
         fs::write(keys::path(), format!(r#"{{"global":{{"{DEFAULT_KEY}":"tab.new"}}}}"#)).unwrap();
         assert!(install_popup(None).unwrap_err().to_string().contains("already runs tab.new"));
@@ -365,7 +365,7 @@ mod tests {
             let expected = if name == "main.js" { contents.replace("\"@BIN@\"", &serde_json::to_string(&exe.to_string_lossy()).unwrap()) } else { contents.to_owned() };
             assert_eq!(actual, expected, "{name}");
         }
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     // Manifests compare these across runs and versions, so the value is fixed.

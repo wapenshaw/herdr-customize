@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn install_remove_and_preserve_edits() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         add_with("files", "lazygit", 0.8, 0.8, "alt-shift-f", true, |_| Ok(())).unwrap();
         assert_eq!(describe().unwrap()[0].popup.argv, ["lazygit"]);
         assert!(add_with("files", "other", 0.8, 0.8, "", false, |_| Ok(())).is_err());
@@ -251,25 +251,25 @@ mod tests {
         assert_eq!(remove("files").unwrap().kept.len(), 1);
         assert_eq!(fs::read_to_string(home().join("mods/popup-files/main.js")).unwrap(), "changed");
         assert!(keys::load().unwrap().is_empty());
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     #[test]
     fn clean_removal_keeps_reassigned_key() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         add_with("clean", "fzf", 1.0, 0.2, "alt-shift-f", false, |_| Ok(())).unwrap();
         keys::set("global", None, "alt-shift-f", "tab.new").unwrap();
         assert!(remove("clean").unwrap().kept.is_empty());
         assert!(!home().join("mods/popup-clean").exists());
         assert_eq!(keys::load().unwrap()[0].action, "tab.new");
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     #[test]
     fn refuses_invalid_conflicts_and_failed_check() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         assert!(add_with("../bad", "x", 0.8, 0.8, "", false, |_| Ok(())).is_err());
         assert!(add_with("valid", "x", 0.1, 0.8, "", false, |_| Ok(())).is_err());
         assert!(add_with("valid", "x", 0.8, 0.8, "", false, |_| bail!("bad mod")).is_err());
@@ -278,6 +278,6 @@ mod tests {
         assert!(add_with("valid", "x", 0.8, 0.8, "alt-shift-f", false, |_| Ok(())).is_err());
         assert_eq!(keys::load().unwrap()[0].action, "tab.new");
         assert!(!home().join("mods/popup-valid").exists());
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 }
