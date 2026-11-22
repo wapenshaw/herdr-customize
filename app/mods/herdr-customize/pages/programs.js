@@ -195,14 +195,16 @@ export default function create(app) {
           .child(this.chip("programs-here", "This computer", !this.machine, (_e, cx) => this.pickMachine(null, cx)))
           .children(listed.map(m => this.chip(`programs-on-${m.name}`, m.layout === "unavailable" ? `${m.name} (offline)` : m.name, this.machine === m.name, (_e, cx) => this.pickMachine(m.name, cx)))));
       }
-      if (mine.length) left.push(this.heading("Your programs"), ...mine.map(p => this.row(`program-${p.key}`, p.key, p.name || p.key, p.run ? "+ menu" : "")));
-      if (this.agentStatus) left.push(this.heading("Agents in the + menu · click to customize"), div().text_size(11).text_color(t.dim).child(this.agentStatus));
-      if (!this.agents && !this.checking && typeof herdr.knownAgents === "function") left.push(h_flex().child(this.button("programs-retry", "Check again", (_e, cx) => this.checkAgents(cx))));
+      const list = [];
+      if (mine.length) list.push(this.heading("Your programs"), ...mine.map(p => this.row(`program-${p.key}`, p.key, p.name || p.key, p.run ? "+ menu" : "")));
+      if (this.agentStatus) list.push(this.heading("Agents in the + menu · click to customize"), div().text_size(11).text_color(t.dim).child(this.agentStatus));
+      if (!this.agents && !this.checking && typeof herdr.knownAgents === "function") list.push(h_flex().child(this.button("programs-retry", "Check again", (_e, cx) => this.checkAgents(cx))));
       // The app lists them most picked first; that order holds within each group.
       for (const [installed, heading] of [[true, "Installed agents · click to customize"], [false, "Not installed"]]) {
         const group = (this.agents ?? []).filter(a => Boolean(a.installed) === installed);
-        if (group.length) left.push(this.heading(heading), ...group.map(a => this.row(`agent-${a.key}`, a.key, a.name, this.personal(a.key) ? "customized" : "")));
+        if (group.length) list.push(this.heading(heading), ...group.map(a => this.row(`agent-${a.key}`, a.key, a.name, this.personal(a.key) ? "customized" : "")));
       }
+      left.push(v_flex().id("program-list").flex_1().min_h(0).overflow_y_scrollbar().gap(4).children(list));
       return this.split(380, left, this.editing ? this.form() : this.explainer());
     }
   }

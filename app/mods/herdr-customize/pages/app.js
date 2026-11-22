@@ -81,7 +81,10 @@ export default function create(app) {
         .child(h_flex().gap(8).mt(4)
           .child(this.button("app-save", "Save", (_e, cx) => this.save(cx), { primary: true, enabled: draft !== (s.value ?? "") }))
           .when(s.value !== null && Boolean(draft), el => el.child(this.button("app-default", `Use the default (${s.default})`, (_e, cx) => { this.edit.set_value(""); cx.notify(); }))));
-      return this.split(420, [...rows, div().text_size(11).text_color(t.dim).child(`Saved to ${this.settings.path}.`)], detail);
+      return this.split(420, [
+        v_flex().id("app-settings").flex_1().min_h(0).overflow_y_scrollbar().gap(4).children(rows),
+        div().text_size(11).text_color(t.dim).child(`Saved to ${this.settings.path}.`),
+      ], detail);
     }
   }
   return page(app, new Page());
