@@ -272,8 +272,10 @@ and removes its shortcut only if it still runs that popup.
 
 ## Programs
 
-The Programs page lists the agents the + menu can start, with their installed
-status when the app can check it. Click one to customize it: rename it,
+The Programs page lists the agents the + menu can start in two groups:
+installed ones first, then those not installed, each in the app's
+most-picked-first order. While the app is still checking, the list waits
+under one heading. Click one to customize it: rename it,
 recolor it, give it an icon or change the command the + menu runs. Only the
 fields you change are written to `programs.json`, so the rest keeps following
 the app; **Back to built-in** removes the override. **Add a program** makes an
