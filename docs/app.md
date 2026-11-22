@@ -6,7 +6,11 @@ own themes, keys and mods in its own folder, and it follows edits to those
 files live. herdr-customize writes its palettes as the app's themes and
 adds a screen to the app with eight pages: Themes, Keys, Mods, Layouts, Core,
 App, Popups and Programs. It
-never touches Herdr's `config.toml` from there.
+never touches Herdr's `config.toml` from there. On the Layouts, Core and App
+pages, picking a value (a shell, a theme, On or Off), typing, pressing Enter
+and **Use the default** only change what the page shows; nothing is written
+until **Save**, which stays disabled until the value differs from the saved
+one. An emptied value saves as the default.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |
@@ -321,7 +325,7 @@ core would and refuses one it would not take; a file that is already broken
 is shown and left alone. **Shell** offers the shells found on this machine:
 PowerShell, Git Bash, Nushell and WSL on Windows, or those in `/etc/shells`.
 PowerShell is the core's default there, with a hook that lets the core follow
-the shell's folder, so picking it clears the setting rather than naming it. `socket` is left out: moving it leaves
+the shell's folder, so picking it empties the inputs, and saving that clears the setting rather than naming it. `socket` is left out: moving it leaves
 clients looking for the core in the old place.
 
 Each machine runs its own core with its own file, so a setting changed here
