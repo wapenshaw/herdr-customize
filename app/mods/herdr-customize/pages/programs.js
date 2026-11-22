@@ -25,7 +25,9 @@ export default function create(app) {
     init() {
       this.data = null;
       this.agents = null;
+      this.machine = null;
       this.agentStatus = "Checking…";
+      this.checking = false;
       this.editing = false;
       this.selected = null;
       this.original = {};
@@ -69,14 +71,31 @@ export default function create(app) {
     checkAgents(cx) {
       if (typeof herdr.knownAgents !== "function") { this.agentStatus = "This version of the app cannot list them."; return; }
       this.agentStatus = "Checking…";
+      this.checking = true;
+      const on = this.machine;
       cx.spawn(async cx => {
         try {
-          this.agents = await herdr.knownAgents();
+          const agents = await herdr.knownAgents({ on });
+          // A check for a machine no longer picked would show that machine's list.
+          if (on !== this.machine) return;
+          this.agents = agents;
           this.agentStatus = "";
           if (this.builtin) this.builtin = this.agents.find(a => a.key === this.selected) ?? this.builtin;
-        } catch { this.agents = null; this.agentStatus = "Could not check."; }
+        } catch {
+          if (on !== this.machine) return;
+          this.agents = null;
+          this.agentStatus = `Could not check ${on ?? "this computer"}.`;
+        }
+        this.checking = false;
         cx.notify();
       });
+    }
+    pickMachine(name, cx) {
+      if (name === this.machine) return;
+      this.machine = name;
+      this.agents = null;
+      this.checkAgents(cx);
+      cx.notify();
     }
     // The app reloads programs.json a moment after it is written; asking at once returns the old table.
     recheckAgents(cx) {
@@ -116,7 +135,8 @@ export default function create(app) {
     focus() { this.handle.focus(); }
     show(cx) {
       if (!this.data) this.load(cx, ["programs"], (data, cx) => { this.data = data; cx.notify(); });
-      if (!this.agents && this.agentStatus === "Checking…") this.checkAgents(cx);
+      // Coming back to the page retries a check that failed, as after a machine reconnects.
+      if (!this.agents && !this.checking) this.checkAgents(cx);
     }
     row(id, key, title, note) {
       const t = herdr.theme();
@@ -132,6 +152,7 @@ export default function create(app) {
         .child(div().text_size(12).text_color(t.muted).child("The app keeps one table of programs. It decides what the + menu can start, and the name, icon and color shown for whatever runs in a terminal."))
         .child(div().text_size(12).text_color(t.muted).child("Click an agent on the left to rename it, recolor it or change the command the + menu runs. Only what you change is saved; the rest stays as the app ships it."))
         .child(div().text_size(12).text_color(t.muted).child("Or add a program of your own, such as a tool you start often, and it shows up in the + menu."))
+        .child(div().text_size(12).text_color(t.muted).child("Installed shows what the + menu finds on the machine picked on the left. The table itself lives on this computer, so a change here applies wherever an agent starts."))
         .child(h_flex().child(this.button("program-new", "Add a program", (_e, cx) => this.pick(null, cx), { primary: true })));
     }
     form() {
@@ -165,8 +186,18 @@ export default function create(app) {
       const agentKeys = new Set((this.agents ?? []).map(a => a.key));
       const mine = this.data.programs.filter(p => !agentKeys.has(p.key));
       const left = [this.button("program-add", "Add a program", (_e, cx) => this.pick(null, cx))];
+      // Installed status is per machine; programs.json, and so every customization, is shared by all.
+      const remotes = typeof herdr.machines === "function" ? herdr.machines().filter(m => m.name) : [];
+      if (remotes.length || this.machine) {
+        const listed = remotes.some(m => m.name === this.machine) || !this.machine ? remotes : [...remotes, { name: this.machine, layout: "unavailable" }];
+        left.push(h_flex().gap(6).flex_wrap().items_center()
+          .child(div().text_size(11.5).text_color(t.muted).child("Installed on"))
+          .child(this.chip("programs-here", "This computer", !this.machine, (_e, cx) => this.pickMachine(null, cx)))
+          .children(listed.map(m => this.chip(`programs-on-${m.name}`, m.layout === "unavailable" ? `${m.name} (offline)` : m.name, this.machine === m.name, (_e, cx) => this.pickMachine(m.name, cx)))));
+      }
       if (mine.length) left.push(this.heading("Your programs"), ...mine.map(p => this.row(`program-${p.key}`, p.key, p.name || p.key, p.run ? "+ menu" : "")));
       if (this.agentStatus) left.push(this.heading("Agents in the + menu · click to customize"), div().text_size(11).text_color(t.dim).child(this.agentStatus));
+      if (!this.agents && !this.checking && typeof herdr.knownAgents === "function") left.push(h_flex().child(this.button("programs-retry", "Check again", (_e, cx) => this.checkAgents(cx))));
       // The app lists them most picked first; that order holds within each group.
       for (const [installed, heading] of [[true, "Installed agents · click to customize"], [false, "Not installed"]]) {
         const group = (this.agents ?? []).filter(a => Boolean(a.installed) === installed);

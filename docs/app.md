@@ -275,7 +275,11 @@ and removes its shortcut only if it still runs that popup.
 The Programs page lists the agents the + menu can start in two groups:
 installed ones first, then those not installed, each in the app's
 most-picked-first order. While the app is still checking, the list waits
-under one heading. Click one to customize it: rename it,
+under one heading; a check that fails, as for an offline machine, is retried
+by **Check again** or by coming back to the page. With other machines connected, an **Installed on** row
+picks whose installed agents are shown, as the + menu shows them in a space on
+that machine. `programs.json` lives on this computer only, so every
+customization applies on all machines. Click one to customize it: rename it,
 recolor it, give it an icon or change the command the + menu runs. Only the
 fields you change are written to `programs.json`, so the rest keeps following
 the app; **Back to built-in** removes the override. **Add a program** makes an
