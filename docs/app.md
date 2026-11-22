@@ -128,8 +128,9 @@ removed stays as you left it. Offline, it offers nothing.
 
 Until the app first starts there is no `keys.json`, and the shipped keys
 apply. A key added then, by `app install` or a mod, goes into a copy of the
-shipped file, read the same way, so the app's own keys stay. Offline, nothing
-is written, and the error asks to open Herdr once and try again.
+shipped file, read the same way, so the app's own keys stay. Offline,
+`keys.json` stays as it was: `app install` stops before writing anything, a
+mod install takes its files back, and both ask to open Herdr once first.
 
 ## Mods
 
