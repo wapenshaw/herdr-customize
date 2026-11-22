@@ -111,31 +111,36 @@ export default function create(app) {
     const updates = herdr.updates();
     const commands = typeof herdr.commands === "function" ? herdr.commands() : [];
     const has = name => commands.some(command => command.name === name);
-    const line = text => div().text_size(11.5).text_color(t.muted).child(text);
-    const card = v_flex().gap(6).p(12).rounded(8).bg(t.surface)
-      .child(div().text_size(13).font_semibold().child("Updates"))
-      .child(line(`App ${updates.app.version}${updates.app.ready ? ` · update ${updates.app.ready} ready` : " · no update ready"}`))
-      .child(line(`Core ${updates.core.version ?? "unknown"}${updates.core.managed ? ` · managed by ${updates.core.managed}` : " · not package-managed"}${updates.core.ready ? ` · update ${updates.core.ready} ready` : " · no update ready"}`))
-      .child(line(updates.checked == null ? "No successful check recorded" : `Checked ${new Date(updates.checked * 1000).toLocaleString()}`))
-      .when(Boolean(updates.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(updates.core.error)));
+    // One column per program: its version, and a badge only when there is news.
+    const column = (id, name, version, badge) => v_flex().id(id).gap(2).flex_none()
+      .child(div().text_size(10.5).text_color(t.dim).child(name))
+      .child(h_flex().gap(6).items_center().child(div().text_size(12.5).child(version ?? "unknown")).when(Boolean(badge), el => el.child(badge)));
+    const ready = version => version ? this.badge(`${version} ready`, t.done) : null;
     // hc machine update copies this computer's hc there, so it only moves an older core forward.
     const machines = (this.core?.machines ?? []).filter(m => m.state === "connected");
-    for (const m of machines) card.child(line(`${m.name}: core ${m.version ?? "unknown"}`));
-    const actions = h_flex().gap(8).flex_wrap()
-      .when(has("app.check_updates"), el => el.child(this.button("check-updates", "Check for updates", () => herdr.run("app.check_updates"))))
+    const checked = updates.checked == null ? "Never checked" : `Checked ${new Date(updates.checked * 1000).toLocaleString()}`;
+    const row = h_flex().gap(20).items_center().flex_wrap()
+      .child(div().text_size(13).font_semibold().child("Updates"))
+      .child(column("updates-app", "App", updates.app.version, ready(updates.app.ready)))
+      .child(column("updates-core", updates.core.managed ? `Core · ${updates.core.managed}` : "Core", updates.core.version, ready(updates.core.ready)))
+      .children(machines.map(m => column(`updates-${m.name}`, m.name, m.version, older(m.version, updates.core.version) ? this.badge("older", t.working) : null)))
+      .child(div().flex_1())
+      .child(div().text_size(11).text_color(t.dim).child(checked))
+      .when(has("app.check_updates"), el => el.child(this.button("check-updates", "Check", () => herdr.run("app.check_updates"))))
       .when(Boolean(updates.core.ready && !updates.core.managed && has("app.update_core")), el =>
         el.child(this.button("update-core", "Update core", () => herdr.run("app.update_core"))))
       .when(Boolean(updates.app.ready && has("app.update")), el =>
-        el.child(this.button("update-app", "Restart app into update", () => herdr.run("app.update"))))
+        el.child(this.button("update-app", "Restart into update", () => herdr.run("app.update"))))
       .children(machines.filter(m => older(m.version, updates.core.version)).map(m =>
-        this.button(`update-${m.name}`, `Update ${m.name} to ${updates.core.version}`, (_e, cx) =>
+        this.button(`update-${m.name}`, `Update ${m.name}`, (_e, cx) =>
           this.task(cx, `Updating ${m.name}'s core`, ["core-update-machine", "--machine", m.name], (data, cx) => {
             this.machine = m.name;
             this.core = data;
-            this.notice = `${m.name} runs core ${updates.core.version} now.`;
+            this.notice = `${m.name} runs core ${updates.core.version} now; its terminals kept running.`;
             this.pickCore(this.coreSel, cx);
           }))));
-    return card.child(actions).child(line("Updating a core keeps its terminals running."));
+    return v_flex().gap(6).px(12).py(10).rounded(8).bg(t.surface).flex_none().child(row)
+      .when(Boolean(updates.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(updates.core.error)));
   }
 
   corePage() {
