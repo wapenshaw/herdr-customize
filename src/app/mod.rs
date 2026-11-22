@@ -272,8 +272,20 @@ const POPUP_FILES: &[(&str, &str)] = &[
 /// Writes the mod that opens this binary's popup in the app, checks it, and
 /// binds key (or DEFAULT_KEY) to it unless a key already opens it.
 pub fn install_popup(key: Option<&str>) -> Result<Bound> {
-    // Before any write: with no keys.json yet, this needs the shipped keys.
+    // Every check runs before any write: with no keys.json yet, reading the
+    // keys needs the shipped ones, and a bad or taken key stops it here.
+    let action = format!("mod.open:{MOD_NAME}");
     let bindings = keys::load()?;
+    let bound = bindings.iter().find(|b| b.section == "global" && b.action == action).map(|b| b.key.clone());
+    let key = keys::normalize(key.unwrap_or(DEFAULT_KEY));
+    if bound.is_none() {
+        if let Some(e) = keys::problems("global", &key).0.first() {
+            bail!("{e}");
+        }
+        if let Some(b) = bindings.iter().find(|b| b.section == "global" && keys::normalize(&b.key) == key).or_else(|| keys::hidden_by(&bindings, "global", &key)) {
+            bail!("{}", taken(b));
+        }
+    }
     let exe = std::env::current_exe().context("find this program")?;
     let dir = home().join("mods").join(MOD_NAME);
     fs::create_dir_all(&dir)?;
@@ -290,22 +302,22 @@ pub fn install_popup(key: Option<&str>) -> Result<Bound> {
         }
     }
     check_mod(&dir)?;
-    let action = format!("mod.open:{MOD_NAME}");
-    if let Some(b) = bindings.iter().find(|b| b.section == "global" && b.action == action) {
-        return Ok(Bound::Already(b.key.clone()));
+    if let Some(key) = bound {
+        return Ok(Bound::Already(key));
     }
-    let key = keys::normalize(key.unwrap_or(DEFAULT_KEY));
-    if let Some(e) = keys::problems("global", &key).0.first() {
-        bail!("{e}");
+    // Under the keys lock: a key bound since the check above stays as it is.
+    if let Some(b) = keys::set_if_free(&keys::Binding { section: "global".into(), key: key.clone(), action })? {
+        bail!("{}", taken(&b));
     }
-    if let Some(b) = bindings.iter().find(|b| b.section == "global" && keys::normalize(&b.key) == key) {
-        bail!("{} already runs {}; pick another key: herdr-customize app install <key>", b.key, b.action);
-    }
-    if let Some(b) = keys::hidden_by(&bindings, "global", &key) {
-        bail!("{} runs {} in {}, so it would not open the screen there; pick another key: herdr-customize app install <key>", b.key, b.action, b.section);
-    }
-    keys::set("global", None, &key, &action)?;
     Ok(Bound::Added(key))
+}
+
+fn taken(b: &keys::Binding) -> String {
+    if b.section == "global" {
+        format!("{} already runs {}; pick another key: herdr-customize app install <key>", b.key, b.action)
+    } else {
+        format!("{} runs {} in {}, so it would not open the screen there; pick another key: herdr-customize app install <key>", b.key, b.action, b.section)
+    }
 }
 
 #[cfg(test)]
