@@ -4,6 +4,15 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [1.1.1](https://github.com/wapenshaw/herdr-customize/compare/v1.1.0...v1.1.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **app:** keep the app's default keys before its first start ([c8af3a6](https://github.com/wapenshaw/herdr-customize/commit/c8af3a6d8d9eaa13503e92131ddccab26b717598))
+* **app:** never replace a key bound during app install ([d5c6125](https://github.com/wapenshaw/herdr-customize/commit/d5c6125fd84bd345679ac55b6aebb5b27797d924))
+* **app:** read the keys before writing the popup mod ([c61ce63](https://github.com/wapenshaw/herdr-customize/commit/c61ce6351b11de916d5751582d62f80743de0125))
+
 ## [1.1.0](https://github.com/wapenshaw/herdr-customize/compare/v1.0.0...v1.1.0) (2026-11-22)
 
 
