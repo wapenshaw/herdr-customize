@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn keys_are_checked_then_set() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         fs::create_dir_all(home()).unwrap();
         fs::write(keys::path(), r#"{"global":{"ctrl-shift-t":"tab.new"}}"#).unwrap();
         let reply = call(&["key-check", "--section", "global", "--key", "hyper-1", "--action", "tab.nope"]).unwrap();
@@ -323,7 +323,7 @@ mod tests {
         call(&["key-set", "--section", "global", "--old", "ctrl-shift-t", "--key", "alt-1", "--action", "app.theme:ink"]).unwrap();
         call(&["key-remove", "--section", "global", "--key", "alt-1"]).unwrap();
         assert_eq!(fs::read_to_string(keys::path()).unwrap().trim(), "{\n  \"global\": {}\n}");
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     // What the screen showed in the review is what gets installed: a
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn review_then_install() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         fs::create_dir_all(home()).unwrap();
         let base = std::path::PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
         mods::tests::repo(&base, "o/board", &[("mods/board/main.js", "fetch(x)"), ("README.md", "# Board\n\nA board.\n"), ("preview.png", "png")]);
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(call(&["packages"]).unwrap()["version"], env!("CARGO_PKG_VERSION"), "the screen lists itself with it");
         call(&["remove", "--repo", "o/board"]).unwrap();
         assert!(!home().join("mods/board/main.js").exists());
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     #[test]

@@ -17,6 +17,7 @@ dir=$(dirname "$0")
 echo "$*" >> "$dir/herdr-app.log"
 case "$1" in
   commands) cat "$dir/commands.json" ;;
+  --version) echo 'herdr-app 9.9.9' ;;
   *) echo '{"ok":true}' ;;
 esac
 "#,
@@ -29,6 +30,7 @@ const FAKE_APP: (&str, &str) = (
 set "dir=%~dp0"
 >>"%dir%herdr-app.log" echo %*
 if "%~1"=="commands" (type "%dir%commands.json"& exit /b 0)
+if "%~1"=="--version" (echo herdr-app 9.9.9& exit /b 0)
 echo {"ok":true}
 "#,
 );
@@ -73,4 +75,13 @@ pub fn isolated() -> MutexGuard<'static, ()> {
     let guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     LazyLock::force(&SANDBOX);
     guard
+}
+
+/// Empties the app's home, leaving the keys.json a started app has (here
+/// with no keys), so edits never fall back to fetching the shipped ones.
+pub fn fresh_home() {
+    let home = crate::app::home();
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(&home).unwrap();
+    fs::write(home.join("keys.json"), "{}\n").unwrap();
 }

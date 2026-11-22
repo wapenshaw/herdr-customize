@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn install_conflicts_updates_and_edited_removal() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         let available = commands();
         let key = extra_keys(extra("copymode").unwrap()).unwrap().remove(0).key;
         let first = install_with("copymode", &available, |_| Ok(())).unwrap();
@@ -343,13 +343,13 @@ mod tests {
         assert!(!remove("copymode").unwrap().kept.is_empty());
         assert_eq!(fs::read_to_string(home().join("mods/copymode/main.js")).unwrap(), "edited");
         assert!(keys::load().unwrap().is_empty());
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     #[test]
     fn conflict_missing_and_failed_check() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         let available = commands();
         let key = extra_keys(extra("scrollback").unwrap()).unwrap().remove(0).key;
         keys::set("global", None, &key, "tab.new").unwrap();
@@ -362,13 +362,13 @@ mod tests {
         assert_eq!(keys::load().unwrap()[0].action, "tab.new");
         remove("scrollback").unwrap();
         assert_eq!(keys::load().unwrap()[0].action, "tab.new");
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     #[test]
     fn changed_binding_after_status_is_skipped() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         let available = commands();
         let binding = extra_keys(extra("scrollback").unwrap()).unwrap().remove(0);
         let snapshot = keys::load().unwrap();
@@ -380,18 +380,18 @@ mod tests {
         assert_eq!(report.skipped.len(), 1);
         assert!(report.skipped[0].contains("tab.new"));
         assert_eq!(keys::load().unwrap()[0].action, "tab.new");
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 
     #[test]
     fn removal_keeps_a_reassigned_key() {
         let _guard = crate::testenv::isolated();
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
         let binding = extra_keys(extra("copymode").unwrap()).unwrap().remove(0);
         install_with("copymode", &commands(), |_| Ok(())).unwrap();
         keys::set(&binding.section, None, &binding.key, "tab.new").unwrap();
         remove("copymode").unwrap();
         assert_eq!(keys::load().unwrap()[0].action, "tab.new");
-        let _ = fs::remove_dir_all(home());
+        crate::testenv::fresh_home();
     }
 }
