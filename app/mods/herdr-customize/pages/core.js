@@ -37,13 +37,10 @@ export default function create(app) {
     this.core = null;
     this.machine = null;
     this.coreSel = "shell";
-    this.coreProblem = "";
     this.coreInput = InputState.new({ placeholder: "" });
     this.shellArgs = InputState.new({ placeholder: "" });
-    for (const input of [this.coreInput, this.shellArgs]) {
-      input.on("change", (_e, cx) => { this.coreProblem = ""; cx.notify(); });
-      input.on("submit", (_e, cx) => this.saveCore(cx));
-    }
+    // Enter does not save: only the Save button writes.
+    for (const input of [this.coreInput, this.shellArgs]) input.on("change", (_e, cx) => cx.notify());
     }
 
   // Copied in by hand, the screen can't find the program it runs.
@@ -55,7 +52,6 @@ export default function create(app) {
   // and the arguments after it.
   pickCore(key, cx) {
     this.coreSel = key;
-    this.coreProblem = "";
     const s = this.coreSetting();
     if (s?.key === "shell") {
       const argv = s.value ? JSON.parse(s.value) : [];
@@ -87,14 +83,12 @@ export default function create(app) {
     });
   }
 
-  saveCore(cx, text = this.coreText()) {
+  // An empty draft means the core's default: Save then removes the setting.
+  saveCore(cx) {
     const s = this.coreSetting();
     if (!s) return;
-    if (!text) {
-      this.coreProblem = "Type a value, or use the default.";
-      cx.notify();
-      return;
-    }
+    const text = this.coreText();
+    if (!text) { if (s.value) this.resetCore(cx); return; }
     this.task(cx, `Saving ${s.title.toLowerCase()}`, this.on(["core-set", "--key", s.key, "--value", text]), (data, cx) => {
       this.core = data;
       this.notice = s.key === "restore_screen" ? "Restore screen saved; it applies at the next recovery." : `${s.title} saved; the core uses it the next time it needs it.`;
@@ -158,18 +152,20 @@ export default function create(app) {
     const detail = v_flex().flex_1().min_w(0).gap(10)
       .child(div().text_size(18).font_semibold().child(s.title))
       .child(div().text_size(12).text_color(t.muted).child(s.about));
+    // A pick only fills the inputs; nothing is written until Save.
     if (s.key === "notes" || s.key === "restore_screen") {
-      const on = s.value ?? (s.default === "on" ? "true" : "false");
-      detail.child(h_flex().gap(6).children(this.segment(s.key, [["true", "On"], ["false", "Off"]], on, (v, cx) => this.saveCore(cx, v))));
+      const on = value(this.coreInput) || (s.default === "on" ? "true" : "false");
+      detail.child(h_flex().gap(6).children(this.segment(s.key, [["true", "On"], ["false", "Off"]], on, (v, cx) => { this.coreInput.set_value(v); cx.notify(); })));
     } else if (s.key === "shell") {
       // PowerShell is the core's default on Windows, with a hook that follows the
-      // shell's folder, so picking it clears the setting rather than naming it.
-      const powershell = platform() === "windows" && !this.machine ? [this.chip("shell-default", "PowerShell (default)", !s.value, (_e, cx) => { if (s.value) this.resetCore(cx); })] : [];
+      // shell's folder, so picking it empties the inputs rather than naming it.
+      const pickShell = argv => (_e, cx) => { this.coreInput.set_value(argv[0] ?? ""); this.shellArgs.set_value(formatArgs(argv.slice(1))); cx.notify(); };
+      const powershell = platform() === "windows" && !this.machine ? [this.chip("shell-default", "PowerShell (default)", !this.coreText(), pickShell([]))] : [];
       const program = value(this.coreInput).toLowerCase();
       // Without the core's -Command hook, cd in the shell never reaches programs it starts.
       const hookLost = platform() === "windows" && !this.machine && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !parseArgs(value(this.shellArgs)).some(a => /^-c(ommand)?$/i.test(a));
       detail.child(h_flex().gap(6).flex_wrap().children([...powershell, ...this.core.shells.map((sh, i) =>
-        this.chip(`shell-${i}`, sh.name, s.value === JSON.stringify(sh.argv), (_e, cx) => this.saveCore(cx, JSON.stringify(sh.argv))))]))
+        this.chip(`shell-${i}`, sh.name, this.coreText() === JSON.stringify(sh.argv), pickShell(sh.argv)))]))
         .child(v_flex().gap(5).child(this.label("Program")).child(this.input(this.coreInput)).child(hint(s.hint)))
         .child(v_flex().gap(5).child(this.label("Arguments")).child(this.input(this.shellArgs))
           .child(hint("Split at spaces, like --login -i for Git Bash. An argument that holds spaces shows the list as JSON, like [\"-NoLogo\", \"-Command\", \"...\"]; edit it in that form. Leave empty for none.")))
@@ -197,10 +193,14 @@ export default function create(app) {
         : `Saved to ${this.core.path}. The core reads it each time it needs a setting; screen restoration applies at the next recovery.`),
     ], detail
       .when(Boolean(this.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.core.error)))
-      .when(Boolean(this.coreProblem), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.coreProblem)))
+      .when(!this.coreText() && Boolean(s.value), el => el.child(hint(`Save puts ${s.title.toLowerCase()} back to the default (${s.default}).`)))
       .child(h_flex().gap(8).mt(4)
-        .when(s.key !== "notes" && s.key !== "restore_screen", el => el.child(this.button("core-save", "Save", (_e, cx) => this.saveCore(cx), { primary: true })))
-        .when(Boolean(s.value), el => el.child(this.button("core-default", `Use the default (${s.default})`, (_e, cx) => this.resetCore(cx)))))));
+        .child(this.button("core-save", "Save", (_e, cx) => this.saveCore(cx), { primary: true, enabled: this.coreText() !== (s.value ?? "") }))
+        .when(Boolean(s.value) && Boolean(this.coreText()), el => el.child(this.button("core-default", `Use the default (${s.default})`, (_e, cx) => {
+          this.coreInput.set_value("");
+          this.shellArgs.set_value("");
+          cx.notify();
+        }))))));
   }
 
   focus() { if (this.core && this.coreSel !== "notes" && this.coreSel !== "restore_screen") this.coreInput.focus(); else this.handle.focus(); }

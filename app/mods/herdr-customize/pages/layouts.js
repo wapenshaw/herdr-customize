@@ -32,7 +32,6 @@ export default function create(app) {
       this.field = "theme";
       this.cloneName = InputState.new({ placeholder: "Name for your copy (optional)" });
       this.edit = InputState.new({ placeholder: "Value" });
-      this.edit.on("submit", (_e, cx) => this.save(cx, value(this.edit)));
     }
     current() { return this.data?.layouts.find(x => x.name === this.selected); }
     refresh(cx) {
@@ -60,17 +59,31 @@ export default function create(app) {
       this.focus();
       cx.notify();
     }
+    // The saved value of the field as the input holds it: text as is, the rest as JSON.
+    saved() {
+      const current = this.current()?.root[this.field];
+      return current == null ? "" : typeof current === "string" ? current : JSON.stringify(current);
+    }
+    // The input's value as the field holds it, read back from JSON where it is JSON.
+    draft() {
+      const text = value(this.edit);
+      if (!/^[[{]/.test(text)) return text || null;
+      try { return JSON.parse(text); } catch { return text; }
+    }
+    // Enter does not save: only the Save button writes.
     pickField(field, cx) {
       this.field = field;
-      const current = this.current()?.root[field];
       this.edit.release();
-      this.edit = InputState.new({ placeholder: "Value", value: current == null ? "" : typeof current === "string" ? current : JSON.stringify(current) });
-      this.edit.on("submit", (_e, cx) => this.save(cx, value(this.edit)));
+      this.edit = InputState.new({ placeholder: "Value", value: this.saved() });
+      this.edit.on("change", (_e, cx) => cx.notify());
       cx.notify();
     }
-    save(cx, text) {
+    // An empty draft means the default: Save then removes the field.
+    save(cx) {
       const layout = this.current();
       if (!layout?.personal || layout.error) return;
+      const text = value(this.edit);
+      if (!text) { if (this.saved()) this.reset(cx); return; }
       this.task(cx, "Saving layout", ["layout-set", "--name", layout.name, "--field", this.field, "--value", text], (data, cx) => {
         this.data = data;
         this.notice = "Layout saved.";
@@ -100,7 +113,6 @@ export default function create(app) {
           .child(this.badge(row.shipped ? "Built in" : "Yours", t.muted))));
       if (!layout) return this.split(300, [left], this.empty("No layouts found."));
       const field = FIELDS.find(f => f[0] === this.field);
-      const current = layout.root[this.field];
       const detail = v_flex().id("layout-detail").flex_1().min_w(0).h_full().overflow_y_scrollbar().gap(10)
         .child(h_flex().gap(10).items_center()
           .child(div().text_size(18).font_semibold().child(layout.name))
@@ -128,23 +140,29 @@ export default function create(app) {
           .child(h_flex().gap(5).flex_wrap().children(FIELDS.map(([key, title]) => this.chip(`layout-field-${key}`, title, key === this.field, (_e, cx) => this.pickField(key, cx)))))
           .child(div().text_size(16).font_semibold().child(field[1]))
           .child(div().text_size(11.5).text_color(t.muted).child(field[2]));
+        // A pick only fills the draft; nothing is written until Save.
+        const draft = this.draft();
+        const set = v => (_e, cx) => { this.edit.set_value(typeof v === "string" ? v : JSON.stringify(v)); cx.notify(); };
         if (this.field === "theme") {
-          const pair = typeof current === "object" && current ? current : { light: typeof current === "string" ? current : "paper", dark: typeof current === "string" ? current : "graphite" };
+          const pair = typeof draft === "object" && draft ? draft : { light: typeof draft === "string" ? draft : "paper", dark: typeof draft === "string" ? draft : "graphite" };
           detail.child(this.label("Single theme"))
-            .child(h_flex().gap(5).flex_wrap().children(this.data.themes.map(name => this.chip(`theme-single-${name}`, name, current === name, (_e, cx) => this.save(cx, name)))));
+            .child(h_flex().gap(5).flex_wrap().children(this.data.themes.map(name => this.chip(`theme-single-${name}`, name, draft === name, set(name)))));
           for (const side of ["light", "dark"]) detail.child(this.label(`${side === "light" ? "Light" : "Dark"} theme`))
-            .child(h_flex().gap(5).flex_wrap().children(this.data.themes.map(name => this.chip(`theme-${side}-${name}`, name, typeof current === "object" && current?.[side] === name, (_e, cx) => this.save(cx, JSON.stringify({ ...pair, [side]: name }))))));
+            .child(h_flex().gap(5).flex_wrap().children(this.data.themes.map(name => this.chip(`theme-${side}-${name}`, name, typeof draft === "object" && draft?.[side] === name, set({ ...pair, [side]: name })))));
         } else if (["terminal_menu", "toast", "link_handlers"].includes(this.field)) {
-          const list = Array.isArray(current) ? current : [];
-          detail.child(h_flex().gap(5).flex_wrap().children(this.data.mods.map(name => this.chip(`layout-mod-${name}`, name, this.field === "link_handlers" ? list.includes(name) : current === name, (_e, cx) => this.save(cx, this.field === "link_handlers" ? JSON.stringify(list.includes(name) ? list.filter(x => x !== name) : [...list, name]) : name)))));
+          const list = Array.isArray(draft) ? draft : [];
+          detail.child(h_flex().gap(5).flex_wrap().children(this.data.mods.map(name => this.chip(`layout-mod-${name}`, name, this.field === "link_handlers" ? list.includes(name) : draft === name, set(this.field === "link_handlers" ? (list.includes(name) ? list.filter(x => x !== name) : [...list, name]) : name)))));
           if (this.field === "link_handlers") detail.child(div().text_size(11).text_color(t.dim).child(`Order: ${list.join(", ") || "none"}`));
         } else if (["window_blur", "titlebar"].includes(this.field)) {
           const options = this.field === "window_blur" ? [["true", "On"], ["false", "Off"]] : [["system", "System"], ["none", "None"]];
-          detail.child(h_flex().gap(5).children(this.segment("layout-choice", options, String(current), (v, cx) => this.save(cx, v))));
+          detail.child(h_flex().gap(5).children(this.segment("layout-choice", options, value(this.edit), (v, cx) => set(v)(null, cx))));
         } else {
-          detail.child(this.input(this.edit)).child(this.button("layout-save", "Save", (_e, cx) => this.save(cx, value(this.edit)), { primary: true }));
+          detail.child(this.input(this.edit));
         }
-        if (current !== null) detail.child(this.button("layout-default", "Use the default", (_e, cx) => this.reset(cx)));
+        if (!value(this.edit) && this.saved()) detail.child(div().text_size(11).text_color(t.dim).child(`Save removes ${field[1].toLowerCase()} from this layout, so it uses the default.`));
+        detail.child(h_flex().gap(8)
+          .child(this.button("layout-save", "Save", (_e, cx) => this.save(cx), { primary: true, enabled: value(this.edit) !== this.saved() }))
+          .when(Boolean(this.saved() && value(this.edit)), el => el.child(this.button("layout-default", "Use the default", (_e, cx) => { this.edit.set_value(""); cx.notify(); }))));
       }
       return this.split(300, [left], detail);
     }

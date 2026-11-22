@@ -10,19 +10,17 @@ export default function create(app) {
     init(_cx) {
       this.settings = null;
       this.selected = "zoom";
-      this.problem = "";
       this.edit = InputState.new({ placeholder: "" });
       this.bindInput();
     }
     current() { return this.settings?.settings.find(s => s.key === this.selected); }
     numericDefault(s) { return s?.kind === "input" && /^\d+(\.\d+)?$/.test(s.default) ? s.default : ""; }
+    // Enter does not save: only the Save button writes.
     bindInput() {
-      this.edit.on("change", (_e, cx) => { this.problem = ""; cx.notify(); });
-      this.edit.on("submit", (_e, cx) => this.save(cx));
+      this.edit.on("change", (_e, cx) => cx.notify());
     }
     pick(key, cx) {
       this.selected = key;
-      this.problem = "";
       const s = this.current();
       this.edit.release();
       this.edit = InputState.new({ placeholder: this.numericDefault(s), value: s?.value ?? "" });
@@ -30,11 +28,12 @@ export default function create(app) {
       this.focusPage();
       cx.notify();
     }
-    save(cx, text = value(this.edit)) {
+    // An empty draft means the default: Save then removes the setting.
+    save(cx) {
       const s = this.current();
       if (!s) return;
-      text ||= this.numericDefault(s);
-      if (!text) { this.problem = "Type a value, or use the default."; cx.notify(); return; }
+      const text = value(this.edit);
+      if (!text) { if (s.value !== null) this.reset(cx); return; }
       this.task(cx, `Saving ${s.title.toLowerCase()}`, ["settings-set", "--key", s.key, "--value", text], (data, cx) => {
         this.settings = data;
         this.notice = s.restart ? `${s.title} saved; restart the app to apply it.` : `${s.title} saved.`;
@@ -67,19 +66,21 @@ export default function create(app) {
         .child(div().text_size(18).font_semibold().child(s.title))
         .child(div().text_size(12).text_color(t.muted).child(s.about))
         .child(div().text_size(11).text_color(t.dim).child(s.restart ? "Needs app restart." : "Applies live."));
+      // A pick only fills the draft; nothing is written until Save.
+      const draft = value(this.edit);
       if (s.kind === "toggle") {
-        detail.child(h_flex().gap(6).children(this.segment("app-toggle", [["true", "On"], ["false", "Off"]], s.value ?? s.default, (v, cx) => this.save(cx, v))));
+        detail.child(h_flex().gap(6).children(this.segment("app-toggle", [["true", "On"], ["false", "Off"]], draft || s.default, (v, cx) => { this.edit.set_value(v); cx.notify(); })));
       } else if (s.kind === "choice") {
-        detail.child(h_flex().gap(6).flex_wrap().children(s.choices.map(v => this.chip(`app-choice-${v}`, v, (s.value ?? s.default) === v, (_e, cx) => this.save(cx, v)))));
+        detail.child(h_flex().gap(6).flex_wrap().children(s.choices.map(v => this.chip(`app-choice-${v}`, v, (draft || s.default) === v, (_e, cx) => { this.edit.set_value(v); cx.notify(); }))));
       } else {
         detail.child(v_flex().gap(5).child(this.input(this.edit)).child(div().text_size(11).text_color(t.dim).child(s.hint)));
       }
       detail.child(div().text_size(11).text_color(t.dim).child(`Default: ${s.default}`))
         .when(Boolean(this.settings.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.settings.error)))
-        .when(Boolean(this.problem), el => el.child(div().text_size(11.5).text_color(t.blocked).child(this.problem)))
+        .when(!draft && s.value !== null, el => el.child(div().text_size(11).text_color(t.dim).child(`Save puts ${s.title.toLowerCase()} back to the default.`)))
         .child(h_flex().gap(8).mt(4)
-          .when(s.kind === "input", el => el.child(this.button("app-save", "Save", (_e, cx) => this.save(cx), { primary: true })))
-          .when(s.value !== null, el => el.child(this.button("app-default", `Use the default (${s.default})`, (_e, cx) => this.reset(cx)))));
+          .child(this.button("app-save", "Save", (_e, cx) => this.save(cx), { primary: true, enabled: draft !== (s.value ?? "") }))
+          .when(s.value !== null && Boolean(draft), el => el.child(this.button("app-default", `Use the default (${s.default})`, (_e, cx) => { this.edit.set_value(""); cx.notify(); }))));
       return this.split(420, [...rows, div().text_size(11).text_color(t.dim).child(`Saved to ${this.settings.path}.`)], detail);
     }
   }
