@@ -166,10 +166,11 @@ export default function create(app) {
       const mine = this.data.programs.filter(p => !agentKeys.has(p.key));
       const left = [this.button("program-add", "Add a program", (_e, cx) => this.pick(null, cx))];
       if (mine.length) left.push(this.heading("Your programs"), ...mine.map(p => this.row(`program-${p.key}`, p.key, p.name || p.key, p.run ? "+ menu" : "")));
-      left.push(this.heading("Agents in the + menu · click to customize"));
-      if (this.agentStatus) left.push(div().text_size(11).text_color(t.dim).child(this.agentStatus));
-      for (const a of this.agents ?? []) {
-        left.push(this.row(`agent-${a.key}`, a.key, a.name, `${this.personal(a.key) ? "customized · " : ""}${a.installed ? "installed" : "not installed"}`));
+      if (this.agentStatus) left.push(this.heading("Agents in the + menu · click to customize"), div().text_size(11).text_color(t.dim).child(this.agentStatus));
+      // The app lists them most picked first; that order holds within each group.
+      for (const [installed, heading] of [[true, "Installed agents · click to customize"], [false, "Not installed"]]) {
+        const group = (this.agents ?? []).filter(a => Boolean(a.installed) === installed);
+        if (group.length) left.push(this.heading(heading), ...group.map(a => this.row(`agent-${a.key}`, a.key, a.name, this.personal(a.key) ? "customized" : "")));
       }
       return this.split(380, left, this.editing ? this.form() : this.explainer());
     }
