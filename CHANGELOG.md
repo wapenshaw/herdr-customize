@@ -4,6 +4,28 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [1.1.0](https://github.com/wapenshaw/herdr-customize/compare/v1.0.0...v1.1.0) (2026-11-22)
+
+
+### Features
+
+* **app:** edit and update other machines' core settings ([efb396d](https://github.com/wapenshaw/herdr-customize/commit/efb396de97f0ff3b86777f2f3dd680ab30487944))
+* **app:** list installed agents before the rest on the programs page ([966d6e5](https://github.com/wapenshaw/herdr-customize/commit/966d6e5f6585408a23388126c6ab91ec983af48b))
+* **app:** pin status to a bar under every page ([b6c058c](https://github.com/wapenshaw/herdr-customize/commit/b6c058cb437cce042bf5fef69e0a0b7947c7b84c))
+* **app:** show which agents each machine has on the programs page ([728629f](https://github.com/wapenshaw/herdr-customize/commit/728629fef002127ded2cff842b1941989a042053))
+
+
+### Bug Fixes
+
+* **app:** write settings only when save is pressed ([dedc7c2](https://github.com/wapenshaw/herdr-customize/commit/dedc7c2037fccf7f7de5e882d8f2d752b45be929))
+
+
+### Refactoring
+
+* **app:** drop an unread record field and needless copies ([16cc10c](https://github.com/wapenshaw/herdr-customize/commit/16cc10c9d51f4664b976b0c3814e252c8f13aaf1))
+* **app:** fit the core updates card on one row ([8d27f47](https://github.com/wapenshaw/herdr-customize/commit/8d27f479f4f89c900607cb00e91593f87f45b499))
+* **deps:** drop regex, libc and windows-sys ([7b8ca74](https://github.com/wapenshaw/herdr-customize/commit/7b8ca74fa9231c168b33fc3bb2cce82da2314b0c))
+
 ## [1.0.0](https://github.com/wapenshaw/herdr-customize/compare/v0.10.0...v1.0.0) (2026-11-21)
 
 
