@@ -10,7 +10,9 @@ never touches Herdr's `config.toml` from there. On the Layouts, Core and App
 pages, picking a value (a shell, a theme, On or Off), typing, pressing Enter
 and **Use the default** only change what the page shows; nothing is written
 until **Save**, which stays disabled until the value differs from the saved
-one. An emptied value saves as the default.
+one. An emptied value saves as the default. What is running, what a change
+did, errors and health problems show in a bar pinned under every page, so
+they never cover the page or scroll away.
 
 | Themes | Keys | Mods |
 | --- | --- | --- |

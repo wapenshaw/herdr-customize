@@ -19,6 +19,7 @@ export default class Customize extends View {
     this.problems = [];
     this.healthVersion = 0;
     this.dismissedHealth = "";
+    this.barOpen = false;
     this.tabScroll = ScrollHandle.new();
     this.pageList = PAGE_REGISTRY.map(create => create(this));
     this.pages = Object.fromEntries(this.pageList.map(page => [page.id, page]));
@@ -277,17 +278,34 @@ export default class Customize extends View {
           .text_size(12).font_medium().cursor_pointer().bg(this.tab === id ? t.raised : t.surface).text_color(this.tab === id ? t.foreground : t.muted)
           .hover(s => s.text_color(t.foreground)).on_click((_e, cx) => this.showTab(id, cx)).child(title))))
         .child(div().flex_1())
-        .when(Boolean(this.busy), el => el.child(h_flex().gap(6).items_center().flex_none().text_size(11.5).text_color(t.muted)
-          .child(this.spinner()).child(`${this.busy}… ${this.busySeconds()} s`)))
         .child(this.button("close", "Close", () => this.close(), { always: true })))
-      .when(this.problems.length > 0 && this.dismissedHealth !== JSON.stringify(this.problems), el => el.child(
-        h_flex().mx(20).mt(10).p(10).gap(10).rounded(8).bg(`${t.blocked}18`).text_color(t.blocked).items_start().flex_none()
-          .child(v_flex().gap(3).flex_1().min_w(0).children(this.problems.map((p, i) =>
-            div().id(`health-${i}`).text_size(11.5).child(`${p.source}: ${p.message}`))))
-          .child(div().id("dismiss-health").cursor_pointer().text_size(11.5).child("Dismiss")
-            .on_click((_e, cx) => { this.dismissedHealth = JSON.stringify(this.problems); cx.notify(); }))))
-      .child(v_flex().px(20).pt(14).pb(12).flex_1().min_h(0).child(page))
-      .when(Boolean(this.error || this.notice), el => el.child(div().mx(20).mb(14).p(10).rounded(8).flex_none()
-        .bg(this.error ? `${t.blocked}18` : `${t.done}18`).text_size(11.5).text_color(this.error ? t.blocked : t.done).child(this.error || this.notice)));
+      // The page is clipped so nothing it draws can cover the bar below.
+      .child(v_flex().px(20).pt(14).pb(12).flex_1().min_h(0).overflow_hidden().child(page))
+      .child(this.statusBar());
+  }
+
+  // Pinned under every page: one line for what runs or happened and one for the
+  // health problems; Details opens their full text in a bounded, scrolling box.
+  statusBar() {
+    const t = theme();
+    const problems = this.problems.length > 0 && this.dismissedHealth !== JSON.stringify(this.problems) ? this.problems : [];
+    const text = p => `${p.source}: ${p.message}`;
+    const line = (id, color, content) => div().id(id).flex_1().min_w(0).whitespace_nowrap().text_ellipsis().text_color(color).child(content);
+    const status = this.busy
+      ? h_flex().gap(6).items_center().flex_1().min_w(0).text_color(t.muted).child(this.spinner()).child(`${this.busy}… ${this.busySeconds()} s`)
+      : line("status", this.error ? t.blocked : t.done, this.error || this.notice);
+    const more = problems.length > 0 || Boolean(this.error);
+    const open = more && this.barOpen;
+    return v_flex().px(20).py(8).gap(6).flex_none().min_h(36).justify_center().border_t(1).border_color(t.border).bg(t.surface).text_size(11.5)
+      .when(open, el => el.child(v_flex().id("status-details").max_h(140).overflow_y_scrollbar().gap(3)
+        .when(Boolean(this.error), d => d.child(div().text_color(t.blocked).child(this.error)))
+        .children(problems.map((p, i) => div().id(`health-${i}`).text_color(t.blocked).child(text(p))))))
+      .when(problems.length > 0, el => el.child(h_flex().gap(10).items_center()
+        .child(line("health", t.blocked, problems.length === 1 ? text(problems[0]) : `${problems.length} problems · ${text(problems[0])}`))
+        .child(div().id("dismiss-health").flex_none().cursor_pointer().text_color(t.blocked).child("Dismiss")
+          .on_click((_e, cx) => { this.dismissedHealth = JSON.stringify(this.problems); cx.notify(); }))))
+      .child(h_flex().gap(10).items_center().child(status)
+        .when(more, el => el.child(div().id("status-more").flex_none().cursor_pointer().text_color(t.muted).child(open ? "Hide details" : "Details")
+          .on_click((_e, cx) => { this.barOpen = !this.barOpen; cx.notify(); }))));
   }
 }
