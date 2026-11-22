@@ -272,6 +272,8 @@ const POPUP_FILES: &[(&str, &str)] = &[
 /// Writes the mod that opens this binary's popup in the app, checks it, and
 /// binds key (or DEFAULT_KEY) to it unless a key already opens it.
 pub fn install_popup(key: Option<&str>) -> Result<Bound> {
+    // Before any write: with no keys.json yet, this needs the shipped keys.
+    let bindings = keys::load()?;
     let exe = std::env::current_exe().context("find this program")?;
     let dir = home().join("mods").join(MOD_NAME);
     fs::create_dir_all(&dir)?;
@@ -289,7 +291,6 @@ pub fn install_popup(key: Option<&str>) -> Result<Bound> {
     }
     check_mod(&dir)?;
     let action = format!("mod.open:{MOD_NAME}");
-    let bindings = keys::load()?;
     if let Some(b) = bindings.iter().find(|b| b.section == "global" && b.action == action) {
         return Ok(Bound::Already(b.key.clone()));
     }
