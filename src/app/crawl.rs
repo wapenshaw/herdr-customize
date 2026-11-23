@@ -21,6 +21,10 @@ const RECORD: &str = "browse.json";
 /// How many repositories are read at once.
 const PARALLEL: usize = 8;
 
+/// Raise it when packages() reads a repository differently, so entries
+/// read the old way are read again. 1: link.js counts as a mod.
+const RULE: u32 = 1;
+
 /// One package in a repository, as Browse lists it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -47,7 +51,15 @@ impl Found {
 #[serde(default)]
 struct Crawled {
     pushed_at: String,
+    rule: u32,
     packages: Vec<Found>,
+}
+
+impl Crawled {
+    /// Whether this still says what the repository holds.
+    fn current(&self, repo: &market::Repo) -> bool {
+        self.rule == RULE && self.pushed_at == repo.pushed_at
+    }
 }
 
 /// One row of Browse.
@@ -69,7 +81,7 @@ pub fn page(layouts: bool, query: &str, sort: &str, page: usize, per_page: usize
     let topic = if layouts { "herdr-layout" } else { "herdr-mod" };
     let results = market::search(topic, query, sort, page, per_page)?;
     let mut known: BTreeMap<String, Crawled> = read_record(RECORD)?;
-    let stale: Vec<&market::Repo> = results.repos.iter().filter(|r| known.get(&r.full_name).is_none_or(|c| c.pushed_at != r.pushed_at)).collect();
+    let stale: Vec<&market::Repo> = results.repos.iter().filter(|r| !known.get(&r.full_name).is_some_and(|c| c.current(r))).collect();
     // Workers take the next repository as they finish, so one slow clone
     // never holds up the rest.
     let next = AtomicUsize::new(0);
@@ -90,7 +102,7 @@ pub fn page(layouts: bool, query: &str, sort: &str, page: usize, per_page: usize
     for (repo, found) in stale.iter().zip(read) {
         // A repository that could not be read is tried again next time.
         if let Some(packages) = found.into_inner() {
-            known.insert(repo.full_name.clone(), Crawled { pushed_at: repo.pushed_at.clone(), packages });
+            known.insert(repo.full_name.clone(), Crawled { pushed_at: repo.pushed_at.clone(), rule: RULE, packages });
         }
     }
     if !stale.is_empty() {
@@ -128,9 +140,9 @@ fn packages(full_name: &str) -> Result<Vec<Found>> {
             show(f).ok().and_then(|b| mods::save_preview(&b, ext).ok())
         });
         let label = if root.is_empty() { full_name.to_string() } else { format!("{full_name}/{root}") };
-        // What review counts: mods/<name>/main.js, and layouts/<name>.json.
+        // What counts: mods/<name>/main.js or link.js, and layouts/<name>.json.
         let (mods_dir, layouts_dir) = (at("mods/"), at("layouts/"));
-        let has_mod = files.iter().filter_map(|f| f.strip_prefix(mods_dir.as_str())).any(|rest| rest.split_once('/').is_some_and(|(_, file)| file == "main.js"));
+        let has_mod = files.iter().filter_map(|f| f.strip_prefix(mods_dir.as_str())).any(|rest| rest.split_once('/').is_some_and(|(_, file)| file == "main.js" || file == "link.js"));
         let has_layout = files.iter().filter_map(|f| f.strip_prefix(layouts_dir.as_str())).any(|rest| !rest.contains('/') && rest.ends_with(".json"));
         out.push(Found { name: mods::title(&recipe, &label), blurb: mods::summary(&recipe), preview, path: root, has_mod, has_layout });
     }
@@ -173,6 +185,16 @@ mod tests {
         assert!(roots(&["a/b/c/mods/x/main.js", "node_modules/m/mods/x/main.js"]).is_empty());
     }
 
+    // An entry saved before link.js counted would hide a link-only package
+    // until its repository is pushed to.
+    #[test]
+    fn entries_read_the_old_way_are_read_again() {
+        let repo = market::Repo { full_name: "o/links".into(), stars: 0, description: String::new(), pushed_at: "2026-11-01T00:00:00Z".into() };
+        let old: Crawled = serde_json::from_str(r#"{"pushed_at":"2026-11-01T00:00:00Z","packages":[{"path":"","has_mod":false}]}"#).unwrap();
+        assert!(!old.current(&repo));
+        assert!(Crawled { rule: RULE, ..old }.current(&repo));
+    }
+
     // A repository lists each package under its recipe's name, with its
     // picture copied where the app can load it.
     #[test]
@@ -188,13 +210,14 @@ mod tests {
                 ("insights/preview.png", "png"),
                 ("desk/layouts/desk.json", "{}"),
                 ("desk/mods/clock/main.js", ""),
+                ("links/mods/opener/link.js", ""),
             ],
         );
         let found = packages("o/kit").unwrap();
         let got: Vec<(&str, &str, &str)> = found.iter().map(|f| (f.path.as_str(), f.name.as_str(), f.blurb.as_str())).collect();
-        assert_eq!(got, [("desk", "desk", ""), ("insights", "Insights", "Token usage.")]);
+        assert_eq!(got, [("desk", "desk", ""), ("insights", "Insights", "Token usage."), ("links", "links", "")]);
         let lists = |layouts| found.iter().filter(|f| f.listed(layouts)).map(|f| f.path.as_str()).collect::<Vec<_>>();
-        assert_eq!((lists(false), lists(true)), (vec!["insights"], vec!["desk"]), "a layout's own mods leave it under Layouts");
+        assert_eq!((lists(false), lists(true)), (vec!["insights", "links"], vec!["desk"]), "a layout's own mods leave it under Layouts");
         let preview = found[1].preview.as_deref().unwrap();
         assert_eq!(std::fs::read(super::super::home().join(preview)).unwrap(), b"png");
         assert!(found[0].preview.is_none());

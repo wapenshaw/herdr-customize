@@ -139,12 +139,16 @@ added by hand, and the ones the app ships; a layout opens on click.
 **Browse GitHub** searches repositories tagged `herdr-mod` or
 `herdr-layout`, by stars or by last update, and lists each package in them
 the way herdr.dev's Mods page does: by its recipe's title, with its first
-paragraph and its `preview.png`. A package with a layout is listed under
-Layouts only, even when it brings mods for it. To find the packages, it
+paragraph and its `preview.png`. A mod is a folder with a view (`main.js`),
+a terminal link handler (`link.js`), or both; Keys refuses a `<mod>.<command>`
+key for a mod with only a link handler, which has no view to receive it. A
+package with a layout is listed under Layouts only, even when it brings mods
+for it. To find the packages, it
 clones each repository's file list alone (`git clone --filter=blob:none`)
 and reads only the recipes and pictures; that takes a few seconds per page
 the first time, and `data/herdr-customize/browse.json` keeps the result
-until the repository is pushed to. Type `owner/repo`, or
+until the repository is pushed to or herdr-customize changes how it reads
+packages. Type `owner/repo`, or
 `owner/repo/folder` for one package of a repository that holds several, or
 paste its GitHub link, such as the one herdr.dev gives, and press **Enter**
 to review it directly. A link to a branch other than the default one is
