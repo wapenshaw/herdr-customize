@@ -52,9 +52,14 @@ pub fn packages() -> Result<Vec<Package>> {
     read_record(RECORD)
 }
 
-/// The mod folders in the home.
+/// The mod folders in the home that have a view, so `<mod>.<command>` reaches one.
 pub fn mod_names() -> Vec<String> {
     names_in(&home().join("mods"), |p| p.join("main.js").is_file())
+}
+
+/// A mod folder: a view, a terminal link handler, or both.
+fn is_mod(dir: &Path) -> bool {
+    dir.join("main.js").is_file() || dir.join("link.js").is_file()
 }
 
 /// Entry names in dir that pass keep, sorted, without hidden ones.
@@ -88,7 +93,7 @@ pub enum Kind {
 pub fn others(packages: &[Package]) -> Vec<(Kind, String)> {
     let shipped = super::shipped();
     let mut out = Vec::new();
-    for name in mod_names() {
+    for name in names_in(&home().join("mods"), is_mod) {
         if name != super::MOD_NAME && !shipped.contains(&name) && !packages.iter().any(|p| p.mods.contains(&name)) {
             out.push((Kind::Mod, name));
         }
@@ -314,7 +319,7 @@ fn package_dirs(root: &Path) -> Vec<PathBuf> {
 }
 
 fn plan(root: &Path, repo: &str, subdir: &str, commit: &str, previous: Option<&Package>, checkout: Arc<Checkout>) -> Result<Plan> {
-    let mods = names_in(&root.join("mods"), |p| p.join("main.js").is_file());
+    let mods = names_in(&root.join("mods"), is_mod);
     let layouts = layout_names(&root.join("layouts"));
     let themes = layout_names(&root.join("themes"));
     let mut files = Vec::new();
@@ -522,7 +527,7 @@ pub fn remove(repo: &str, subdir: &str) -> Result<Vec<String>> {
     }
     for m in &pkg.mods {
         let dir = home.join("mods").join(m);
-        if !dir.join("main.js").exists() {
+        if !is_mod(&dir) {
             for f in GENERATED {
                 let _ = fs::remove_file(dir.join(f));
             }
@@ -621,6 +626,30 @@ pub(crate) mod tests {
         let keys: Vec<String> = keys::load().unwrap().into_iter().map(|b| b.key).collect();
         assert_eq!(keys, ["ctrl-shift-j"]);
         assert!(packages().unwrap().is_empty());
+        crate::testenv::fresh_home();
+    }
+
+    // A mod with only a link handler installs, shows when added by hand, and
+    // takes no `<mod>.<command>` keys, having no view to receive them.
+    #[test]
+    fn a_link_only_mod_installs_without_a_view() {
+        let _guard = crate::testenv::isolated();
+        let home = home();
+        crate::testenv::fresh_home();
+        let base = PathBuf::from(crate::env("HERDR_CUSTOMIZE_GIT_BASE").unwrap());
+        repo(&base, "o/links", &[("mods/opener/link.js", "export function handleLink() { return \"pass\"; }\n"), ("mods/opener/mod.json", r#"{"place":"none"}"#)]);
+        let plans = fetch("o/links").unwrap();
+        assert_eq!(plans[0].mods, ["opener"]);
+        install(&plans[0], false).unwrap();
+        assert!(home.join("mods/opener/link.js").is_file() && home.join("mods/opener/mod.json").is_file());
+        let commands: Vec<super::super::AppCommand> = serde_json::from_str(r#"[{"name":"tab.new","args":[]}]"#).unwrap();
+        assert!(keys::action_problem("opener.open", &commands, &mod_names()).is_some());
+        fs::create_dir_all(home.join("mods/handmade")).unwrap();
+        fs::write(home.join("mods/handmade/link.js"), "").unwrap();
+        let others: Vec<String> = others(&packages().unwrap()).into_iter().map(|(_, name)| name).collect();
+        assert_eq!(others, ["handmade"]);
+        remove("o/links", "").unwrap();
+        assert!(!home.join("mods/opener").exists());
         crate::testenv::fresh_home();
     }
 
