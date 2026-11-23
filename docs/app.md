@@ -351,6 +351,12 @@ A machine that sets `XDG_CONFIG_HOME` keeps its file elsewhere, which the page
 does not follow. Its shells come from its `/etc/shells`, as login shells on
 macOS.
 
+A machine whose SSH login wants a password or code, like a passphrase key that
+isn't in an agent, shows as *needs login*, and a **Log in** button closes the
+screen and opens a space on this computer running `hc machine login <machine>`
+to ask for it. Opening the screen again reads the machines afresh, so the
+machine shows as connected once the login worked.
+
 The **Updates** card, when supported by the app, shows app and core versions,
 ready updates, the last successful check and core update errors. It offers
 the commands available in that app to check, update an unmanaged core, or

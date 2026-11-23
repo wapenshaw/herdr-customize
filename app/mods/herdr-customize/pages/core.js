@@ -190,7 +190,12 @@ export default function create(app) {
         .child(div().text_size(11.5).text_color(t.muted).child("Settings of"))
         .child(this.chip("machine-here", "This computer", !this.machine, (_e, cx) => this.pickMachine(null, cx)))
         .children([...this.core.machines, ...this.machine && !this.core.machines.some(m => m.name === this.machine) ? [{ name: this.machine, state: "not listed" }] : []]
-          .map(m => this.chip(`machine-${m.name}`, m.state === "connected" ? m.name : `${m.name} (${m.state})`, this.machine === m.name, (_e, cx) => this.pickMachine(m.name, cx))))))
+          .map(m => this.chip(`machine-${m.name}`, m.state === "connected" ? m.name : `${m.name} (${m.state.replaceAll("_", " ")})`, this.machine === m.name, (_e, cx) => this.pickMachine(m.name, cx))))))
+      // hc machine login asks for a password or code, so it runs in a terminal of
+      // its own; machine "" keeps it on this computer whatever space is shown.
+      .children(this.core.machines.filter(m => m.login).map(m => h_flex().gap(8).items_center()
+        .child(div().flex_1().text_size(11.5).text_color(t.working).child(`${m.name} needs a password or code before Herdr can reach it. Log in opens a space here that asks for it.`))
+        .child(this.button(`login-${m.name}`, "Log in", () => this.closeAndRun("space.new", { name: `Log in to ${m.name}`, machine: "", argv: m.login })))))
       .child(this.split(420, [
       v_flex().id("core-settings").flex_1().min_h(0).overflow_y_scrollbar().gap(4).children(rows),
       div().text_size(11).text_color(t.dim).child(this.machine
