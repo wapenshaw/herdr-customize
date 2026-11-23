@@ -349,7 +349,20 @@ fn remote_write(machine: &str, old: Option<&str>, text: &str) -> Result<()> {
 /// The machines hc reaches and the core each runs; none when hc cannot say.
 fn machines() -> Vec<Value> {
     let reply = hc_ok(&["machine", "ls"], None, Duration::from_secs(10)).unwrap_or_default();
-    reply["machines"].as_array().into_iter().flatten().map(|m| json!({ "name": m["name"], "state": m["state"], "version": m["version"] })).collect()
+    let hc = super::core_bin().map(|b| b.to_string_lossy().into_owned());
+    reply["machines"].as_array().into_iter().flatten().map(|m| machine(m, hc.as_deref())).collect()
+}
+
+/// One machine as the Core page shows it. One that needs a password or code
+/// carries the command that logs in to it, which needs a terminal.
+fn machine(m: &Value, hc: Option<&str>) -> Value {
+    let mut out = json!({ "name": m["name"], "state": m["state"], "version": m["version"] });
+    if m["state"] == "needs_login"
+        && let (Some(hc), Some(name)) = (hc, m["name"].as_str())
+    {
+        out["login"] = json!([hc, "machine", "login", name]);
+    }
+    out
 }
 
 /// Copies this hc to machine and restarts its core; its terminals keep running.
@@ -445,5 +458,16 @@ mod tests {
         assert_eq!(names(false), [("sh".to_string(), vec!["/bin/sh".to_string()]), ("zsh".to_string(), vec!["/usr/bin/zsh".to_string()])]);
         assert_eq!(names(true)[1].1, ["/usr/bin/zsh", "-l"]);
         assert_eq!(listed_shells(listed, false, |p| p != "/bin/sh")[0].0, "zsh");
+    }
+
+    // Only a machine waiting for a password or code gets a login command.
+    #[test]
+    fn a_machine_that_needs_a_login_carries_its_command() {
+        let ls = |state: &str| json!({ "name": "vps", "state": state, "version": "0.1.22", "host": "x" });
+        assert_eq!(machine(&ls("needs_login"), Some("/bin/hc"))["login"], json!(["/bin/hc", "machine", "login", "vps"]));
+        for state in ["connected", "connecting", "unreachable"] {
+            assert!(machine(&ls(state), Some("/bin/hc")).get("login").is_none(), "{state}");
+        }
+        assert!(machine(&ls("needs_login"), None).get("login").is_none());
     }
 }
