@@ -40,6 +40,7 @@ export default class Customize extends View {
     if (!checking) this.loadAll(cx);
     const themes = this.pages.themes;
     themes.themeSearch.focus();
+    if (checking) return;
     cx.timer.after(300, cx => {
       themes.themeSearch.focus();
       const at = themes.themeRows().findIndex(r => r.name === themes.themeSel);
