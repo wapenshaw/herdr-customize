@@ -1,1 +1,1 @@
-{ "place": "none", "title": "Scrollback", "overlay": { "width": 220, "height": 60 } }
+{ "place": "none", "title": "Scrollback", "overlay": { "width": 220, "height": 60 }, "palette": [{ "title": "Scrollback in an editor", "command": "mod.open", "args": { "name": "scrollback" }, "words": "history output buffer" }] }

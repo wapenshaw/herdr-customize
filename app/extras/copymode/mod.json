@@ -1,1 +1,1 @@
-{ "place": "none", "title": "Copy mode", "focusable": true, "overlay": { "width": 580, "height": 36 } }
+{ "place": "none", "title": "Copy mode", "focusable": true, "overlay": { "width": 580, "height": 36 }, "palette": [{ "title": "Copy mode", "command": "mod.open", "args": { "name": "copymode" }, "words": "select copy keyboard vim" }] }

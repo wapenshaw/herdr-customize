@@ -1,1 +1,1 @@
-{ "place": "none", "title": "Customize", "overlay": { "width": 0.86, "height": 0.86 } }
+{ "place": "none", "title": "Customize", "overlay": { "width": 0.86, "height": 0.86 }, "palette": [{ "title": "Customize", "command": "mod.open", "args": { "name": "herdr-customize" }, "words": "themes keys mods layouts popups programs core settings" }] }
