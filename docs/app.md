@@ -344,7 +344,9 @@ effect without a restart, and running terminals keep their shell. A file it
 cannot read means all its defaults, so the page checks each value as the
 core would and refuses one it would not take; a file that is already broken
 is shown and left alone. **Shell** offers the shells found on this machine:
-PowerShell, Git Bash, Nushell and WSL on Windows, or those in `/etc/shells`.
+PowerShell, Git Bash, Nushell and WSL on Windows, or those in `/etc/shells`;
+from app 0.1.18, **Choose…** picks the program in the system's file picker,
+for this computer only, since the picker can't see another machine.
 PowerShell is the core's default there, with a hook that lets the core follow
 the shell's folder, so picking it empties the inputs, and saving that clears the setting rather than naming it. `socket` is left out: moving it leaves
 clients looking for the core in the old place.
