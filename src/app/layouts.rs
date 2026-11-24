@@ -13,6 +13,7 @@ const FIELDS: &[&str] = &[
     "font_size",
     "ui_font",
     "font_weight",
+    "font_weight_bold",
     "terminal_padding",
     "terminal_opacity",
     "terminal_line_height",
@@ -23,7 +24,24 @@ const FIELDS: &[&str] = &[
     "terminal_menu",
     "toast",
     "link_handlers",
+    "veil",
 ];
+
+/// Runs found on the pane frame of each tab block in the node tree, where
+/// `veil` lives. Only nodes are walked: a mod's props are its own business.
+fn pane_frames(node: &mut Map<String, Value>, found: &mut dyn FnMut(&mut Map<String, Value>)) {
+    if let Some(Value::Object(content)) = node.get_mut("content")
+        && content.contains_key("tab")
+        && let Some(Value::Object(pane)) = content.get_mut("pane")
+    {
+        found(pane);
+    }
+    for key in ["children", "floating"] {
+        if let Some(Value::Array(nodes)) = node.get_mut(key) {
+            nodes.iter_mut().filter_map(Value::as_object_mut).for_each(|child| pane_frames(child, found));
+        }
+    }
+}
 
 fn names(dir: &Path, folders: bool) -> BTreeSet<String> {
     fs::read_dir(dir)
@@ -64,11 +82,14 @@ pub fn describe() -> Value {
         .into_iter()
         .map(|name| {
             let is_shipped = shipped.contains(&format!("layout:{name}"));
-            let (doc, error) = match read(&home.join("layouts").join(format!("{name}.json"))) {
+            let (mut doc, error) = match read(&home.join("layouts").join(format!("{name}.json"))) {
                 Ok(doc) => (doc, None),
                 Err(e) => (Map::new(), Some(format!("{e:#}"))),
             };
-            let root: Map<String, Value> = FIELDS.iter().map(|field| ((*field).into(), doc.get(*field).cloned().unwrap_or(Value::Null))).collect();
+            let mut veil = None;
+            pane_frames(&mut doc, &mut |pane| veil = veil.take().or_else(|| pane.get("veil").cloned()));
+            let mut root: Map<String, Value> = FIELDS.iter().map(|field| ((*field).into(), doc.get(*field).cloned().unwrap_or(Value::Null))).collect();
+            root.insert("veil".into(), veil.unwrap_or(Value::Null));
             json!({"name": name, "shipped": is_shipped, "personal": !is_shipped, "root": root, "error": error})
         })
         .collect();
@@ -104,10 +125,10 @@ fn parse(field: &str, text: &str) -> Result<Value> {
             json!(text)
         }
         "font_size" => number(f64::MIN_POSITIVE, f64::MAX)?,
-        "font_weight" => {
-            let n: u64 = text.parse().context("font_weight must be an integer")?;
+        "font_weight" | "font_weight_bold" => {
+            let n: u64 = text.parse().with_context(|| format!("{field} must be an integer"))?;
             if !(100..=900).contains(&n) {
-                bail!("font_weight must be from 100 to 900");
+                bail!("{field} must be from 100 to 900");
             }
             json!(n)
         }
@@ -119,7 +140,7 @@ fn parse(field: &str, text: &str) -> Result<Value> {
             }
             value
         }
-        "terminal_opacity" => number(0.0, 1.0)?,
+        "terminal_opacity" | "veil" => number(0.0, 1.0)?,
         "terminal_line_height" | "terminal_cell_width" => number(0.8, 2.0)?,
         "terminal_scroll_speed" => number(0.1, 5.0)?,
         "window_blur" => match text {
@@ -163,11 +184,25 @@ pub fn set(name: &str, field: &str, text: Option<&str>) -> Result<()> {
     }
     let mut doc = read(&path)?;
     match text {
-        Some(text) => {
+        Some(text) if field != "veil" => {
             doc.insert(field.into(), parse(field, text)?);
         }
-        None => {
+        None if field != "veil" => {
             doc.shift_remove(field);
+        }
+        _ => {
+            let value = text.map(|text| parse(field, text)).transpose()?;
+            let mut frames = 0;
+            pane_frames(&mut doc, &mut |pane| {
+                frames += 1;
+                match &value {
+                    Some(v) => pane.insert("veil".into(), v.clone()),
+                    None => pane.shift_remove("veil"),
+                };
+            });
+            if frames == 0 {
+                bail!("{name} has no tab block with a pane frame to fade");
+            }
         }
     }
     let mut bytes = serde_json::to_vec_pretty(&doc)?;
@@ -204,6 +239,8 @@ mod tests {
         assert!(set("hc-layout-test-shipped", "font", Some("Mono")).is_err());
         for (field, value) in [
             ("font_weight", "99"),
+            ("font_weight_bold", "901"),
+            ("veil", "0.4"),
             ("terminal_opacity", "1.1"),
             ("terminal_line_height", "2.1"),
             ("terminal_scroll_speed", "0"),
@@ -226,5 +263,35 @@ mod tests {
         fs::remove_file(dir.join("hc-layout-test-shipped.json")).unwrap();
         fs::remove_file(home.join("themes/hc-layout-test-theme.json")).unwrap();
         fs::remove_dir(home.join("mods/menu-test")).unwrap();
+    }
+
+    // veil fades the panes of the tab block, so it goes in that block's pane
+    // frame wherever the tree puts it, and the page reads it back from there.
+    // A mod's props shaped like a tab block are not one and stay as they are.
+    #[test]
+    fn veil_goes_in_the_tab_block_pane_frame() {
+        let _guard = crate::testenv::isolated();
+        let dir = super::super::home().join("layouts");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("hc-layout-test-veil.json");
+        let props = json!({"tab": "active", "pane": {"veil": 0.9}});
+        let layout = json!({"type": "row", "children": [
+            {"content": {"mod": "spaces", "props": props}},
+            {"type": "column", "children": [{"content": {"tab": "active", "pane": {"gap": 6}}}]},
+        ]});
+        fs::write(&path, layout.to_string()).unwrap();
+        assert!(set("hc-layout-test-veil", "veil", Some("1.5")).is_err());
+        set("hc-layout-test-veil", "veil", Some("0.4")).unwrap();
+        let doc = read(&path).unwrap();
+        assert_eq!((doc["children"][1]["children"][0]["content"]["pane"]["veil"].as_f64(), doc.get("veil")), (Some(0.4), None));
+        assert_eq!(doc["children"][0]["content"]["props"], props);
+        let listed = describe()["layouts"].as_array().unwrap().iter().find(|l| l["name"] == "hc-layout-test-veil").unwrap()["root"]["veil"].clone();
+        assert_eq!(listed.as_f64(), Some(0.4));
+        set("hc-layout-test-veil", "veil", None).unwrap();
+        let doc = read(&path).unwrap();
+        assert_eq!((&doc["children"][1]["children"][0]["content"]["pane"], &doc["children"][0]["content"]["props"]), (&json!({"gap": 6}), &props));
+        fs::write(&path, r#"{"type":"block","content":{"mod":"board","props":{"tab":"active","pane":{}}}}"#).unwrap();
+        assert!(set("hc-layout-test-veil", "veil", Some("0.4")).is_err(), "a mod's props are no tab block");
+        fs::remove_file(path).unwrap();
     }
 }
