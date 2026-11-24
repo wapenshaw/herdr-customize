@@ -9,8 +9,10 @@ const FIELDS = [
   ["font_size", "Font size", "A positive size in pixels."],
   ["ui_font", "UI font", "Font family for the interface."],
   ["font_weight", "Font weight", "Integer from 100 to 900."],
+  ["font_weight_bold", "Bold weight", "Integer from 100 to 900 for bold text; the nearest face is used."],
   ["terminal_padding", "Terminal padding", "A number or [vertical, horizontal]."],
   ["terminal_opacity", "Terminal opacity", "From 0 to 1."],
+  ["veil", "Fade other panes", "From 0 to 1: how much the panes you're not in fade, such as 0.4. It goes in the tab block's pane frame."],
   ["terminal_line_height", "Line height", "From 0.8 to 2."],
   ["terminal_cell_width", "Cell width", "From 0.8 to 2."],
   ["terminal_scroll_speed", "Scroll speed", "From 0.1 to 5."],
@@ -136,7 +138,7 @@ export default function create(app) {
             }))));
       if (layout.error) detail.child(div().text_size(12).text_color(t.blocked).child(layout.error));
       if (layout.personal && !layout.error) {
-        detail.child(this.heading("Root fields"))
+        detail.child(this.heading("Settings"))
           .child(h_flex().gap(5).flex_wrap().children(FIELDS.map(([key, title]) => this.chip(`layout-field-${key}`, title, key === this.field, (_e, cx) => this.pickField(key, cx)))))
           .child(div().text_size(16).font_semibold().child(field[1]))
           .child(div().text_size(11.5).text_color(t.muted).child(field[2]));

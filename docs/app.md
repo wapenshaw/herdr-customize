@@ -198,9 +198,10 @@ The Layouts page, beside Mods, has two views. My layouts lists the available
 layouts, marks the active one and offers **Switch to this layout**. A built-in
 layout can't be edited; **Make a copy** (with an optional name) creates one you
 can. Switching and copying refresh the list on their own. Personal layouts
-expose root theme (including light and dark pairs), fonts, terminal spacing and
-opacity, title bar and blur, and installed mod pickers for menus,
-notifications and ordered link handlers.
+expose root theme (including light and dark pairs), fonts and bold weight,
+terminal spacing and opacity, title bar and blur, and installed mod pickers
+for menus, notifications and ordered link handlers. **Fade other panes** (app
+0.1.18) sets `veil`, which lives in the tab block's pane frame, not the root.
 
 Community gallery lists the repositories tagged `herdr-layout` on GitHub, the
 same list as herdr.dev/gallery, with the same Review and Install as the Mods
