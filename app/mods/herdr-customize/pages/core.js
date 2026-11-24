@@ -1,7 +1,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex, InputState } from "gpui-base";
 import * as herdr from "herdr";
-import { page, value, platform } from "../lib.js";
+import { page, value, platform, reason } from "../lib.js";
 
 const { theme } = herdr;
 
@@ -171,7 +171,10 @@ export default function create(app) {
       const hookLost = platform() === "windows" && !this.machine && /(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(program) && !parseArgs(value(this.shellArgs)).some(a => /^-c(ommand)?$/i.test(a));
       detail.child(h_flex().gap(6).flex_wrap().children([...powershell, ...this.core.shells.map((sh, i) =>
         this.chip(`shell-${i}`, sh.name, this.coreText() === JSON.stringify(sh.argv), pickShell(sh.argv)))]))
-        .child(v_flex().gap(5).child(this.label("Program")).child(this.input(this.coreInput)).child(hint(s.hint)))
+        .child(v_flex().gap(5).child(this.label("Program"))
+          .child(h_flex().gap(8).child(div().flex_1().min_w(0).child(this.input(this.coreInput)))
+            .when(Boolean(herdr.pickFiles) && !this.machine, el => el.child(this.button("shell-choose", "Choose…", (_e, cx) => this.chooseProgram(cx)))))
+          .child(hint(s.hint)))
         .child(v_flex().gap(5).child(this.label("Arguments")).child(this.input(this.shellArgs))
           .child(hint("Split at spaces, like --login -i for Git Bash. An argument that holds spaces shows the list as JSON, like [\"-NoLogo\", \"-Command\", \"...\"]; edit it in that form. Leave empty for none.")))
         .when(hookLost, el => el.child(div().text_size(11.5).text_color(t.working).child("Naming PowerShell here replaces the core's default start-up: new terminals no longer follow cd for the programs they start. Choose PowerShell (default) unless you need other arguments.")));
@@ -213,6 +216,16 @@ export default function create(app) {
         }))))));
   }
 
+  // The picker shows this computer's files only, so a remote machine gets no button.
+  chooseProgram(cx) {
+    cx.spawn(async cx => {
+      try {
+        const files = await herdr.pickFiles({ prompt: "Use" });
+        if (files?.[0]) this.coreInput.set_value(files[0]);
+      } catch (e) { this.error = reason(e); }
+      cx.notify();
+    });
+  }
   focus() { if (this.core && this.coreSel !== "notes" && this.coreSel !== "restore_screen") this.coreInput.focus(); else this.handle.focus(); }
   show(cx) { if (!this.core) this.load(cx, ["core"], (data, cx) => { this.core = data; this.pickCore(this.coreSel, cx); }); }
   render() { return this.corePage(); }
