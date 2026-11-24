@@ -109,9 +109,11 @@ typed values. The form checks required and unknown argument names against the
 installed app. String actions retain the app's literal first-argument shorthand.
 
 **Presets** offers pane resize, tab reordering, terminal select all and
-search, and naming a pane. A preset appears only when all its commands exist
-in the installed app and at least one binding is not already set; resize and
-naming require a newer app. Applying one skips keys already used for another
+search, naming a pane, and jumping to an agent by its place in the list
+(alt+shift+1 to 9, ctrl+shift on macOS). A preset appears only when all its
+commands exist in the installed app and at least one binding is not already
+set; resize and naming require a newer app, and agent jumps app 0.1.18.
+Applying one skips keys already used for another
 action or hidden by a winning section and reports each outcome. Option-letter
 shortcuts on macOS can take characters from keyboard layouts that use Option
 for typing.

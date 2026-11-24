@@ -42,6 +42,17 @@ fn presets() -> Vec<Preset> {
             bindings: vec![binding("terminal", if cfg!(target_os = "macos") { "cmd-f" } else { "ctrl-shift-f" }, "terminal.search", &json!({}))],
         },
         Preset { id: "pane-rename", title: "Name pane", about: "Ask for a name for the focused pane.", bindings: vec![binding("global", "alt-shift-r", "pane.rename", &json!({}))] },
+        // Space selection plus Shift: option-shift-digits type characters on a Mac.
+        Preset {
+            id: "agent-select",
+            title: "Jump to an agent",
+            about: if cfg!(target_os = "macos") {
+                "Show the agent at that place in the list with Ctrl-Shift and 1 to 9."
+            } else {
+                "Show the agent at that place in the list with Alt-Shift and 1 to 9."
+            },
+            bindings: (1..=9).map(|n| binding("global", &format!("{}-shift-{n}", if cfg!(target_os = "macos") { "ctrl" } else { "alt" }), "agent.select", &json!({"index": n}))).collect(),
+        },
     ]
 }
 
@@ -135,13 +146,13 @@ mod tests {
     use super::*;
 
     fn commands() -> Vec<AppCommand> {
-        serde_json::from_str(r#"[{"name":"pane.go","args":[{"name":"direction","required":true}]},{"name":"pane.resize","args":[{"name":"direction","required":true}]},{"name":"tab.move","args":[{"name":"by"}]},{"name":"terminal.select_all"},{"name":"terminal.search"},{"name":"pane.rename","args":[{"name":"name"}]}]"#).unwrap()
+        serde_json::from_str(r#"[{"name":"pane.go","args":[{"name":"direction","required":true}]},{"name":"pane.resize","args":[{"name":"direction","required":true}]},{"name":"tab.move","args":[{"name":"by"}]},{"name":"terminal.select_all"},{"name":"terminal.search"},{"name":"pane.rename","args":[{"name":"name"}]},{"name":"agent.select","args":[{"name":"index","required":true}]}]"#).unwrap()
     }
 
     #[test]
     fn presets_are_valid_and_gated() {
         let commands = commands();
-        assert_eq!(available(&commands).len(), 5);
+        assert_eq!(available(&commands).len(), 6);
         assert!(!available(&commands[0..1]).iter().any(|p| p.id == "pane-resize"));
         for p in available(&commands) {
             for b in p.bindings {
