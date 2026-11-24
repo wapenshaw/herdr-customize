@@ -44,7 +44,8 @@ and colors, and binds **ctrl+shift+y** (**cmd+shift+y** on macOS) to it.
 There, **Tab** and **Shift+Tab** switch pages and **Esc** closes it. A key already in
 use is never taken: pass another one, as in
 `herdr-customize app install alt-shift-c`. Run it again after moving the
-binary; it updates the mod and keeps the key.
+binary; it updates the mod and keeps the key. From app 0.1.18, the command
+palette also lists **Customize**.
 
 The mod is also published on its own in [app/](../app), so it can be added
 like any other. A copy that `app install` did not write looks for the
@@ -217,7 +218,8 @@ with daily backups, and serialize with other herdr-customize writers.
 
 The Mods page has a Bundled with Customize view for optional mods that ship
 inside herdr-customize instead of coming from GitHub: Copy mode
-and Scrollback in an editor. It shows their required app commands and the
+and Scrollback in an editor; from app 0.1.18 each is also in the command
+palette. It shows their required app commands and the
 default shortcut's status. Install and Update check the mod with the app;
 a failed check restores the previous installation. Only the platform's
 shortcut is added, and keys already taken or hidden by a more specific
