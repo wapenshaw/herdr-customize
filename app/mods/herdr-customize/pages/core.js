@@ -149,7 +149,7 @@ export default function create(app) {
       .when(Boolean(updates.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(updates.core.error)))
       .when(Boolean(news), el => el.child(h_flex().gap(8).items_center()
         .child(div().flex_1().min_w(0).text_size(11.5).text_color(t.muted).child(command
-          ? `herdr-customize ${news} is out. To update, close Customize and run this in a terminal: ${command}`
+          ? `herdr-customize ${news} is out. To update, close Customize and run this in ${platform() === "windows" ? "PowerShell" : "a terminal"}: ${command}`
           : `herdr-customize ${news} is out: ${REPO}/releases/latest`))
         .when(Boolean(command), row => row.child(this.button("copy-update", "Copy", (_e, cx) => { cx.write_to_clipboard(command); this.notice = "Copied the update command."; cx.notify(); })))));
   }

@@ -77,13 +77,21 @@ fn update_command(exe: &Path) -> Option<String> {
     if !root.join(".git").exists() || !root.join("scripts").join("fetch-or-build.sh").is_file() {
         return None;
     }
-    let root = root.to_string_lossy();
-    Some(if cfg!(windows) {
-        format!("cd \"{root}\"; git pull --ff-only; powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fetch-or-build.ps1; target\\release\\herdr-customize.exe app install")
+    Some(shell_line(&root.to_string_lossy(), cfg!(windows)))
+}
+
+/// Each step runs only if the one before worked, and the path is taken
+/// literally: `$?` is false in PowerShell 5.1 and 7 for a failed or missing program.
+fn shell_line(root: &str, windows: bool) -> String {
+    if windows {
+        let root = root.replace('\'', "''");
+        format!(
+            "if (Set-Location -LiteralPath '{root}' -PassThru) {{ git pull --ff-only; if ($?) {{ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fetch-or-build.ps1; if ($?) {{ .\\target\\release\\herdr-customize.exe app install }} }} }}"
+        )
     } else {
         let root = root.replace('\'', "'\\''");
-        format!("cd '{root}' && git pull --ff-only && sh scripts/fetch-or-build.sh && target/release/herdr-customize app install")
-    })
+        format!("cd -- '{root}' && git pull --ff-only && sh scripts/fetch-or-build.sh && target/release/herdr-customize app install")
+    }
 }
 
 #[cfg(test)]
@@ -124,7 +132,13 @@ mod tests {
         fs::create_dir_all(dir.join(".git")).unwrap();
         fs::write(dir.join("scripts/fetch-or-build.sh"), "").unwrap();
         let command = update_command(&exe).unwrap();
-        assert!(command.contains(&*dir.to_string_lossy()) && command.contains("git pull --ff-only") && command.ends_with("app install"));
+        assert!(command.contains("git pull --ff-only") && command.contains("app install"));
+        // Quotes, $ and backticks in the path stay literal in both shells.
+        assert_eq!(
+            shell_line(r"C:\it's $HOME `x", true),
+            r"if (Set-Location -LiteralPath 'C:\it''s $HOME `x' -PassThru) { git pull --ff-only; if ($?) { powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch-or-build.ps1; if ($?) { .\target\release\herdr-customize.exe app install } } }"
+        );
+        assert_eq!(shell_line("/home/a/it's $HOME", false), r"cd -- '/home/a/it'\''s $HOME' && git pull --ff-only && sh scripts/fetch-or-build.sh && target/release/herdr-customize app install");
         fs::remove_dir_all(dir).unwrap();
     }
 }
