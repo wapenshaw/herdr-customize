@@ -4,6 +4,13 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [1.2.1](https://github.com/wapenshaw/herdr-customize/compare/v1.2.0...v1.2.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **app:** stop the update command at the first failed step ([934345e](https://github.com/wapenshaw/herdr-customize/commit/934345e9a2308aec1290660c1643a21913bd368a))
+
 ## [1.2.0](https://github.com/wapenshaw/herdr-customize/compare/v1.1.1...v1.2.0) (2026-11-25)
 
 
