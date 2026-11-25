@@ -4,6 +4,24 @@ release-please writes this file from the Conventional Commits on `main`;
 do not edit it by hand. Versions follow semver and match the `version` field
 in `Cargo.toml` and `herdr-plugin.toml`.
 
+## [1.2.0](https://github.com/wapenshaw/herdr-customize/compare/v1.1.1...v1.2.0) (2026-11-25)
+
+
+### Features
+
+* **app:** list customize and the extras in the command palette ([9d52f99](https://github.com/wapenshaw/herdr-customize/commit/9d52f990535d98be2475f2067126502f54a53318))
+* **app:** log in to a machine that needs it from the core page ([9afb85f](https://github.com/wapenshaw/herdr-customize/commit/9afb85fa7ceb10f381d62096d1acf98d6e43fca9))
+* **app:** offer a preset that jumps to an agent by its place ([61500ea](https://github.com/wapenshaw/herdr-customize/commit/61500ea1e84c79285cdfaddeb602e7cd1be36ace))
+* **app:** pick the shell program in the system's file picker ([5dbcdda](https://github.com/wapenshaw/herdr-customize/commit/5dbcddaa11cb2df862f0d29139e3f89e88fcc740))
+* **app:** set bold weight and fading of other panes ([20d7cc1](https://github.com/wapenshaw/herdr-customize/commit/20d7cc15defa0e95d266daa618b9a59850699b2e))
+* **app:** tell when a newer herdr-customize is out ([51966dc](https://github.com/wapenshaw/herdr-customize/commit/51966dc4893e5ba2a1563606eb21b5c2203abbb1))
+
+
+### Bug Fixes
+
+* **app:** install and list mods that only handle links ([ad00a93](https://github.com/wapenshaw/herdr-customize/commit/ad00a931ddb6fd1a4da79c6f82ed01c9c22646f8))
+* **app:** start no focus timer while the app checks the popup ([3a51fcb](https://github.com/wapenshaw/herdr-customize/commit/3a51fcbce0af5c173b45a328a7d51c0fcb001aee))
+
 ## [1.1.1](https://github.com/wapenshaw/herdr-customize/compare/v1.1.0...v1.1.1) (2026-11-22)
 
 
