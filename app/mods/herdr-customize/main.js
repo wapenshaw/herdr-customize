@@ -20,6 +20,7 @@ export default class Customize extends View {
     this.healthVersion = 0;
     this.dismissedHealth = "";
     this.barOpen = false;
+    this.latest = null;
     this.tabScroll = ScrollHandle.new();
     this.pageList = PAGE_REGISTRY.map(create => create(this));
     this.pages = Object.fromEntries(this.pageList.map(page => [page.id, page]));
@@ -77,6 +78,10 @@ export default class Customize extends View {
         this.refreshHealth(cx);
         this.load(cx, ["palettes"], data => { this.pages.themes.palettes = data.palettes; });
         if (!this.pages.mods.packages) this.pages.mods.refreshPackages(cx);
+        this.load(cx, ["latest"], data => {
+          this.latest = data;
+          if (data.latest) this.notice = `herdr-customize ${data.latest} is out. ${typeof herdr.updates === "function" ? "Core > Updates has the steps." : `See ${REPO}/blob/main/docs/install.md#update.`}`;
+        });
       }
       cx.notify();
     });

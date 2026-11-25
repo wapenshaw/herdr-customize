@@ -1,7 +1,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex, InputState } from "gpui-base";
 import * as herdr from "herdr";
-import { page, value, platform, reason } from "../lib.js";
+import { page, value, platform, reason, REPO } from "../lib.js";
 
 const { theme } = herdr;
 
@@ -123,10 +123,14 @@ export default function create(app) {
       .child(div().text_size(13).font_semibold().child("Updates"))
       .child(column("updates-app", "App", updates.app.version, ready(updates.app.ready)))
       .child(column("updates-core", updates.core.managed ? `Core · ${updates.core.managed}` : "Core", updates.core.version, ready(updates.core.ready)))
+      .when(Boolean(this.latest), el => el.child(column("updates-customize", "Customize", this.latest.version, this.latest.latest ? this.badge(`${this.latest.latest} available`, t.working) : null)))
       .children(machines.map(m => column(`updates-${m.name}`, m.name, m.version, older(m.version, updates.core.version) ? this.badge("older", t.working) : null)))
       .child(div().flex_1())
       .child(div().text_size(11).text_color(t.dim).child(checked))
-      .when(has("app.check_updates"), el => el.child(this.button("check-updates", "Check", () => herdr.run("app.check_updates"))))
+      .when(has("app.check_updates"), el => el.child(this.button("check-updates", "Check", (_e, cx) => {
+        herdr.run("app.check_updates");
+        this.load(cx, ["latest", "--refresh"], data => { app.latest = data; });
+      })))
       .when(Boolean(updates.core.ready && !updates.core.managed && has("app.update_core")), el =>
         el.child(this.button("update-core", "Update core", () => herdr.run("app.update_core"))))
       .when(Boolean(updates.app.ready && has("app.update")), el =>
@@ -139,8 +143,15 @@ export default function create(app) {
             this.notice = `${m.name} runs core ${updates.core.version} now; its terminals kept running.`;
             this.pickCore(this.coreSel, cx);
           }))));
+    const news = this.latest?.latest;
+    const command = this.latest?.command;
     return v_flex().gap(6).px(12).py(10).rounded(8).bg(t.surface).flex_none().child(row)
-      .when(Boolean(updates.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(updates.core.error)));
+      .when(Boolean(updates.core.error), el => el.child(div().text_size(11.5).text_color(t.blocked).child(updates.core.error)))
+      .when(Boolean(news), el => el.child(h_flex().gap(8).items_center()
+        .child(div().flex_1().min_w(0).text_size(11.5).text_color(t.muted).child(command
+          ? `herdr-customize ${news} is out. To update, close Customize and run this in a terminal: ${command}`
+          : `herdr-customize ${news} is out: ${REPO}/releases/latest`))
+        .when(Boolean(command), row => row.child(this.button("copy-update", "Copy", (_e, cx) => { cx.write_to_clipboard(command); this.notice = "Copied the update command."; cx.notify(); })))));
   }
 
   corePage() {

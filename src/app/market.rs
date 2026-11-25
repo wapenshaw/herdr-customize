@@ -13,7 +13,7 @@ use crate::{env, proc};
 const MARKET_LIMIT: usize = 1000;
 
 /// The GitHub REST API; replaced in tests.
-fn api_base() -> String {
+pub(super) fn api_base() -> String {
     env("HERDR_CUSTOMIZE_API_BASE").unwrap_or_else(|| "https://api.github.com".into())
 }
 

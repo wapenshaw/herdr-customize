@@ -376,6 +376,11 @@ running; a package-managed core is updated through its package manager.
 It also lists each connected machine's core, and offers `hc machine update`
 for one older than this computer's: that copies this computer's `hc` there and
 restarts its core, and its terminals keep running.
+It lists herdr-customize as well. Once a day, and on **Check**, it asks GitHub
+for the latest release, keeping the answer in `data/herdr-customize/latest.json`.
+When a newer one is out, its column says so, the card shows the update steps for
+this checkout with a **Copy** button, and opening Customize says so in the
+bottom bar. Nothing updates by itself.
 The page also offers a command to copy and run in a terminal outside Herdr:
 `hc server restart --fresh` makes new terminals use that shell's environment
 without ending programs.
