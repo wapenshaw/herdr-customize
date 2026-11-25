@@ -70,6 +70,7 @@ fn run(args: &[String]) -> Result<Value> {
     let a = Args::parse(rest);
     match command.as_str() {
         "health" => Ok(super::health()),
+        "latest" => Ok(super::latest::describe(a.flags.contains_key("refresh"))),
         "palettes" => palettes(),
         "theme-write" => {
             let wrote = themes::install(a.word(0, "a palette")?, false)?;

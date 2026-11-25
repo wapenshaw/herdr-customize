@@ -43,8 +43,10 @@ if needed. See [the app guide](app.md) for the pages and commands.
 
 ## Update
 
-Update the checkout, fetch or build its matching binary, and run `app install`
-again to update the screen:
+Customize tells you when a newer release is out: its Core page's Updates card
+then shows these steps for your checkout, ready to copy. Update the checkout,
+fetch or build its matching binary, and run `app install` again to update the
+screen:
 
 ```sh
 git pull

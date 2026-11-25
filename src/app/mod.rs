@@ -7,6 +7,7 @@ pub mod core_config;
 pub mod crawl;
 pub mod extras;
 pub mod keys;
+mod latest;
 pub mod layouts;
 mod market;
 pub mod mods;
