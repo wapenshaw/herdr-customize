@@ -60,5 +60,5 @@ jobs:
       # source with whatever cargo the machine has.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.99"
+          toolchain: "1.100"
       - run: cargo build --locked
