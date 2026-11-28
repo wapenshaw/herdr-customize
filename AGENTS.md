@@ -37,10 +37,6 @@ Use Rust 1.99 or newer (edition 2024); on Windows, the MSVC toolchain with the V
 
 Check platform-sensitive changes for every target: `cargo clippy --target x86_64-pc-windows-msvc` and `--target x86_64-unknown-linux-gnu` type-check from macOS (`ring` needs the target's C headers, so check a copy with ureq's `rustls` feature off if they are missing). Native runtime checks are needed to validate terminal behavior; Windows steps are in `docs/windows-test-plan.md`.
 
-## Language rule (mandatory)
-
-**Everything written into this repository is in English.** Code comments, commit messages, log and error messages, documentation, test names: all English, whatever language the request was made in. Only the conversation with the user follows the user's language.
-
 ## Type rule (mandatory)
 
 **A struct field exists only if code reads it.** Herdr's JSON carries far more than this plugin needs; mirroring it in full claims a dependency the code does not have, and every unread field is a promise to keep something working that nothing exercises. Add a field when the code that reads it lands in the same change, and delete it when its last reader goes. The same holds for methods, constants and `Msg` variants.
@@ -72,7 +68,7 @@ CI runs on its own only for the maintainer's (`wapenshaw`) pull requests; everyo
 Follow [CONTRIBUTING.md](CONTRIBUTING.md); these rules are mandatory.
 
 - Never commit to `main`. Branch as `<type>/<kebab-summary>`.
-- Conventional Commits: `<type>(<scope>): <subject>`, imperative, lowercase, no trailing period, 72 characters at most. Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `chore`; scope is a module or area, or `deps`. The body says why. One logical change per commit, never a co-author trailer, and no "Generated with" line in commits or pull request bodies.
+- Commit types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `chore`; scope is a module or area, or `deps`.
 - Pull requests are rebased, never squashed or merged, so each commit subject becomes a changelog line; `feat`, `fix`, `perf` and `refactor` are the visible ones.
 - One thing per pull request. The body follows `.github/pull_request_template.md`: Summary (the smallest view that shows the change), Evidence (before and after), Merge Danger (one-way or two-way door, blast radius), and the checklist with only true items ticked. Include screenshots for UI changes.
 - Update README or persistence notes when behavior changes; leave `CHANGELOG.md` and versions to release-please.
